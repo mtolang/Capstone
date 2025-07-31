@@ -50,7 +50,7 @@ class TherapistLogin extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Image.asset(
-                    'asset/images/logo3_1.png',
+                    'asset/logo1.png',
                     height: 100,
                   ),
                   const SizedBox(height: 16.0),

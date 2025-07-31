@@ -50,7 +50,7 @@ class LoginPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Image.asset(
-                    'asset/images/logo3_1.png',
+                    'asset/logo1.png',
                     height: 100,
                   ),
                   const SizedBox(height: 16.0),
@@ -127,7 +127,9 @@ class LoginPage extends StatelessWidget {
                     children: [
                       const Text("Don't have an account?"),
                       TextButton(
-                        onPressed: null, // Disabled
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/clinicreg');
+                        }, // Disabled
                         child: const Text('Register'),
                       ),
                     ],
