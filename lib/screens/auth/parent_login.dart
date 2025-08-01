@@ -114,7 +114,9 @@ class ParentLogin extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed: null, // Disabled
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/parentdashboard');
+                    }, 
                     child: const Text('Login'),
                   ),
                   TextButton(

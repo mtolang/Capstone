@@ -1,3 +1,4 @@
+import 'package:capstone_2/screens/auth/login_as.dart';
 import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
 
@@ -142,7 +143,10 @@ class Dashboard extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
-              onTap: null,
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => LoginAs()));
+              },
             ),
           ],
         ),

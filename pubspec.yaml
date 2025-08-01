@@ -58,6 +58,11 @@ flutter:
     - asset/images/WAVE.png
     - asset/images/logo3_1.png
     - asset/images/WAVE (1).png
+    - asset/images/Ellipse 1.png
+    - asset/images/Ellipse 2.png
+    - asset/images/map.png
+    - asset/images/tiny.png
+    - asset/icons/add_1.png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

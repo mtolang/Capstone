@@ -13,8 +13,41 @@ class _DashTabState extends State<DashTab> {
   void _onTabTapped(int index) {
     setState(() {
       _selectedTabIndex = index;
-      // Navigation removed for design-only
     });
+
+    // Handle different actions based on tab index
+    switch (index) {
+      case 0:
+        _onClinicsPressed();
+        break;
+      case 1:
+        _onTherapistsPressed();
+        break;
+      case 2:
+        _onMaterialsPressed();
+        break;
+    }
+  }
+
+  // OnPressed methods for each tab
+  void _onClinicsPressed() {
+    print('Clinics tab pressed');
+    Navigator.pushNamed(context, '/parentdashboard');
+    // Add your clinics navigation or logic here
+    // Example: Navigator.pushNamed(context, '/clinics');
+  }
+
+  void _onTherapistsPressed() {
+    print('Therapists tab pressed');
+    Navigator.pushNamed(context, 'therdashboard');
+    // Add your therapists navigation or logic here
+    // Example: Navigator.pushNamed(context, '/therapists');
+  }
+
+  void _onMaterialsPressed() {
+    print('Materials tab pressed');
+    // Add your materials navigation or logic here
+    // Example: Navigator.pushNamed(context, '/materials');
   }
 
   Widget buildTab(String label, int index) {
