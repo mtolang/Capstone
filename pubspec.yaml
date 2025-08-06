@@ -63,6 +63,7 @@ flutter:
     - asset/images/map.png
     - asset/images/tiny.png
     - asset/icons/add_1.png
+    - asset/icons/logo_ther.png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

@@ -127,7 +127,9 @@ class TherapistLogin extends StatelessWidget {
                     children: [
                       const Text("Don't have an account?"),
                       TextButton(
-                        onPressed: null, // Disabled
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/therapistreg');
+                        },
                         child: const Text('Register'),
                       ),
                     ],

@@ -39,11 +39,11 @@ class Dashboard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Image.asset("asset/icons/logo_ther.png",
+                    Image.asset("asset/logo1.png",
                         width: 40.0, height: 40.0),
                     const SizedBox(width: 8.0),
                     const Text(
-                      "TherapEase",
+                      "Kindora",
                       style: TextStyle(
                         color: Color(0xFF006A5B),
                         fontFamily: 'Poppins',

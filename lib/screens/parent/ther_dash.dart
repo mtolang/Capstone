@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
 
 class TherapistsDashboard extends StatelessWidget {
   const TherapistsDashboard({Key? key}) : super(key: key);
@@ -11,7 +10,7 @@ class TherapistsDashboard extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Dashboard',
+          'Therapist Dashboard',
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF006A5B),
@@ -62,7 +61,10 @@ class TherapistsDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Dashboard tapped');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.person),
@@ -76,7 +78,10 @@ class TherapistsDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Profile tapped');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.sticky_note_2_rounded),
@@ -90,7 +95,10 @@ class TherapistsDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Materials tapped');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.edit_calendar_rounded),
@@ -104,7 +112,10 @@ class TherapistsDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Schedule tapped');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.note_alt),
@@ -118,7 +129,10 @@ class TherapistsDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Journal tapped');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.message),
@@ -132,13 +146,19 @@ class TherapistsDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Chat tapped');
+              },
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Logout tapped');
+              },
             ),
           ],
         ),
@@ -170,149 +190,108 @@ class TherapistsDashboard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: CustomScrollView(
-              slivers: <Widget>[
-                const SliverAppBar(
-                  automaticallyImplyLeading: false,
-                  pinned: true,
-                  expandedHeight: 100.0,
-                  toolbarHeight: 100.0,
-                  backgroundColor: Color(0xFF006A5B),
-                  flexibleSpace: FlexibleSpaceBar(
-                    title: DashTab(),
-                    centerTitle: true,
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+                const Text(
+                  'Welcome back, Dr. [Name]!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 20),
-                ),
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'Therapists Finder',
-                      style: TextStyle(
-                        color: Color(0xFF67AFA5),
-                        fontSize: 20,
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w900,
-                      ),
-                      textAlign: TextAlign.left,
-                    ),
+                const SizedBox(height: 30),
+                const Text(
+                  'Today\'s Schedule',
+                  style: TextStyle(
+                    color: Color(0xFF67AFA5),
+                    fontSize: 20,
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 1),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10.0),
-                    child: SizedBox(
-                      height: 200,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10.0),
-                        child: Image.asset(
-                          'asset/images/map.png',
-                          fit: BoxFit.cover,
+                const SizedBox(height: 15),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: 5,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              spreadRadius: 2,
+                              blurRadius: 5,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 10),
-                ),
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: EdgeInsets.symmetric(horizontal: 16.0),
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20.0),
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey,
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        border: InputBorder.none,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            Icons.search,
-                            color: Color(0xFF67AFA5),
-                          ),
-                          onPressed: null,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 15),
-                ),
-                SliverGrid(
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200.0,
-                    mainAxisSpacing: 12.0,
-                    crossAxisSpacing: 12.0,
-                    childAspectRatio: 0.7,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      return Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10.0),
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey,
-                                spreadRadius: 2,
-                                blurRadius: 5,
-                                offset: Offset(0, 3),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF006A5B),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              Image.asset(
-                                'asset/images/ther.jpg',
-                                height: 150,
+                              child: Text(
+                                '${9 + index}:00 AM',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                              const SizedBox(height: 10.0),
-                              const Text('Therapist Name',
-                                  style: TextStyle(
-                                      fontSize: 16.0,
-                                      fontWeight: FontWeight.bold)),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: List.generate(5, (starIndex) {
-                                  return Icon(
-                                    Icons.star,
-                                    color: starIndex < 5
-                                        ? Colors.yellow
-                                        : Colors.grey,
-                                    size: 15,
-                                  );
-                                }),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Patient ${index + 1}',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Speech Therapy Session',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 5.0),
-                              const Text('Occupational and Speech Therapist',
-                                  style: TextStyle(fontSize: 12.0)),
-                            ],
-                          ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: index < 2 ? Colors.green : Colors.orange,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                index < 2 ? 'Completed' : 'Upcoming',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     },
-                    childCount: 8,
                   ),
                 ),
               ],
@@ -325,7 +304,9 @@ class TherapistsDashboard extends StatelessWidget {
               child: Material(
                 color: const Color(0xFF006A5B),
                 child: InkWell(
-                  onTap: null,
+                  onTap: () {
+                    print('Add new appointment');
+                  },
                   child: SizedBox(
                     width: 60,
                     height: 60,

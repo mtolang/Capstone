@@ -6,6 +6,8 @@ import 'package:capstone_2/screens/auth/parent_login.dart';
 import 'package:capstone_2/screens/auth/therapist_login.dart';
 //registration imports
 import 'package:capstone_2/screens/registration/clinic_reg.dart';
+import 'package:capstone_2/screens/registration/parent_reg.dart';
+import 'package:capstone_2/screens/registration/therapist_reg.dart';
 //parent page imports
 import 'package:capstone_2/screens/parent/dashboard.dart';
 import 'package:capstone_2/screens/parent/ther_dash.dart';
@@ -34,10 +36,12 @@ class MyApp extends StatelessWidget {
 
           //Registration Routes
           '/clinicreg': (context) => const ClinicRegister(),
+          '/parentreg': (context) => const ParentRegister(),
+          '/therapistreg': (context) => const TherapistRegister(),
 
           //Parent Page Routes
           '/parentdashboard': (context) => const Dashboard(),
-          'therdashboard': (context) => const TherapistsDashboard(),
+          '/therdashboard': (context) => const TherapistsDashboard(),
         } // Show splash screen first
         );
   }

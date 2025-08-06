@@ -116,7 +116,7 @@ class ParentLogin extends StatelessWidget {
                     ),
                     onPressed: () {
                       Navigator.pushNamed(context, '/parentdashboard');
-                    }, 
+                    },
                     child: const Text('Login'),
                   ),
                   TextButton(
@@ -129,7 +129,9 @@ class ParentLogin extends StatelessWidget {
                     children: [
                       const Text("Don't have an account?"),
                       TextButton(
-                        onPressed: null, // Disabled
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/parentreg');
+                        },
                         child: const Text('Register'),
                       ),
                     ],
