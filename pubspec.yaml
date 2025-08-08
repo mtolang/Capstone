@@ -32,6 +32,9 @@ dependencies:
     sdk: flutter
   delayed_display: ^2.0.0
   image_picker: ^1.1.2
+  google_maps_flutter: ^2.5.0
+  location: ^5.0.3
+  flutter_tts: ^3.8.5
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -64,6 +67,7 @@ flutter:
     - asset/images/tiny.png
     - asset/icons/add_1.png
     - asset/icons/logo_ther.png
+    - asset/icons/social.png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

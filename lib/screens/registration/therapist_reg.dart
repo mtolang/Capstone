@@ -19,23 +19,11 @@ class _TherapistRegisterState extends State<TherapistRegister> {
       TextEditingController();
   XFile? _attachFile;
 
-  // Image picker functionality
+  // Add image picker functionality
   Future<XFile?> pickImageFromGallery() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     return image;
-  }
-
-  @override
-  void dispose() {
-    fullNameController.dispose();
-    userNameController.dispose();
-    emailController.dispose();
-    contactNumberController.dispose();
-    addressController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
-    super.dispose();
   }
 
   @override
@@ -88,16 +76,13 @@ class _TherapistRegisterState extends State<TherapistRegister> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 20), // Top spacing
                     _buildTextField(fullNameController, 'Full Name'),
                     const SizedBox(height: 14.0),
                     _buildTextField(userNameController, 'User Name'),
                     const SizedBox(height: 14.0),
-                    _buildTextField(emailController, 'Email',
-                        keyboardType: TextInputType.emailAddress),
+                    _buildTextField(emailController, 'Email'),
                     const SizedBox(height: 14.0),
-                    _buildTextField(contactNumberController, 'Contact Number',
-                        keyboardType: TextInputType.phone),
+                    _buildTextField(contactNumberController, 'Contact Number'),
                     const SizedBox(height: 14.0),
                     _buildTextField(addressController, 'Address'),
                     const SizedBox(height: 14.0),
@@ -156,41 +141,7 @@ class _TherapistRegisterState extends State<TherapistRegister> {
                               ),
                             ),
                             onPressed: () {
-                              // Form validation
-                              if (fullNameController.text.isEmpty ||
-                                  emailController.text.isEmpty ||
-                                  passwordController.text.isEmpty ||
-                                  confirmPasswordController.text.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text('Please fill all required fields'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-
-                              if (passwordController.text !=
-                                  confirmPasswordController.text) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Passwords do not match'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-
-                              // Success message
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Registration submitted successfully!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-
+                              // Add your registration logic here
                               print('Therapist Register button pressed');
                               if (_attachFile != null) {
                                 print(
@@ -200,7 +151,6 @@ class _TherapistRegisterState extends State<TherapistRegister> {
                             child: const Text('Register'),
                           ),
                         ),
-                        const SizedBox(height: 30), // Bottom spacing
                       ],
                     ),
                   ],
@@ -213,12 +163,8 @@ class _TherapistRegisterState extends State<TherapistRegister> {
     );
   }
 
-  Widget _buildTextField(
-    TextEditingController controller,
-    String label, {
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
+  Widget _buildTextField(TextEditingController controller, String label,
+      {bool isPassword = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
@@ -237,7 +183,6 @@ class _TherapistRegisterState extends State<TherapistRegister> {
       child: TextField(
         controller: controller,
         obscureText: isPassword,
-        keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
           border: InputBorder.none,

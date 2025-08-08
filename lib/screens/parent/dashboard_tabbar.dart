@@ -2,15 +2,27 @@ import 'package:flutter/material.dart';
 
 class DashTab extends StatefulWidget {
   final Function(int)? onTabChanged; // Add callback for parent widget
+  final int initialSelectedIndex; // Add this parameter
 
-  const DashTab({Key? key, this.onTabChanged}) : super(key: key);
+  const DashTab({
+    Key? key,
+    this.onTabChanged,
+    this.initialSelectedIndex = 0, // Default to first tab
+  }) : super(key: key);
 
   @override
   State<DashTab> createState() => _DashTabState();
 }
 
 class _DashTabState extends State<DashTab> {
-  int _selectedTabIndex = 0;
+  late int _selectedTabIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTabIndex =
+        widget.initialSelectedIndex; // Use the passed initial index
+  }
 
   void _onTabTapped(int index) {
     setState(() {
@@ -37,8 +49,6 @@ class _DashTabState extends State<DashTab> {
   // OnPressed methods for each tab
   void _onClinicsPressed() {
     print('Clinics tab pressed');
-    // Add your clinics navigation or logic here
-    // Navigator.pushNamed(context, '/clinics');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Clinics tab selected')),
     );
@@ -46,7 +56,6 @@ class _DashTabState extends State<DashTab> {
 
   void _onTherapistsPressed() {
     print('Therapists tab pressed');
-
     Navigator.pushNamed(context, '/therdashboard');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Therapists tab selected')),
@@ -55,8 +64,6 @@ class _DashTabState extends State<DashTab> {
 
   void _onMaterialsPressed() {
     print('Materials tab pressed');
-    // Add your materials navigation or logic here
-    // Navigator.pushNamed(context, '/materials');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Materials tab selected')),
     );

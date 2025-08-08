@@ -1,6 +1,7 @@
 import 'package:capstone_2/screens/auth/login_as.dart';
 import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
+import 'package:capstone_2/screens/parent/games_option.dart';
 
 class Dashboard extends StatelessWidget {
   const Dashboard({Key? key}) : super(key: key);
@@ -39,8 +40,19 @@ class Dashboard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Image.asset("asset/logo1.png",
-                        width: 40.0, height: 40.0),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF006A5B),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(
+                        Icons.child_care,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
                     const SizedBox(width: 8.0),
                     const Text(
                       "Kindora",
@@ -67,7 +79,13 @@ class Dashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Dashboard tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Dashboard selected')),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.person),
@@ -81,7 +99,13 @@ class Dashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Profile tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profile selected')),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.sticky_note_2_rounded),
@@ -95,7 +119,35 @@ class Dashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Materials tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Materials selected')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.games),
+              iconColor: const Color(0xFF006A5B),
+              title: const Text(
+                'Games',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                print('Games tapped');
+                // Direct navigation instead of named route
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const GamesOption()),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.edit_calendar_rounded),
@@ -109,7 +161,13 @@ class Dashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Schedule tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Schedule selected')),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.note_alt),
@@ -123,7 +181,13 @@ class Dashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Journal tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Journal selected')),
+                );
+              },
             ),
             ListTile(
               leading: const Icon(Icons.message),
@@ -137,15 +201,44 @@ class Dashboard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              onTap: null,
+              onTap: () {
+                Navigator.pop(context);
+                print('Chat tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Chat selected')),
+                );
+              },
             ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
               onTap: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => LoginAs()));
+                Navigator.pop(context);
+                // Show logout confirmation
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginAs()));
+                        },
+                        child: const Text('Logout'),
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
           ],
@@ -153,15 +246,28 @@ class Dashboard extends StatelessWidget {
       ),
       body: Stack(
         children: [
+          // Background images with fallback gradients
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: ConstrainedBox(
               constraints: BoxConstraints.expand(height: mq.height * 0.30),
-              child: Image.asset(
-                'asset/images/Ellipse 1.png',
-                fit: BoxFit.cover,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(); // Gradient fallback
+                  },
+                ),
               ),
             ),
           ),
@@ -171,9 +277,21 @@ class Dashboard extends StatelessWidget {
             right: 0,
             child: ConstrainedBox(
               constraints: BoxConstraints.expand(height: mq.height * 0.3),
-              child: Image.asset(
-                'asset/images/Ellipse 2.png',
-                fit: BoxFit.cover,
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xFF67AFA5), Colors.white],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 2.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(); // Gradient fallback
+                  },
+                ),
               ),
             ),
           ),
@@ -188,7 +306,8 @@ class Dashboard extends StatelessWidget {
                   toolbarHeight: 70.0,
                   backgroundColor: Color(0xFF006A5B),
                   flexibleSpace: FlexibleSpaceBar(
-                    title: DashTab(),
+                    title:
+                        DashTab(initialSelectedIndex: 0), // Set to clinics tab
                     centerTitle: true,
                   ),
                 ),
@@ -215,14 +334,29 @@ class Dashboard extends StatelessWidget {
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 10.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0),
                     child: SizedBox(
                       height: 200,
                       child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10.0),
-                        child: Image.asset(
-                          'asset/images/map.png',
-                          fit: BoxFit.cover,
+                        padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Image.asset(
+                            'asset/images/map.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Center(
+                                child: Text(
+                                  'Map Placeholder\n(Replace with your map)',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -233,17 +367,17 @@ class Dashboard extends StatelessWidget {
                 ),
                 SliverToBoxAdapter(
                   child: Container(
-                    margin: EdgeInsets.symmetric(horizontal: 16.0),
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20.0),
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey,
+                          color: Colors.grey.withOpacity(0.5),
                           spreadRadius: 2,
                           blurRadius: 5,
-                          offset: Offset(0, 3),
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
@@ -252,11 +386,17 @@ class Dashboard extends StatelessWidget {
                         hintText: 'Search...',
                         border: InputBorder.none,
                         suffixIcon: IconButton(
-                          icon: Icon(
+                          icon: const Icon(
                             Icons.search,
                             color: Color(0xFF67AFA5),
                           ),
-                          onPressed: null,
+                          onPressed: () {
+                            print('Search pressed');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Search functionality')),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -266,7 +406,7 @@ class Dashboard extends StatelessWidget {
                   child: SizedBox(height: 15),
                 ),
                 SliverGrid(
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 200.0,
                     mainAxisSpacing: 12.0,
                     crossAxisSpacing: 12.0,
@@ -275,25 +415,45 @@ class Dashboard extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (BuildContext context, int index) {
                       return Padding(
-                        padding: EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.all(8.0),
                         child: Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(10.0),
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.grey,
+                                color: Colors.grey.withOpacity(0.5),
                                 spreadRadius: 2,
                                 blurRadius: 5,
-                                offset: Offset(0, 3),
+                                offset: const Offset(0, 3),
                               ),
                             ],
                           ),
                           child: Column(
                             children: [
-                              Image.asset(
-                                'asset/images/tiny.png',
+                              Container(
                                 height: 150,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[300],
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(10),
+                                    topRight: Radius.circular(10),
+                                  ),
+                                ),
+                                child: Image.asset(
+                                  'asset/images/tiny.png',
+                                  height: 150,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Center(
+                                      child: Icon(
+                                        Icons.business,
+                                        size: 50,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                               const SizedBox(height: 10.0),
                               const Padding(
@@ -306,7 +466,7 @@ class Dashboard extends StatelessWidget {
                               Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: List.generate(5, (starIndex) {
                                     return Icon(
                                       Icons.star,
@@ -319,10 +479,13 @@ class Dashboard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 5.0),
-                              const Text(
-                                  'A center with all your needed services',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 12.0)),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 8.0),
+                                child: Text(
+                                    'A center with all your needed services',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 12.0)),
+                              ),
                             ],
                           ),
                         ),
@@ -337,23 +500,18 @@ class Dashboard extends StatelessWidget {
           Positioned(
             bottom: 35,
             right: 30,
-            child: ClipOval(
-              child: Material(
-                color: const Color(0xFF006A5B),
-                child: InkWell(
-                  onTap: null,
-                  child: SizedBox(
-                    width: 60,
-                    height: 60,
-                    child: Center(
-                      child: Image.asset(
-                        'asset/icons/add_1.png',
-                        height: 30,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+            child: FloatingActionButton(
+              onPressed: () {
+                print('FAB tapped');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Add new functionality')),
+                );
+              },
+              backgroundColor: const Color(0xFF006A5B),
+              child: const Icon(
+                Icons.add,
+                color: Colors.white,
+                size: 30,
               ),
             ),
           ),

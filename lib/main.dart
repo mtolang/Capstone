@@ -11,6 +11,12 @@ import 'package:capstone_2/screens/registration/therapist_reg.dart';
 //parent page imports
 import 'package:capstone_2/screens/parent/dashboard.dart';
 import 'package:capstone_2/screens/parent/ther_dash.dart';
+import 'package:capstone_2/screens/parent/games_option.dart';
+import 'package:capstone_2/screens/parent/talk_with_tiles.dart';
+//therapist page imports
+//clinic page imports
+import 'package:capstone_2/screens/clinic/clinic_gallery.dart';
+import 'package:capstone_2/screens/clinic/clinic_profile.dart';
 
 void main() {
   runApp(const MyApp());
@@ -42,6 +48,13 @@ class MyApp extends StatelessWidget {
           //Parent Page Routes
           '/parentdashboard': (context) => const Dashboard(),
           '/therdashboard': (context) => const TherapistsDashboard(),
+          '/gamesoption': (context) => const GamesOption(),
+          '/talkwithtiles': (context) => const TalkWithTilesGame(),
+
+          //Therapist Page Routes
+          //Clinic Page Routes
+          '/clinicgallery': (context) => const ClinicGallery(),
+          '/clinicprofile': (context) => const ClinicProfile(),
         } // Show splash screen first
         );
   }
