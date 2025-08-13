@@ -32,8 +32,10 @@ dependencies:
     sdk: flutter
   delayed_display: ^2.0.0
   image_picker: ^1.1.2
-  google_maps_flutter: ^2.5.0
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
   location: ^5.0.3
+  http: ^1.1.0
   flutter_tts: ^3.8.5
 
   # The following adds the Cupertino Icons font to your application.

@@ -17,6 +17,9 @@ import 'package:capstone_2/screens/parent/talk_with_tiles.dart';
 //clinic page imports
 import 'package:capstone_2/screens/clinic/clinic_gallery.dart';
 import 'package:capstone_2/screens/clinic/clinic_profile.dart';
+//chat page imports
+import 'package:capstone_2/chat/patient_selection.dart';
+import 'package:capstone_2/chat/therapist_chat.dart';
 
 void main() {
   runApp(const MyApp());
@@ -52,6 +55,11 @@ class MyApp extends StatelessWidget {
           '/talkwithtiles': (context) => const TalkWithTilesGame(),
 
           //Therapist Page Routes
+          '/patientselection': (context) => const PatientSelectionPage(),
+          '/therapistchat': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments as String?;
+            return TherapistChatPage(patientId: args);
+          },
           //Clinic Page Routes
           '/clinicgallery': (context) => const ClinicGallery(),
           '/clinicprofile': (context) => const ClinicProfile(),

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dart:async';
 
 class Maps extends StatefulWidget {
@@ -8,12 +11,12 @@ class Maps extends StatefulWidget {
 
   final String title;
 
-  @override // Fixed the typo from @overrides
+  @override
   State<Maps> createState() => _MapsState();
 }
 
 class _MapsState extends State<Maps> {
-  GoogleMapController? mapController;
+  late final MapController mapController;
   Location location = Location();
 
   // Default location (Philippines - you can change this)
@@ -23,7 +26,7 @@ class _MapsState extends State<Maps> {
   LatLng? _currentLocation;
 
   // Markers for therapists/clinics
-  Set<Marker> _markers = {};
+  List<Marker> _markers = [];
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -31,12 +34,15 @@ class _MapsState extends State<Maps> {
   @override
   void initState() {
     super.initState();
+    mapController = MapController();
     _getCurrentLocation();
     _addSampleMarkers();
   }
 
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
+  @override
+  void dispose() {
+    mapController.dispose();
+    super.dispose();
   }
 
   // Get user's current location
@@ -73,11 +79,13 @@ class _MapsState extends State<Maps> {
         _isLoading = false;
       });
 
-      // Move camera to user location
-      if (mapController != null && _currentLocation != null) {
-        mapController!.animateCamera(
-          CameraUpdate.newLatLng(_currentLocation!),
-        );
+      // Move map to user location safely
+      if (_currentLocation != null && mounted) {
+        try {
+          mapController.move(_currentLocation!, 15.0);
+        } catch (e) {
+          print('Error moving map: $e');
+        }
       }
     } catch (e) {
       setState(() {
@@ -90,46 +98,66 @@ class _MapsState extends State<Maps> {
   // Add sample markers for therapists/clinics
   void _addSampleMarkers() {
     setState(() {
-      _markers = {
-        const Marker(
-          markerId: MarkerId('clinic1'),
-          position: LatLng(14.6091, 121.0223), // Quezon City
-          infoWindow: InfoWindow(
-            title: 'The Tiny House Therapy Center',
-            snippet: 'Speech & Occupational Therapy',
+      _markers = [
+        Marker(
+          point: const LatLng(14.6091, 121.0223), // Quezon City
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _onMarkerTapped('clinic1'),
+            child: const Icon(
+              Icons.local_hospital,
+              color: Color(0xFF006A5B),
+              size: 40,
+            ),
           ),
         ),
-        const Marker(
-          markerId: MarkerId('clinic2'),
-          position: LatLng(14.5547, 121.0244), // Makati
-          infoWindow: InfoWindow(
-            title: 'Child Development Center',
-            snippet: 'Physical & Cognitive Therapy',
+        Marker(
+          point: const LatLng(14.5547, 121.0244), // Makati
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _onMarkerTapped('clinic2'),
+            child: const Icon(
+              Icons.local_hospital,
+              color: Color(0xFF006A5B),
+              size: 40,
+            ),
           ),
         ),
-        const Marker(
-          markerId: MarkerId('therapist1'),
-          position: LatLng(14.5764, 121.0851), // Pasig
-          infoWindow: InfoWindow(
-            title: 'Dr. Maria Santos',
-            snippet: 'Speech Therapist',
+        Marker(
+          point: const LatLng(14.5764, 121.0851), // Pasig
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _onMarkerTapped('therapist1'),
+            child: const Icon(
+              Icons.person_pin,
+              color: Color(0xFF67AFA5),
+              size: 40,
+            ),
           ),
         ),
-        const Marker(
-          markerId: MarkerId('therapist2'),
-          position: LatLng(14.6507, 121.0497), // San Juan
-          infoWindow: InfoWindow(
-            title: 'Dr. Juan Cruz',
-            snippet: 'Occupational Therapist',
+        Marker(
+          point: const LatLng(14.6507, 121.0497), // San Juan
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _onMarkerTapped('therapist2'),
+            child: const Icon(
+              Icons.person_pin,
+              color: Color(0xFF67AFA5),
+              size: 40,
+            ),
           ),
         ),
-      };
+      ];
     });
   }
 
   // Handle marker tap
-  void _onMarkerTapped(MarkerId markerId) {
-    print('Marker tapped: ${markerId.value}');
+  void _onMarkerTapped(String markerId) {
+    print('Marker tapped: $markerId');
 
     // Show bottom sheet with details
     showModalBottomSheet(
@@ -143,7 +171,7 @@ class _MapsState extends State<Maps> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _getMarkerTitle(markerId.value),
+              _getMarkerTitle(markerId),
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -151,7 +179,7 @@ class _MapsState extends State<Maps> {
             ),
             const SizedBox(height: 10),
             Text(
-              _getMarkerSubtitle(markerId.value),
+              _getMarkerSubtitle(markerId),
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 20),
@@ -163,8 +191,8 @@ class _MapsState extends State<Maps> {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                          content: Text(
-                              'Calling ${_getMarkerTitle(markerId.value)}')),
+                          content:
+                              Text('Calling ${_getMarkerTitle(markerId)}')),
                     );
                   },
                   icon: const Icon(Icons.phone),
@@ -180,7 +208,7 @@ class _MapsState extends State<Maps> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                           content: Text(
-                              'Getting directions to ${_getMarkerTitle(markerId.value)}')),
+                              'Getting directions to ${_getMarkerTitle(markerId)}')),
                     );
                   },
                   icon: const Icon(Icons.directions),
@@ -225,6 +253,42 @@ class _MapsState extends State<Maps> {
         return 'Occupational Therapist\n3+ years experience';
       default:
         return 'No details available';
+    }
+  }
+
+  // Search function using Nominatim API (OpenStreetMap's geocoding service)
+  Future<void> _searchLocation(String query) async {
+    if (query.isEmpty) return;
+
+    try {
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/search?format=json&q=$query&limit=1&countrycodes=ph');
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> results = json.decode(response.body);
+
+        if (results.isNotEmpty) {
+          final result = results[0];
+          final double lat = double.parse(result['lat']);
+          final double lon = double.parse(result['lon']);
+
+          mapController.move(LatLng(lat, lon), 15.0);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Found: ${result['display_name']}')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location not found')),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Search error: $e')),
+      );
     }
   }
 
@@ -282,27 +346,41 @@ class _MapsState extends State<Maps> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        backgroundColor: const Color(0xFF006A5B),
-        foregroundColor: Colors.white,
-      ),
       body: Stack(
         children: [
-          GoogleMap(
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(
-              target: _currentLocation ?? _center,
-              zoom: 12.0,
+          FlutterMap(
+            mapController: mapController,
+            options: MapOptions(
+              initialCenter: _currentLocation ?? _center,
+              initialZoom: 12.0,
+              onTap: (TapPosition tapPosition, LatLng point) {
+                print('Map tapped at: $point');
+              },
             ),
-            markers: _markers,
-            onTap: (LatLng location) {
-              print('Map tapped at: $location');
-            },
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            onMarkerTapped: _onMarkerTapped,
-            mapType: MapType.normal,
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.capstone_2',
+                maxZoom: 19,
+              ),
+              MarkerLayer(
+                markers: [
+                  ..._markers,
+                  // Add current location marker if available
+                  if (_currentLocation != null)
+                    Marker(
+                      point: _currentLocation!,
+                      width: 30,
+                      height: 30,
+                      child: const Icon(
+                        Icons.my_location,
+                        color: Colors.blue,
+                        size: 30,
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ),
 
           // Search bar overlay
@@ -331,10 +409,7 @@ class _MapsState extends State<Maps> {
                   prefixIcon: Icon(Icons.search, color: Color(0xFF006A5B)),
                 ),
                 onSubmitted: (value) {
-                  print('Search for: $value');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Searching for: $value')),
-                  );
+                  _searchLocation(value);
                 },
               ),
             ),
@@ -342,7 +417,20 @@ class _MapsState extends State<Maps> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _getCurrentLocation,
+        onPressed: () {
+          if (_currentLocation != null) {
+            try {
+              mapController.move(_currentLocation!, 15.0);
+            } catch (e) {
+              print('Error moving to location: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Error moving to your location')),
+              );
+            }
+          } else {
+            _getCurrentLocation();
+          }
+        },
         backgroundColor: const Color(0xFF006A5B),
         child: const Icon(Icons.my_location, color: Colors.white),
       ),

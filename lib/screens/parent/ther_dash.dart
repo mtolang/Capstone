@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
+import 'package:capstone_2/widgets/map.dart';
+import 'package:capstone_2/screens/auth/login_as.dart';
 
 class TherapistsDashboard extends StatelessWidget {
   const TherapistsDashboard({Key? key}) : super(key: key);
@@ -15,11 +17,15 @@ class TherapistsDashboard extends StatelessWidget {
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF006A5B),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          color: Colors.white,
-          onPressed: () {
-            Scaffold.of(context).openDrawer();
+        leading: Builder(
+          builder: (BuildContext context) {
+            return IconButton(
+              icon: const Icon(Icons.menu),
+              color: Colors.white,
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
+              },
+            );
           },
         ),
       ),
@@ -171,6 +177,23 @@ class TherapistsDashboard extends StatelessWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.people),
+              iconColor: const Color(0xFF006A5B),
+              title: const Text(
+                'Patient List',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showPatientList(context);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.message),
               iconColor: const Color(0xFF006A5B),
               title: const Text(
@@ -184,10 +207,7 @@ class TherapistsDashboard extends StatelessWidget {
               ),
               onTap: () {
                 Navigator.pop(context);
-                print('Chat tapped');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Chat selected')),
-                );
+                Navigator.pushNamed(context, '/patientselection');
               },
             ),
             // Add more items as needed
@@ -214,10 +234,10 @@ class TherapistsDashboard extends StatelessWidget {
                       TextButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Logged out successfully')),
-                          );
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginAs()));
                         },
                         child: const Text('Logout'),
                       ),
@@ -233,7 +253,7 @@ class TherapistsDashboard extends StatelessWidget {
       //body
       body: Stack(
         children: [
-          // top background
+          // Background images with fallback gradients
           Positioned(
             top: 0,
             left: 0,
@@ -248,11 +268,16 @@ class TherapistsDashboard extends StatelessWidget {
                     colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
                   ),
                 ),
+                child: Image.asset(
+                  'asset/images/Ellipse 1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(); // Gradient fallback
+                  },
+                ),
               ),
             ),
           ),
-
-          // bottom background
           Positioned(
             bottom: 0,
             left: 0,
@@ -267,6 +292,13 @@ class TherapistsDashboard extends StatelessWidget {
                     colors: [Color(0xFF67AFA5), Colors.white],
                   ),
                 ),
+                child: Image.asset(
+                  'asset/images/Ellipse 2.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(); // Gradient fallback
+                  },
+                ),
               ),
             ),
           ),
@@ -278,14 +310,15 @@ class TherapistsDashboard extends StatelessWidget {
                 const SliverAppBar(
                   automaticallyImplyLeading: false,
                   pinned:
-                      true, // Set to true if you want it pinned, false for floating
+                      false, // Set to false so it doesn't stay on top when scrolling
                   expandedHeight: 100.0,
                   toolbarHeight: 100.0, // Set the toolbar height
                   backgroundColor:
-                      Color(0xFF006A5B), // Make the background transparent
+                      Colors.transparent, // Make the background transparent
                   flexibleSpace: FlexibleSpaceBar(
-                    title:
-                        DashTab(), // Make DashTab the content of the flexibleSpace
+                    title: DashTab(
+                        initialSelectedIndex:
+                            1), // Set to therapists tab (index 1)
                     centerTitle: true, // Center the title
                   ),
                 ),
@@ -295,15 +328,15 @@ class TherapistsDashboard extends StatelessWidget {
                   child: SizedBox(height: 20),
                 ),
 
-                // Therapy clinic finder
+                // Search Therapists header
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.all(16.0),
                     child: Text(
-                      'Therapists Finder',
+                      'Search Therapists',
                       style: TextStyle(
-                        color: Color(0xFF67AFA5),
-                        fontSize: 20,
+                        color: Color(0xFF006A5B),
+                        fontSize: 24,
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w900,
                       ),
@@ -314,10 +347,10 @@ class TherapistsDashboard extends StatelessWidget {
 
                 // top height of the map
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 1),
+                  child: SizedBox(height: 10),
                 ),
 
-                // code for map (placeholder)
+                // code for map (OpenStreetMap implementation)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10.0),
@@ -327,16 +360,10 @@ class TherapistsDashboard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 10.0),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.grey[300],
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Center(
-                            child: Text(
-                              'Map Placeholder\n(Replace with your map)',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
+                          clipBehavior: Clip.hardEdge,
+                          child: const Maps(title: "Find Therapists"),
                         ),
                       ),
                     ),
@@ -503,5 +530,243 @@ class TherapistsDashboard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Method to show patient list
+  static void _showPatientList(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (context, scrollController) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Handle bar
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+
+                // Title
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.people,
+                      color: Color(0xFF006A5B),
+                      size: 28,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Patient List',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006A5B),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Search bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: const TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search patients...',
+                      border: InputBorder.none,
+                      prefixIcon: Icon(Icons.search, color: Color(0xFF006A5B)),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Patient list
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: _getSamplePatients().length,
+                    itemBuilder: (context, index) {
+                      final patient = _getSamplePatients()[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFF67AFA5),
+                            child: Text(
+                              patient['name']!.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            patient['name']!,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Age: ${patient['age']}'),
+                              Text('Condition: ${patient['condition']}'),
+                              Text('Next Session: ${patient['nextSession']}'),
+                            ],
+                          ),
+                          trailing: PopupMenuButton(
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'view',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.visibility),
+                                    SizedBox(width: 8),
+                                    Text('View Details'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit),
+                                    SizedBox(width: 8),
+                                    Text('Edit'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'schedule',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.schedule),
+                                    SizedBox(width: 8),
+                                    Text('Schedule'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            onSelected: (value) {
+                              switch (value) {
+                                case 'view':
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content:
+                                            Text('Viewing ${patient['name']}')),
+                                  );
+                                  break;
+                                case 'edit':
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content:
+                                            Text('Editing ${patient['name']}')),
+                                  );
+                                  break;
+                                case 'schedule':
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            'Scheduling for ${patient['name']}')),
+                                  );
+                                  break;
+                              }
+                            },
+                          ),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text('Selected ${patient['name']}')),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Sample patient data
+  static List<Map<String, String>> _getSamplePatients() {
+    return [
+      {
+        'name': 'Emma Rodriguez',
+        'age': '8',
+        'condition': 'Speech Delay',
+        'nextSession': 'Tomorrow 2:00 PM',
+      },
+      {
+        'name': 'Liam Johnson',
+        'age': '6',
+        'condition': 'Articulation Disorder',
+        'nextSession': 'Friday 10:00 AM',
+      },
+      {
+        'name': 'Sophia Chen',
+        'age': '7',
+        'condition': 'Language Development',
+        'nextSession': 'Monday 3:00 PM',
+      },
+      {
+        'name': 'Noah Williams',
+        'age': '5',
+        'condition': 'Phonological Processing',
+        'nextSession': 'Wednesday 11:00 AM',
+      },
+      {
+        'name': 'Olivia Garcia',
+        'age': '9',
+        'condition': 'Fluency Disorder',
+        'nextSession': 'Thursday 1:00 PM',
+      },
+      {
+        'name': 'Ethan Brown',
+        'age': '6',
+        'condition': 'Social Communication',
+        'nextSession': 'Friday 4:00 PM',
+      },
+      {
+        'name': 'Ava Martinez',
+        'age': '7',
+        'condition': 'Voice Disorder',
+        'nextSession': 'Next Tuesday 9:00 AM',
+      },
+      {
+        'name': 'Mason Davis',
+        'age': '8',
+        'condition': 'Hearing Impairment',
+        'nextSession': 'Next Wednesday 2:30 PM',
+      },
+    ];
   }
 }

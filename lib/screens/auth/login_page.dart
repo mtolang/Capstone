@@ -115,7 +115,7 @@ class LoginPage extends StatelessWidget {
                       ),
                     ),
                     onPressed: () {
-                      Navigator.pushNamed(context, '/clinicdashboard');
+                      Navigator.pushNamed(context, '/clinicprofile');
                     }, // Disabled
                     child: const Text('Login'),
                   ),

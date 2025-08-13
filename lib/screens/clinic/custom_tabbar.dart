@@ -18,6 +18,14 @@ class _CustomTabBarState extends State<CustomTabBar> {
           setState(() {
             _selectedTabIndex = index;
           });
+
+          // Navigate based on the selected tab
+          if (index == 0 && label == 'Profile') {
+            Navigator.pushNamed(context, '/clinicprofile');
+          } else if (index == 1 && label == 'Gallery') {
+            Navigator.pushNamed(context, '/clinicgallery');
+          }
+          // Note: Reviews tab (index 2) doesn't have a route yet
         },
         child: Container(
           height: 40,

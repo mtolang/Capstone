@@ -112,7 +112,7 @@ class _DashTabState extends State<DashTab> {
       width: 350,
       height: 40,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5),
+        color: Colors.white.withOpacity(0.2), // Restore capsule background
         shape: BoxShape.rectangle,
         borderRadius: BorderRadius.circular(20),
       ),
