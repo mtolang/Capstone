@@ -1,10 +1,13 @@
+import 'package:capstone_2/firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:capstone_2/splash_page.dart';
 //logins imports
 import 'package:capstone_2/screens/auth/login_page.dart';
 import 'package:capstone_2/screens/auth/parent_login.dart';
 import 'package:capstone_2/screens/auth/therapist_login.dart';
 import 'package:capstone_2/screens/auth/login_as.dart';
+import 'package:capstone_2/screens/auth/auth_test_page.dart';
 //registration imports
 import 'package:capstone_2/screens/registration/clinic_reg.dart';
 import 'package:capstone_2/screens/registration/parent_reg.dart';
@@ -25,7 +28,9 @@ import 'package:capstone_2/chat/therapist_chat.dart';
 import 'package:capstone_2/chat/patienside_select.dart';
 import 'package:capstone_2/chat/patient_chat.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -47,6 +52,7 @@ class MyApp extends StatelessWidget {
           '/parentlogin': (context) => const ParentLogin(), // <-- Add this
           '/therlogin': (context) => const TherapistLogin(), // <-- Add this
           '/loginas': (context) => const LoginAs(),
+          '/authtest': (context) => const AuthTestPage(),
 
           //Registration Routes
           '/clinicreg': (context) => const ClinicRegister(),

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "961497419837",
+    "project_id": "kindora-baed6",
+    "storage_bucket": "kindora-baed6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:961497419837:android:0abd82a01d350516a19a54",
+        "android_client_info": {
+          "package_name": "com.example.capstone_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8WRUgtzmn5TCBk-bbNns1JhyHw2HWN9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:961497419837:android:7a2a36b24d878887a19a54",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8WRUgtzmn5TCBk-bbNns1JhyHw2HWN9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
