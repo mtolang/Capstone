@@ -19,8 +19,8 @@ class _MapsState extends State<Maps> {
   late final MapController mapController;
   Location location = Location();
 
-  // Default location (Philippines - you can change this)
-  final LatLng _center = const LatLng(14.5995, 120.9842); // Manila, Philippines
+  // Default location - University of the Immaculate Conception - Main (Davao City)
+  final LatLng _center = const LatLng(7.069901911299253, 125.60031857042385);
 
   // Current user location
   LatLng? _currentLocation;
@@ -99,8 +99,36 @@ class _MapsState extends State<Maps> {
   void _addSampleMarkers() {
     setState(() {
       _markers = [
+        // University of the Immaculate Conception - Main Campus marker
         Marker(
-          point: const LatLng(14.6091, 121.0223), // Quezon City
+          point: const LatLng(7.069901911299253, 125.60031857042385),
+          width: 50,
+          height: 50,
+          child: GestureDetector(
+            onTap: () => _onMarkerTapped('uic_main'),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.school,
+                color: Color(0xFF006A5B),
+                size: 30,
+              ),
+            ),
+          ),
+        ),
+        Marker(
+          point: const LatLng(
+              7.0731, 125.6123), // Davao Medical School Foundation area
           width: 40,
           height: 40,
           child: GestureDetector(
@@ -113,7 +141,7 @@ class _MapsState extends State<Maps> {
           ),
         ),
         Marker(
-          point: const LatLng(14.5547, 121.0244), // Makati
+          point: const LatLng(7.0644, 125.6081), // Near Abreeza Mall area
           width: 40,
           height: 40,
           child: GestureDetector(
@@ -126,7 +154,7 @@ class _MapsState extends State<Maps> {
           ),
         ),
         Marker(
-          point: const LatLng(14.5764, 121.0851), // Pasig
+          point: const LatLng(7.0808, 125.5964), // Buhangin area
           width: 40,
           height: 40,
           child: GestureDetector(
@@ -139,7 +167,7 @@ class _MapsState extends State<Maps> {
           ),
         ),
         Marker(
-          point: const LatLng(14.6507, 121.0497), // San Juan
+          point: const LatLng(7.0559, 125.5889), // Matina area
           width: 40,
           height: 40,
           child: GestureDetector(
@@ -228,10 +256,12 @@ class _MapsState extends State<Maps> {
 
   String _getMarkerTitle(String markerId) {
     switch (markerId) {
+      case 'uic_main':
+        return 'University of the Immaculate Conception';
       case 'clinic1':
-        return 'The Tiny House Therapy Center';
+        return 'Davao Medical Center';
       case 'clinic2':
-        return 'Child Development Center';
+        return 'The Tiny House Therapy Center';
       case 'therapist1':
         return 'Dr. Maria Santos';
       case 'therapist2':
@@ -243,10 +273,12 @@ class _MapsState extends State<Maps> {
 
   String _getMarkerSubtitle(String markerId) {
     switch (markerId) {
+      case 'uic_main':
+        return 'Main Campus - Davao City\nEducational Institution';
       case 'clinic1':
-        return 'Speech & Occupational Therapy\n₱750/session';
+        return 'General Medicine & Therapy\n₱600/consultation';
       case 'clinic2':
-        return 'Physical & Cognitive Therapy\n₱800/session';
+        return 'Speech & Occupational Therapy\n₱750/session';
       case 'therapist1':
         return 'Speech Therapist\n5+ years experience';
       case 'therapist2':
@@ -370,12 +402,25 @@ class _MapsState extends State<Maps> {
                   if (_currentLocation != null)
                     Marker(
                       point: _currentLocation!,
-                      width: 30,
-                      height: 30,
-                      child: const Icon(
-                        Icons.my_location,
-                        color: Colors.blue,
-                        size: 30,
+                      width: 40,
+                      height: 40,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.person_pin_circle,
+                          color: Colors.white,
+                          size: 25,
+                        ),
                       ),
                     ),
                 ],
@@ -404,7 +449,7 @@ class _MapsState extends State<Maps> {
               ),
               child: TextField(
                 decoration: const InputDecoration(
-                  hintText: 'Search for therapists or clinics...',
+                  hintText: 'Search for therapists or clinics in Davao...',
                   border: InputBorder.none,
                   prefixIcon: Icon(Icons.search, color: Color(0xFF006A5B)),
                 ),
@@ -421,6 +466,9 @@ class _MapsState extends State<Maps> {
           if (_currentLocation != null) {
             try {
               mapController.move(_currentLocation!, 15.0);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Moved to your current location')),
+              );
             } catch (e) {
               print('Error moving to location: $e');
               ScaffoldMessenger.of(context).showSnackBar(
@@ -428,11 +476,20 @@ class _MapsState extends State<Maps> {
               );
             }
           } else {
-            _getCurrentLocation();
+            // If no GPS location, go to UIC location
+            mapController.move(_center, 15.0);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content:
+                      Text('Showing University of the Immaculate Conception')),
+            );
           }
         },
         backgroundColor: const Color(0xFF006A5B),
-        child: const Icon(Icons.my_location, color: Colors.white),
+        child: Icon(
+          _currentLocation != null ? Icons.my_location : Icons.location_on,
+          color: Colors.white,
+        ),
       ),
     );
   }

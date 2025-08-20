@@ -2,9 +2,20 @@ import 'package:capstone_2/screens/auth/login_as.dart';
 import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
 import 'package:capstone_2/screens/parent/games_option.dart';
+import 'package:capstone_2/widgets/map.dart';
 
-class Dashboard extends StatelessWidget {
+class Dashboard extends StatefulWidget {
   const Dashboard({Key? key}) : super(key: key);
+
+  @override
+  State<Dashboard> createState() => _DashboardState();
+}
+
+class _DashboardState extends State<Dashboard> {
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +213,7 @@ class Dashboard extends StatelessWidget {
                 ),
               ),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pushNamed(context, '/thertherapistsideselect');
                 print('Chat tapped');
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Chat selected')),
@@ -341,30 +352,22 @@ class Dashboard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 10.0),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.grey[300],
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Image.asset(
-                            'asset/images/map.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Center(
-                                child: Text(
-                                  'Map Placeholder\n(Replace with your map)',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                              );
-                            },
-                          ),
+                          clipBehavior: Clip.hardEdge,
+                          child: const Maps(title: "Find Therapists"),
                         ),
                       ),
                     ),
                   ),
                 ),
+
+                // top height of the searchbar and/or spacing of search bar and map
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 10),
                 ),
+
+                // code for the search bar
                 SliverToBoxAdapter(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16.0),

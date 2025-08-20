@@ -90,7 +90,6 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
         children: [
           // Custom Header with wave design
           Container(
-            height: 120,
             decoration: const BoxDecoration(
               color: Color(0xFF006A5B),
               borderRadius: BorderRadius.only(
@@ -100,8 +99,9 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       children: [
@@ -178,17 +178,6 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Wave decoration
-                Container(
-                  height: 20,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF67AFA5),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(20),
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 20),
 
                 // Messages label

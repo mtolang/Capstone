@@ -1,73 +1,116 @@
 import 'package:flutter/material.dart';
 import 'chat_call.dart';
 
-class TherapistChatPage extends StatefulWidget {
-  final String? patientId;
+class PatientChatPage extends StatefulWidget {
+  final String? therapistId;
+  final String? therapistName;
+  final bool isPatientSide;
 
-  const TherapistChatPage({Key? key, this.patientId}) : super(key: key);
+  const PatientChatPage({
+    Key? key,
+    this.therapistId,
+    this.therapistName,
+    this.isPatientSide = true,
+  }) : super(key: key);
 
   @override
-  State<TherapistChatPage> createState() => _TherapistChatPageState();
+  State<PatientChatPage> createState() => _PatientChatPageState();
 }
 
-class _TherapistChatPageState extends State<TherapistChatPage> {
+class _PatientChatPageState extends State<PatientChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<ChatMessage> _messages = [];
-  String _patientName = '';
+  String _contactName = '';
 
   @override
   void initState() {
     super.initState();
-    _loadPatientInfo();
+    _loadContactInfo();
     _loadMessages();
   }
 
-  void _loadPatientInfo() {
-    // Load patient information based on the patient ID
-    // This should be replaced with actual data from your backend
-    Map<String, String> patientNames = {
-      '1': 'Tiny House Therapy Clinic',
-      '2': 'Taylor Swift',
-      '3': 'Maria Santos',
-      '4': 'John Doe',
-      '5': 'Sarah Wilson',
-    };
-
-    _patientName = patientNames[widget.patientId] ?? 'Unknown Patient';
+  void _loadContactInfo() {
+    // Load contact information based on the ID
+    if (widget.isPatientSide) {
+      // Patient side - showing therapist info
+      Map<String, String> therapistNames = {
+        '1': 'Dr. Maria Santos',
+        '2': 'Dr. Juan Cruz',
+        '3': 'Dr. Sarah Wilson',
+        '4': 'The Tiny House Therapy Center',
+      };
+      _contactName = widget.therapistName ??
+          therapistNames[widget.therapistId] ??
+          'Unknown Therapist';
+    } else {
+      // Therapist side - showing patient info
+      Map<String, String> patientNames = {
+        '1': 'Tiny House Therapy Clinic',
+        '2': 'Taylor Swift',
+        '3': 'Maria Santos',
+        '4': 'John Doe',
+        '5': 'Sarah Wilson',
+      };
+      _contactName = patientNames[widget.therapistId] ?? 'Unknown Patient';
+    }
   }
 
   void _loadMessages() {
     // Sample messages - replace with actual data from your backend
-    _messages = [
-      ChatMessage(
-        id: '1',
-        senderId: widget.patientId ?? '1',
-        senderName: _patientName,
-        message: 'Hello doctor, I hope you are doing well.',
-        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-        isFromTherapist: false,
-      ),
-      ChatMessage(
-        id: '2',
-        senderId: 'therapist',
-        senderName: 'Dr. Therapist',
-        message: 'Hello! I\'m doing well, thank you. How can I help you today?',
-        timestamp:
-            DateTime.now().subtract(const Duration(hours: 1, minutes: 45)),
-        isFromTherapist: true,
-      ),
-      ChatMessage(
-        id: '3',
-        senderId: widget.patientId ?? '1',
-        senderName: _patientName,
-        message:
-            'I wanted to ask about the exercises you recommended last session.',
-        timestamp:
-            DateTime.now().subtract(const Duration(hours: 1, minutes: 30)),
-        isFromTherapist: false,
-      ),
-    ];
+    if (widget.isPatientSide) {
+      _messages = [
+        ChatMessage(
+          id: '1',
+          senderId: widget.therapistId ?? '1',
+          senderName: _contactName,
+          message: 'Hello! How are you feeling today? Ready for our session?',
+          timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+          isFromTherapist: true,
+        ),
+        ChatMessage(
+          id: '2',
+          senderId: 'patient',
+          senderName: 'You',
+          message: 'Hi Dr! I\'m doing well, thank you. Yes, I\'m ready.',
+          timestamp:
+              DateTime.now().subtract(const Duration(hours: 1, minutes: 45)),
+          isFromTherapist: false,
+        ),
+        ChatMessage(
+          id: '3',
+          senderId: widget.therapistId ?? '1',
+          senderName: _contactName,
+          message:
+              'Great! I\'ve prepared some new exercises for you to try today.',
+          timestamp:
+              DateTime.now().subtract(const Duration(hours: 1, minutes: 30)),
+          isFromTherapist: true,
+        ),
+      ];
+    } else {
+      // Load therapist side messages (reuse from therapist_chat logic)
+      _messages = [
+        ChatMessage(
+          id: '1',
+          senderId: widget.therapistId ?? '1',
+          senderName: _contactName,
+          message: 'Hello doctor, I hope you are doing well.',
+          timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+          isFromTherapist: false,
+        ),
+        ChatMessage(
+          id: '2',
+          senderId: 'therapist',
+          senderName: 'Dr. Therapist',
+          message:
+              'Hello! I\'m doing well, thank you. How can I help you today?',
+          timestamp:
+              DateTime.now().subtract(const Duration(hours: 1, minutes: 45)),
+          isFromTherapist: true,
+        ),
+      ];
+    }
 
     // Scroll to bottom after loading messages
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -86,11 +129,11 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
 
     final newMessage = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: 'therapist',
-      senderName: 'Dr. Therapist',
+      senderId: widget.isPatientSide ? 'patient' : 'therapist',
+      senderName: widget.isPatientSide ? 'You' : 'Dr. Therapist',
       message: _messageController.text.trim(),
       timestamp: DateTime.now(),
-      isFromTherapist: true,
+      isFromTherapist: !widget.isPatientSide,
     );
 
     setState(() {
@@ -143,7 +186,7 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
               radius: 18,
               backgroundColor: const Color(0xFF67AFA5),
               child: Text(
-                _patientName.isNotEmpty ? _patientName[0].toUpperCase() : 'P',
+                _contactName.isNotEmpty ? _contactName[0].toUpperCase() : 'C',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -157,7 +200,7 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _patientName,
+                    _contactName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -165,9 +208,9 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                       fontFamily: 'Poppins',
                     ),
                   ),
-                  const Text(
-                    'Online',
-                    style: TextStyle(
+                  Text(
+                    widget.isPatientSide ? 'Therapist' : 'Patient',
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
                       fontFamily: 'Poppins',
@@ -187,9 +230,10 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                 MaterialPageRoute(
                   builder: (context) => ChatCallScreen(
                     callId:
-                        'call_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: 'therapist_id',
-                    initialParticipants: [widget.patientId ?? 'unknown'],
+                        'call_${widget.therapistId}_${DateTime.now().millisecondsSinceEpoch}',
+                    currentUserId:
+                        widget.isPatientSide ? 'patient_id' : 'therapist_id',
+                    initialParticipants: [widget.therapistId ?? 'unknown'],
                   ),
                 ),
               );
@@ -203,9 +247,10 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                 MaterialPageRoute(
                   builder: (context) => ChatCallScreen(
                     callId:
-                        'voice_call_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: 'therapist_id',
-                    initialParticipants: [widget.patientId ?? 'unknown'],
+                        'voice_call_${widget.therapistId}_${DateTime.now().millisecondsSinceEpoch}',
+                    currentUserId:
+                        widget.isPatientSide ? 'patient_id' : 'therapist_id',
+                    initialParticipants: [widget.therapistId ?? 'unknown'],
                   ),
                 ),
               );
@@ -306,21 +351,26 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
+    // For patient side: show user messages on right, therapist on left
+    // For therapist side: show therapist messages on right, patient on left
+    bool isCurrentUser = widget.isPatientSide
+        ? !message.isFromTherapist
+        : message.isFromTherapist;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: message.isFromTherapist
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (!message.isFromTherapist) ...[
+          if (!isCurrentUser) ...[
             CircleAvatar(
               radius: 16,
               backgroundColor: const Color(0xFF67AFA5),
               child: Text(
                 message.senderName.isNotEmpty
                     ? message.senderName[0].toUpperCase()
-                    : 'P',
+                    : 'C',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -334,14 +384,12 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: message.isFromTherapist
-                    ? const Color(0xFF006A5B)
-                    : Colors.white,
+                color: isCurrentUser ? const Color(0xFF006A5B) : Colors.white,
                 borderRadius: BorderRadius.circular(18).copyWith(
-                  bottomLeft: message.isFromTherapist
+                  bottomLeft: isCurrentUser
                       ? const Radius.circular(18)
                       : const Radius.circular(4),
-                  bottomRight: message.isFromTherapist
+                  bottomRight: isCurrentUser
                       ? const Radius.circular(4)
                       : const Radius.circular(18),
                 ),
@@ -360,7 +408,7 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                   Text(
                     message.message,
                     style: TextStyle(
-                      color: message.isFromTherapist
+                      color: isCurrentUser
                           ? Colors.white
                           : const Color(0xFF006A5B),
                       fontSize: 14,
@@ -371,9 +419,7 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                   Text(
                     _formatTimestamp(message.timestamp),
                     style: TextStyle(
-                      color: message.isFromTherapist
-                          ? Colors.white70
-                          : Colors.grey[500],
+                      color: isCurrentUser ? Colors.white70 : Colors.grey[500],
                       fontSize: 10,
                       fontFamily: 'Poppins',
                     ),
@@ -382,15 +428,13 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
               ),
             ),
           ),
-          if (message.isFromTherapist) ...[
+          if (isCurrentUser) ...[
             const SizedBox(width: 8),
             CircleAvatar(
               radius: 16,
               backgroundColor: const Color(0xFF006A5B),
               child: Text(
-                message.senderName.isNotEmpty
-                    ? message.senderName[0].toUpperCase()
-                    : 'T',
+                'You'[0].toUpperCase(),
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

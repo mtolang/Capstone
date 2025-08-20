@@ -49,6 +49,7 @@ class _DashTabState extends State<DashTab> {
   // OnPressed methods for each tab
   void _onClinicsPressed() {
     print('Clinics tab pressed');
+    Navigator.pushNamed(context, '/parentdashboard');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Clinics tab selected')),
     );

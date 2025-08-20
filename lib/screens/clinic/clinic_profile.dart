@@ -188,6 +188,7 @@ class ClinicProfile extends StatelessWidget {
               ),
               onTap: () {
                 Navigator.pop(context);
+                Navigator.pushNamed(context, '/patientselection');
                 print('Chat tapped');
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Chat selected')),
@@ -222,6 +223,7 @@ class ClinicProfile extends StatelessWidget {
                             const SnackBar(
                                 content: Text('Logged out successfully')),
                           );
+                          Navigator.pushNamed(context, '/loginas');
                         },
                         child: const Text('Logout'),
                       ),
@@ -293,245 +295,254 @@ class ClinicProfile extends StatelessWidget {
 
             // Main Content
             Positioned(
-              child: ListView(
-                children: <Widget>[
-                  const SizedBox(height: 30),
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: <Widget>[
+                    const SizedBox(height: 30),
 
-                  // - Custom Tab bar -
-                  const Center(
-                    child: CustomTabBar(),
-                  ),
+                    // - Custom Tab bar -
+                    const Center(
+                      child: CustomTabBar(),
+                    ),
 
-                  // Padding added before the CustomTabBar to avoid overlap
-                  const SizedBox(height: 60),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Profile picture with fallback
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: const Color.fromARGB(255, 10, 94, 45),
-                            width: 1.0,
+                    // Padding added before the CustomTabBar to avoid overlap
+                    const SizedBox(height: 60),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Profile picture with fallback
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: const Color.fromARGB(255, 10, 94, 45),
+                              width: 1.0,
+                            ),
+                            shape: BoxShape.circle,
                           ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: CircleAvatar(
-                          radius: 70,
-                          backgroundColor: Colors.grey[300],
-                          child: Image.asset(
-                            'asset/images/profile.jpg',
-                            width: 140,
-                            height: 140,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
-                                Icons.business,
-                                size: 80,
-                                color: Colors.grey,
-                              );
-                            },
+                          child: CircleAvatar(
+                            radius: 70,
+                            backgroundColor: Colors.grey[300],
+                            child: Image.asset(
+                              'asset/images/profile.jpg',
+                              width: 140,
+                              height: 140,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.business,
+                                  size: 80,
+                                  color: Colors.grey,
+                                );
+                              },
+                            ),
                           ),
                         ),
-                      ),
 
-                      // Spacing between profile picture and clinic name
-                      const SizedBox(height: 5),
+                        // Spacing between profile picture and clinic name
+                        const SizedBox(height: 5),
 
-                      // Clinic Name
-                      const Text(
-                        'The Tiny House',
-                        style: TextStyle(
-                          color: Color(0xFF67AFA5),
-                          fontSize: 20,
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-
-                      // Spacing between clinic name and 'About Us'
-                      const SizedBox(height: 10),
-
-                      // About Us
-                      const Text(
-                        'ABOUT US',
-                        style: TextStyle(
-                          color: Color(0xFF999999),
-                          fontSize: 16,
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-
-                      // Spacing between 'About Us' and its content
-                      const SizedBox(height: 5),
-
-                      // About Us content
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 20),
-                        child: Text(
-                          'A center with all your needed services, The Tiny House Therapy and Learning Center',
+                        // Clinic Name
+                        const Text(
+                          'The Tiny House',
                           style: TextStyle(
-                            height: 1.3,
-                            fontSize: 15.0,
-                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF67AFA5),
+                            fontSize: 20,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w900,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
-                  ),
 
-                  // Spacing between About Us content and "Services offered"
-                  const SizedBox(height: 15),
+                        // Spacing between clinic name and 'About Us'
+                        const SizedBox(height: 10),
 
-                  // Services Offered
-                  const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'SERVICES OFFERED',
-                        style: TextStyle(
-                          color: Color(0xFF999999),
-                          fontSize: 16,
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w900,
+                        // About Us
+                        const Text(
+                          'ABOUT US',
+                          style: TextStyle(
+                            color: Color(0xFF999999),
+                            fontSize: 16,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
 
-                  // Spacing between "Services Offered" and its content
-                  const SizedBox(height: 5),
-                  const SizedBox(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 10),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('• Occupational Therapy',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                                SizedBox(height: 5),
-                                Text('• Physical Therapy',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                                SizedBox(height: 5),
-                                Text('• Cognitive Therapy',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                                SizedBox(height: 5),
-                                Text('• Speech Therapy',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                              ],
+                        // Spacing between 'About Us' and its content
+                        const SizedBox(height: 5),
+
+                        // About Us content
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'A center with all your needed services, The Tiny House Therapy and Learning Center',
+                            style: TextStyle(
+                              height: 1.3,
+                              fontSize: 15.0,
+                              fontWeight: FontWeight.bold,
                             ),
-                            SizedBox(width: 20),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('• Developmental Delays',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                                SizedBox(height: 5),
-                                Text('• ADHD',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                                SizedBox(height: 5),
-                                Text('• Learning Disability',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                                SizedBox(height: 5),
-                                Text('• Oral Motor Issues',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.0)),
-                              ],
-                            ),
-                          ],
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Spacing between About Us content and "Services offered"
+                    const SizedBox(height: 15),
+
+                    // Services Offered
+                    const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'SERVICES OFFERED',
+                          style: TextStyle(
+                            color: Color(0xFF999999),
+                            fontSize: 16,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Spacing between "Services Offered" and its content
+                    const SizedBox(height: 5),
+                    const SizedBox(
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('• Occupational Therapy',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                  SizedBox(height: 5),
+                                  Text('• Physical Therapy',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                  SizedBox(height: 5),
+                                  Text('• Cognitive Therapy',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                  SizedBox(height: 5),
+                                  Text('• Speech Therapy',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                ],
+                              ),
+                              SizedBox(width: 20),
+                              Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('• Developmental Delays',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                  SizedBox(height: 5),
+                                  Text('• ADHD',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                  SizedBox(height: 5),
+                                  Text('• Learning Disability',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                  SizedBox(height: 5),
+                                  Text('• Oral Motor Issues',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.0)),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  // Spacing between services offered content and "Prices"
-                  const SizedBox(height: 20),
+                    // Spacing between services offered content and "Prices"
+                    const SizedBox(height: 20),
 
-                  // Prices
-                  const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'PRICES',
-                        style: TextStyle(
-                          color: Color(0xFF999999),
-                          fontSize: 16,
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Spacing between "Prices" and its content
-                  const SizedBox(height: 15),
-
-                  // Prices content
-                  Column(
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 297,
-                          height: 51,
-                          decoration: ShapeDecoration(
-                            color: const Color(0xFF006A5B),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            shadows: const [
-                              BoxShadow(
-                                color: Color(0x3F000000),
-                                blurRadius: 4,
-                                offset: Offset(0, 4),
-                                spreadRadius: 0,
-                              )
-                            ],
+                    // Prices
+                    const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'PRICES',
+                          style: TextStyle(
+                            color: Color(0xFF999999),
+                            fontSize: 16,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w900,
                           ),
-                          child: const Center(
-                            child: Text(
-                              "₱750/Session (1hr)",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                        ),
+                      ],
+                    ),
+
+                    // Spacing between "Prices" and its content
+                    const SizedBox(height: 15),
+
+                    // Prices content
+                    Column(
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 297,
+                            height: 51,
+                            decoration: ShapeDecoration(
+                              color: const Color(0xFF006A5B),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              shadows: const [
+                                BoxShadow(
+                                  color: Color(0x3F000000),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 4),
+                                  spreadRadius: 0,
+                                )
+                              ],
+                            ),
+                            child: const Center(
+                              child: Text(
+                                "₱750/Session (1hr)",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
 
-                  // Additional spacing at bottom
-                  const SizedBox(height: 100),
-                ],
+                    // Additional spacing at bottom
+                    const SizedBox(height: 100),
+                  ],
+                ),
               ),
             ),
 
