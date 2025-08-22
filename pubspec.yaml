@@ -46,6 +46,7 @@ dependencies:
   firebase_core: ^4.0.0
   cloud_firestore: ^6.0.0
   firebase_auth: ^6.0.0
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +76,7 @@ flutter:
     - asset/icons/add_1.png
     - asset/icons/logo_ther.png
     - asset/icons/social.png
+    - asset/icons/facebook (1).png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

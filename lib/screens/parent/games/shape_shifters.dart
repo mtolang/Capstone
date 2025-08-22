@@ -5,10 +5,10 @@ class ShapeShiftersGame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Shape Shifters',
+      title: 'Drag to Shape Game',
       theme: ThemeData(
         primarySwatch: Colors.teal,
-        fontFamily: 'Arial',
+        fontFamily: 'Roboto',
       ),
       home: DragToShapeGame(),
       debugShowCheckedModeBanner: false,
@@ -16,51 +16,39 @@ class ShapeShiftersGame extends StatelessWidget {
   }
 }
 
-class GameLevel {
-  final int level;
-  final String instruction;
-  final List<ShapeData> shapes;
-  final List<DragObject> objects;
-
-  GameLevel({
-    required this.level,
-    required this.instruction,
-    required this.shapes,
-    required this.objects,
-  });
-}
-
-class ShapeData {
-  final String type; // 'square', 'circle', 'triangle', 'star'
-  final Offset position;
+class GameShape {
+  final String type;
+  final Offset center;
   final double size;
-  final Color outlineColor;
+  final Color color;
+  bool hasObject;
 
-  ShapeData({
+  GameShape({
     required this.type,
-    required this.position,
+    required this.center,
     required this.size,
-    required this.outlineColor,
+    required this.color,
+    this.hasObject = false,
   });
 }
 
-class DragObject {
+class GameDragObject {
   final String id;
   final String type;
   final Color color;
   final double size;
   Offset position;
-  bool isDragging;
   bool isPlaced;
+  String? placedInShape;
 
-  DragObject({
+  GameDragObject({
     required this.id,
     required this.type,
     required this.color,
     required this.size,
     required this.position,
-    this.isDragging = false,
     this.isPlaced = false,
+    this.placedInShape,
   });
 }
 
@@ -70,302 +58,292 @@ class DragToShapeGame extends StatefulWidget {
 }
 
 class _DragToShapeGameState extends State<DragToShapeGame>
-    with TickerProviderStateMixin {
-  int currentLevel = 1;
+    with SingleTickerProviderStateMixin {
+  int currentLevel = 0; // Start from 0 for Level 1
   bool showSuccess = false;
-  late AnimationController _successController;
-  late AnimationController _popController;
+  late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _popAnimation;
 
-  List<GameLevel> levels = [];
-  late GameLevel activeLevel;
-  List<DragObject> dragObjects = [];
+  List<GameShape> shapes = [];
+  List<GameDragObject> objects = [];
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
-    _initializeLevels();
-    _loadLevel(currentLevel);
-  }
-
-  void _initializeAnimations() {
-    _successController = AnimationController(
-      duration: Duration(milliseconds: 500),
+    _animationController = AnimationController(
+      duration: Duration(milliseconds: 800),
       vsync: this,
     );
-
-    _popController = AnimationController(
-      duration: Duration(milliseconds: 300),
-      vsync: this,
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
     );
-
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _successController, curve: Curves.elasticOut),
-    );
-
-    _popAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
-      CurvedAnimation(parent: _popController, curve: Curves.elasticOut),
-    );
+    _loadLevel();
   }
 
-  void _initializeLevels() {
-    levels = [
-      // Level 1: 1 shape, 1 object
-      GameLevel(
-        level: 1,
-        instruction: "Trace the Square and pop the balloon",
-        shapes: [
-          ShapeData(
-            type: 'square',
-            position: Offset(200, 300),
-            size: 120,
-            outlineColor: Colors.grey,
-          ),
-        ],
-        objects: [
-          DragObject(
-            id: 'balloon1',
-            type: 'balloon',
-            color: Colors.red,
-            size: 80,
-            position: Offset(200, 500),
-          ),
-        ],
-      ),
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
-      // Level 2: 1 shape, 2 objects
-      GameLevel(
-        level: 2,
-        instruction: "Place objects on the Circle",
-        shapes: [
-          ShapeData(
-            type: 'circle',
-            position: Offset(200, 300),
-            size: 120,
-            outlineColor: Colors.blue,
-          ),
-        ],
-        objects: [
-          DragObject(
+  void _loadLevel() {
+    setState(() {
+      shapes.clear();
+      objects.clear();
+      showSuccess = false;
+    });
+
+    switch (currentLevel) {
+      case 0: // Level 1
+        shapes.add(GameShape(
+          type: 'square',
+          center: Offset(200, 250),
+          size: 100,
+          color: Colors.grey.shade400,
+        ));
+        objects.add(GameDragObject(
+          id: 'balloon1',
+          type: 'balloon',
+          color: Colors.red,
+          size: 60,
+          position: Offset(200, 400),
+        ));
+        break;
+
+      case 1: // Level 2
+        shapes.add(GameShape(
+          type: 'circle',
+          center: Offset(200, 250),
+          size: 120,
+          color: Colors.blue.shade300,
+        ));
+        objects.addAll([
+          GameDragObject(
             id: 'star1',
             type: 'star',
             color: Colors.yellow,
-            size: 60,
-            position: Offset(150, 500),
+            size: 50,
+            position: Offset(150, 400),
           ),
-          DragObject(
+          GameDragObject(
             id: 'heart1',
             type: 'heart',
             color: Colors.pink,
-            size: 60,
-            position: Offset(250, 500),
+            size: 50,
+            position: Offset(250, 400),
           ),
-        ],
-      ),
+        ]);
+        break;
 
-      // Level 3: 2 shapes, 2 objects
-      GameLevel(
-        level: 3,
-        instruction: "Match objects to their shapes",
-        shapes: [
-          ShapeData(
+      case 2: // Level 3
+        shapes.addAll([
+          GameShape(
             type: 'square',
-            position: Offset(150, 280),
-            size: 100,
-            outlineColor: Colors.green,
+            center: Offset(150, 250),
+            size: 90,
+            color: Colors.green.shade300,
           ),
-          ShapeData(
+          GameShape(
             type: 'circle',
-            position: Offset(270, 280),
-            size: 100,
-            outlineColor: Colors.purple,
+            center: Offset(270, 250),
+            size: 90,
+            color: Colors.purple.shade300,
           ),
-        ],
-        objects: [
-          DragObject(
+        ]);
+        objects.addAll([
+          GameDragObject(
             id: 'square_obj',
-            type: 'square_filled',
+            type: 'square',
             color: Colors.green,
-            size: 70,
-            position: Offset(120, 450),
+            size: 60,
+            position: Offset(120, 400),
           ),
-          DragObject(
+          GameDragObject(
             id: 'circle_obj',
-            type: 'circle_filled',
+            type: 'circle',
             color: Colors.purple,
-            size: 70,
-            position: Offset(280, 450),
+            size: 60,
+            position: Offset(280, 400),
           ),
-        ],
-      ),
+        ]);
+        break;
 
-      // Level 4: 2 shapes, 3 objects
-      GameLevel(
-        level: 4,
-        instruction: "Sort the shapes correctly",
-        shapes: [
-          ShapeData(
+      case 3: // Level 4
+        shapes.addAll([
+          GameShape(
             type: 'triangle',
-            position: Offset(150, 280),
-            size: 100,
-            outlineColor: Colors.orange,
+            center: Offset(140, 250),
+            size: 90,
+            color: Colors.orange.shade300,
           ),
-          ShapeData(
+          GameShape(
             type: 'star',
-            position: Offset(270, 280),
-            size: 100,
-            outlineColor: Colors.teal,
+            center: Offset(280, 250),
+            size: 90,
+            color: Colors.teal.shade300,
           ),
-        ],
-        objects: [
-          DragObject(
+        ]);
+        objects.addAll([
+          GameDragObject(
             id: 'triangle_obj',
-            type: 'triangle_filled',
+            type: 'triangle',
             color: Colors.orange,
-            size: 60,
-            position: Offset(100, 450),
+            size: 50,
+            position: Offset(100, 400),
           ),
-          DragObject(
-            id: 'star_obj1',
-            type: 'star_filled',
+          GameDragObject(
+            id: 'star_obj',
+            type: 'star',
             color: Colors.teal,
-            size: 60,
-            position: Offset(200, 450),
+            size: 50,
+            position: Offset(180, 400),
           ),
-          DragObject(
+          GameDragObject(
             id: 'balloon2',
             type: 'balloon',
             color: Colors.red,
-            size: 60,
-            position: Offset(300, 450),
-          ),
-        ],
-      ),
-
-      // Level 5: 3 shapes, 4 objects
-      GameLevel(
-        level: 5,
-        instruction: "Complete the pattern challenge",
-        shapes: [
-          ShapeData(
-            type: 'square',
-            position: Offset(120, 260),
-            size: 80,
-            outlineColor: Colors.red,
-          ),
-          ShapeData(
-            type: 'circle',
-            position: Offset(220, 260),
-            size: 80,
-            outlineColor: Colors.blue,
-          ),
-          ShapeData(
-            type: 'triangle',
-            position: Offset(320, 260),
-            size: 80,
-            outlineColor: Colors.green,
-          ),
-        ],
-        objects: [
-          DragObject(
-            id: 'red_square',
-            type: 'square_filled',
-            color: Colors.red,
             size: 50,
-            position: Offset(80, 450),
+            position: Offset(300, 400),
           ),
-          DragObject(
-            id: 'blue_circle',
-            type: 'circle_filled',
-            color: Colors.blue,
-            size: 50,
-            position: Offset(160, 450),
-          ),
-          DragObject(
-            id: 'green_triangle',
-            type: 'triangle_filled',
-            color: Colors.green,
-            size: 50,
-            position: Offset(240, 450),
-          ),
-          DragObject(
-            id: 'extra_star',
-            type: 'star_filled',
-            color: Colors.yellow,
-            size: 50,
-            position: Offset(320, 450),
-          ),
-        ],
-      ),
-    ];
-  }
-
-  void _loadLevel(int level) {
-    setState(() {
-      activeLevel = levels[level - 1];
-      dragObjects = activeLevel.objects
-          .map((obj) => DragObject(
-                id: obj.id,
-                type: obj.type,
-                color: obj.color,
-                size: obj.size,
-                position: obj.position,
-              ))
-          .toList();
-      showSuccess = false;
-    });
-  }
-
-  bool _isObjectInShape(DragObject object, ShapeData shape) {
-    double distance = (object.position - shape.position).distance;
-    return distance < (shape.size / 2);
-  }
-
-  void _checkLevelComplete() {
-    bool allPlaced = true;
-
-    for (var object in dragObjects) {
-      bool foundValidShape = false;
-
-      for (var shape in activeLevel.shapes) {
-        if (_isObjectInShape(object, shape)) {
-          // Check if object type matches shape type (for matching levels)
-          if (_isValidMatch(object.type, shape.type)) {
-            foundValidShape = true;
-            break;
-          }
-        }
-      }
-
-      if (!foundValidShape) {
-        allPlaced = false;
+        ]);
         break;
+
+      case 4: // Level 5
+        shapes.addAll([
+          GameShape(
+            type: 'square',
+            center: Offset(110, 250),
+            size: 80,
+            color: Colors.red.shade300,
+          ),
+          GameShape(
+            type: 'circle',
+            center: Offset(200, 250),
+            size: 80,
+            color: Colors.blue.shade300,
+          ),
+          GameShape(
+            type: 'triangle',
+            center: Offset(290, 250),
+            size: 80,
+            color: Colors.green.shade300,
+          ),
+        ]);
+        objects.addAll([
+          GameDragObject(
+            id: 'red_square',
+            type: 'square',
+            color: Colors.red,
+            size: 45,
+            position: Offset(80, 400),
+          ),
+          GameDragObject(
+            id: 'blue_circle',
+            type: 'circle',
+            color: Colors.blue,
+            size: 45,
+            position: Offset(160, 400),
+          ),
+          GameDragObject(
+            id: 'green_triangle',
+            type: 'triangle',
+            color: Colors.green,
+            size: 45,
+            position: Offset(240, 400),
+          ),
+          GameDragObject(
+            id: 'extra_balloon',
+            type: 'balloon',
+            color: Colors.yellow,
+            size: 45,
+            position: Offset(320, 400),
+          ),
+        ]);
+        break;
+    }
+  }
+
+  bool _isInsideShape(Offset position, GameShape shape) {
+    double distance = (position - shape.center).distance;
+    return distance <= (shape.size / 2) - 10;
+  }
+
+  bool _isValidPlacement(GameDragObject object, GameShape shape) {
+    // Level 1-2: Any object can go in any shape
+    if (currentLevel <= 1) return true;
+
+    // Level 3+: Objects must match shape types
+    if (object.type == shape.type) return true;
+
+    // Balloons can go anywhere (extra objects)
+    if (object.type == 'balloon') return false;
+
+    return false;
+  }
+
+  void _onObjectDragEnd(GameDragObject object, Offset position) {
+    bool wasPlaced = false;
+
+    for (GameShape shape in shapes) {
+      if (_isInsideShape(position, shape)) {
+        if (_isValidPlacement(object, shape) && !shape.hasObject) {
+          setState(() {
+            object.position = shape.center;
+            object.isPlaced = true;
+            object.placedInShape = shape.type;
+            shape.hasObject = true;
+          });
+          wasPlaced = true;
+          break;
+        }
       }
     }
 
-    if (allPlaced) {
+    if (!wasPlaced) {
+      // Snap back to original position or current position
+      setState(() {
+        object.position = position;
+        object.isPlaced = false;
+        if (object.placedInShape != null) {
+          // Remove from previous shape
+          for (GameShape shape in shapes) {
+            if (shape.type == object.placedInShape) {
+              shape.hasObject = false;
+              break;
+            }
+          }
+          object.placedInShape = null;
+        }
+      });
+    }
+
+    _checkLevelComplete();
+  }
+
+  void _checkLevelComplete() {
+    int requiredPlacements = _getRequiredPlacements();
+    int actualPlacements = objects.where((obj) => obj.isPlaced).length;
+
+    if (actualPlacements >= requiredPlacements) {
       _showSuccess();
     }
   }
 
-  bool _isValidMatch(String objectType, String shapeType) {
-    // For levels 1-2, any object can go in any shape
-    if (currentLevel <= 2) return true;
-
-    // For levels 3-5, check specific matches
-    Map<String, String> validMatches = {
-      'square_filled': 'square',
-      'circle_filled': 'circle',
-      'triangle_filled': 'triangle',
-      'star_filled': 'star',
-    };
-
-    return validMatches[objectType] == shapeType ||
-        objectType == 'balloon' ||
-        objectType == 'star' ||
-        objectType == 'heart';
+  int _getRequiredPlacements() {
+    switch (currentLevel) {
+      case 0:
+        return 1; // Level 1: 1 object
+      case 1:
+        return 2; // Level 2: 2 objects
+      case 2:
+        return 2; // Level 3: 2 objects
+      case 3:
+        return 2; // Level 4: 2 objects (triangle and star)
+      case 4:
+        return 3; // Level 5: 3 objects
+      default:
+        return objects.length;
+    }
   }
 
   void _showSuccess() {
@@ -373,41 +351,43 @@ class _DragToShapeGameState extends State<DragToShapeGame>
       showSuccess = true;
     });
 
-    _successController.forward();
-    _popController.forward().then((_) {
-      _popController.reverse();
-    });
+    _animationController.forward();
 
     Future.delayed(Duration(seconds: 2), () {
-      if (currentLevel < 5) {
-        _nextLevel();
+      _animationController.reverse();
+      if (currentLevel < 4) {
+        setState(() {
+          currentLevel++;
+        });
+        _loadLevel();
       } else {
         _showGameComplete();
       }
     });
   }
 
-  void _nextLevel() {
-    setState(() {
-      currentLevel++;
-      showSuccess = false;
-    });
-    _successController.reset();
-    _loadLevel(currentLevel);
-  }
-
   void _showGameComplete() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('🎉 Congratulations!'),
-          content: Text('You completed all levels!\nGreat job!'),
+          title: Row(
+            children: [
+              Icon(Icons.celebration, color: Colors.orange, size: 30),
+              SizedBox(width: 10),
+              Text('Congratulations!'),
+            ],
+          ),
+          content: Text('You completed all 5 levels!\nWell done!'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                _resetGame();
+                setState(() {
+                  currentLevel = 0;
+                });
+                _loadLevel();
               },
               child: Text('Play Again'),
             ),
@@ -417,73 +397,38 @@ class _DragToShapeGameState extends State<DragToShapeGame>
     );
   }
 
-  void _resetGame() {
-    setState(() {
-      currentLevel = 1;
-      showSuccess = false;
-    });
-    _successController.reset();
-    _popController.reset();
-    _loadLevel(currentLevel);
+  String _getLevelInstruction() {
+    switch (currentLevel) {
+      case 0:
+        return "Trace the Square and pop the balloon";
+      case 1:
+        return "Place objects on the Circle";
+      case 2:
+        return "Match objects to their shapes";
+      case 3:
+        return "Sort the shapes correctly";
+      case 4:
+        return "Complete the pattern challenge";
+      default:
+        return "Drag objects to shapes";
+    }
   }
 
-  Widget _buildShape(ShapeData shape) {
-    return Positioned(
-      left: shape.position.dx - shape.size / 2,
-      top: shape.position.dy - shape.size / 2,
-      child: CustomPaint(
-        size: Size(shape.size, shape.size),
-        painter: ShapePainter(
-          shapeType: shape.type,
-          color: shape.outlineColor,
-          filled: false,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDragObject(DragObject object, int index) {
-    return Positioned(
-      left: object.position.dx - object.size / 2,
-      top: object.position.dy - object.size / 2,
-      child: Draggable<DragObject>(
-        data: object,
-        child: AnimatedBuilder(
-          animation: _popAnimation,
-          builder: (context, child) {
-            double scale = object.isPlaced ? _popAnimation.value : 1.0;
-            return Transform.scale(
-              scale: scale,
-              child: CustomPaint(
-                size: Size(object.size, object.size),
-                painter: ShapePainter(
-                  shapeType: object.type,
-                  color: object.color,
-                  filled: true,
-                ),
-              ),
-            );
-          },
-        ),
-        feedback: CustomPaint(
-          size: Size(object.size * 1.2, object.size * 1.2),
-          painter: ShapePainter(
-            shapeType: object.type,
-            color: object.color.withOpacity(0.8),
-            filled: true,
-          ),
-        ),
-        childWhenDragging: Container(),
-        onDragEnd: (details) {
-          setState(() {
-            object.position =
-                details.offset + Offset(object.size / 2, object.size / 2);
-            object.isDragging = false;
-          });
-          _checkLevelComplete();
-        },
-      ),
-    );
+  String _getHint() {
+    switch (currentLevel) {
+      case 0:
+        return "Drag the balloon into the square shape to continue.";
+      case 1:
+        return "Place both objects inside the circle.";
+      case 2:
+        return "Match each object with its corresponding shape.";
+      case 3:
+        return "Only triangle and star objects belong in their shapes.";
+      case 4:
+        return "Place each colored object in its matching colored shape.";
+      default:
+        return "Drag objects to their correct positions.";
+    }
   }
 
   @override
@@ -494,27 +439,28 @@ class _DragToShapeGameState extends State<DragToShapeGame>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.teal.shade400, Colors.teal.shade600],
+            colors: [Colors.teal.shade300, Colors.teal.shade600],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
               // Header
-              Container(
-                padding: EdgeInsets.all(20),
+              Padding(
+                padding: EdgeInsets.all(16),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    IconButton(
-                      onPressed: () {
+                    GestureDetector(
+                      onTap: () {
                         Navigator.of(context).pop();
                       },
-                      icon: Icon(Icons.arrow_back, color: Colors.white),
+                      child:
+                          Icon(Icons.arrow_back, color: Colors.white, size: 28),
                     ),
-                    Spacer(),
                     Container(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -522,7 +468,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                             Border.all(color: Colors.teal.shade300, width: 2),
                       ),
                       child: Text(
-                        'Level ${currentLevel}',
+                        'Level ${currentLevel + 1}',
                         style: TextStyle(
                           color: Colors.teal.shade600,
                           fontWeight: FontWeight.bold,
@@ -530,16 +476,15 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                         ),
                       ),
                     ),
-                    Spacer(),
-                    IconButton(
-                      onPressed: _resetGame,
-                      icon: Icon(Icons.refresh, color: Colors.white),
+                    GestureDetector(
+                      onTap: _loadLevel,
+                      child: Icon(Icons.refresh, color: Colors.white, size: 28),
                     ),
                   ],
                 ),
               ),
 
-              // Game Area
+              // Game Container
               Expanded(
                 child: Container(
                   margin: EdgeInsets.all(16),
@@ -548,7 +493,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black26,
+                        color: Colors.black.withOpacity(0.1),
                         blurRadius: 10,
                         offset: Offset(0, 5),
                       ),
@@ -557,11 +502,10 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                   child: Column(
                     children: [
                       // Instruction
-                      Container(
-                        width: double.infinity,
+                      Padding(
                         padding: EdgeInsets.all(20),
                         child: Text(
-                          activeLevel.instruction,
+                          _getLevelInstruction(),
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -571,22 +515,73 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                         ),
                       ),
 
-                      // Game Canvas
+                      // Game Area
                       Expanded(
                         child: Container(
                           width: double.infinity,
-                          margin: EdgeInsets.all(16),
                           child: Stack(
                             children: [
-                              // Shapes
-                              ...activeLevel.shapes
-                                  .map((shape) => _buildShape(shape)),
+                              // Draw shapes
+                              ...shapes.map((shape) => Positioned(
+                                    left: shape.center.dx - shape.size / 2,
+                                    top: shape.center.dy - shape.size / 2,
+                                    child: Container(
+                                      width: shape.size,
+                                      height: shape.size,
+                                      child: CustomPaint(
+                                        painter: ShapePainter(
+                                          shapeType: shape.type,
+                                          color: shape.color,
+                                          filled: false,
+                                          size: shape.size,
+                                        ),
+                                      ),
+                                    ),
+                                  )),
 
-                              // Drag Objects
-                              ...dragObjects.asMap().entries.map((entry) =>
-                                  _buildDragObject(entry.value, entry.key)),
+                              // Draw draggable objects
+                              ...objects.map((object) => Positioned(
+                                    left: object.position.dx - object.size / 2,
+                                    top: object.position.dy - object.size / 2,
+                                    child: Draggable<GameDragObject>(
+                                      data: object,
+                                      child: Container(
+                                        width: object.size,
+                                        height: object.size,
+                                        child: CustomPaint(
+                                          painter: ShapePainter(
+                                            shapeType: object.type,
+                                            color: object.color,
+                                            filled: true,
+                                            size: object.size,
+                                          ),
+                                        ),
+                                      ),
+                                      feedback: Container(
+                                        width: object.size * 1.2,
+                                        height: object.size * 1.2,
+                                        child: CustomPaint(
+                                          painter: ShapePainter(
+                                            shapeType: object.type,
+                                            color:
+                                                object.color.withOpacity(0.8),
+                                            filled: true,
+                                            size: object.size * 1.2,
+                                          ),
+                                        ),
+                                      ),
+                                      childWhenDragging: Container(),
+                                      onDragEnd: (details) {
+                                        RenderBox renderBox = context
+                                            .findRenderObject() as RenderBox;
+                                        Offset localPosition = renderBox
+                                            .globalToLocal(details.offset);
+                                        _onObjectDragEnd(object, localPosition);
+                                      },
+                                    ),
+                                  )),
 
-                              // Success Animation
+                              // Success animation
                               if (showSuccess)
                                 Center(
                                   child: AnimatedBuilder(
@@ -595,15 +590,15 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                       return Transform.scale(
                                         scale: _scaleAnimation.value,
                                         child: Container(
-                                          padding: EdgeInsets.all(20),
+                                          padding: EdgeInsets.all(30),
                                           decoration: BoxDecoration(
                                             color: Colors.green,
                                             borderRadius:
-                                                BorderRadius.circular(15),
+                                                BorderRadius.circular(20),
                                             boxShadow: [
                                               BoxShadow(
                                                 color: Colors.black26,
-                                                blurRadius: 10,
+                                                blurRadius: 15,
                                                 offset: Offset(0, 5),
                                               ),
                                             ],
@@ -612,16 +607,16 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Icon(
-                                                Icons.check_circle,
+                                                Icons.check_circle_outline,
                                                 color: Colors.white,
-                                                size: 50,
+                                                size: 60,
                                               ),
-                                              SizedBox(height: 10),
+                                              SizedBox(height: 15),
                                               Text(
-                                                'Great Job!',
+                                                'Excellent!',
                                                 style: TextStyle(
                                                   color: Colors.white,
-                                                  fontSize: 24,
+                                                  fontSize: 28,
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                               ),
@@ -637,14 +632,15 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                         ),
                       ),
 
-                      // Hints Section
+                      // Hints section
                       Container(
                         width: double.infinity,
                         margin: EdgeInsets.all(16),
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.teal.shade100,
+                          color: Colors.teal.shade50,
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.teal.shade200),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,7 +655,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                             ),
                             SizedBox(height: 8),
                             Text(
-                              _getHintForLevel(currentLevel),
+                              _getHint(),
                               style: TextStyle(
                                 color: Colors.teal.shade600,
                                 fontSize: 14,
@@ -678,225 +674,181 @@ class _DragToShapeGameState extends State<DragToShapeGame>
       ),
     );
   }
-
-  String _getHintForLevel(int level) {
-    switch (level) {
-      case 1:
-        return 'Drag the balloon into the square shape to continue to the next level.';
-      case 2:
-        return 'Place both objects inside the circle to complete this level.';
-      case 3:
-        return 'Match each object with its corresponding shape outline.';
-      case 4:
-        return 'Sort the shapes - only triangle and star objects belong in their shapes.';
-      case 5:
-        return 'Place each colored object in its matching colored shape outline.';
-      default:
-        return 'Drag objects to their correct positions.';
-    }
-  }
-
-  @override
-  void dispose() {
-    _successController.dispose();
-    _popController.dispose();
-    super.dispose();
-  }
 }
 
 class ShapePainter extends CustomPainter {
   final String shapeType;
   final Color color;
   final bool filled;
+  final double size;
 
   ShapePainter({
     required this.shapeType,
     required this.color,
     required this.filled,
+    required this.size,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(Canvas canvas, Size canvasSize) {
     Paint paint = Paint()
       ..color = color
       ..style = filled ? PaintingStyle.fill : PaintingStyle.stroke
-      ..strokeWidth = 3;
+      ..strokeWidth = filled ? 1 : 4;
 
-    double centerX = size.width / 2;
-    double centerY = size.height / 2;
-    double radius = size.width / 2;
+    double centerX = canvasSize.width / 2;
+    double centerY = canvasSize.height / 2;
+    double radius = min(canvasSize.width, canvasSize.height) / 2 - 5;
 
     switch (shapeType) {
       case 'square':
-      case 'square_filled':
-        if (!filled) {
-          paint.style = PaintingStyle.stroke;
-          paint.strokeWidth = 3;
-          // Draw dashed outline
-          _drawDashedRect(canvas, paint,
-              Rect.fromLTWH(10, 10, size.width - 20, size.height - 20));
+        Rect rect = Rect.fromCenter(
+          center: Offset(centerX, centerY),
+          width: radius * 1.6,
+          height: radius * 1.6,
+        );
+        if (filled) {
+          canvas.drawRect(rect, paint);
         } else {
-          canvas.drawRect(
-            Rect.fromLTWH(5, 5, size.width - 10, size.height - 10),
-            paint,
-          );
+          _drawDashedRect(canvas, paint, rect);
         }
         break;
 
       case 'circle':
-      case 'circle_filled':
-        if (!filled) {
-          paint.style = PaintingStyle.stroke;
-          paint.strokeWidth = 3;
-          _drawDashedCircle(canvas, paint, centerX, centerY, radius - 10);
+        if (filled) {
+          canvas.drawCircle(Offset(centerX, centerY), radius, paint);
         } else {
-          canvas.drawCircle(Offset(centerX, centerY), radius - 5, paint);
+          _drawDashedCircle(canvas, paint, Offset(centerX, centerY), radius);
         }
         break;
 
       case 'triangle':
-      case 'triangle_filled':
-        Path trianglePath = Path();
-        trianglePath.moveTo(centerX, 5);
-        trianglePath.lineTo(5, size.height - 5);
-        trianglePath.lineTo(size.width - 5, size.height - 5);
-        trianglePath.close();
+        Path path = Path();
+        path.moveTo(centerX, centerY - radius);
+        path.lineTo(centerX - radius * 0.866, centerY + radius * 0.5);
+        path.lineTo(centerX + radius * 0.866, centerY + radius * 0.5);
+        path.close();
 
-        if (!filled) {
-          paint.style = PaintingStyle.stroke;
-          paint.strokeWidth = 3;
-          _drawDashedPath(canvas, paint, trianglePath);
+        if (filled) {
+          canvas.drawPath(path, paint);
         } else {
-          canvas.drawPath(trianglePath, paint);
+          canvas.drawPath(path, paint);
         }
         break;
 
       case 'star':
-      case 'star_filled':
-        Path starPath = _createStarPath(centerX, centerY, radius - 5, 5);
-        if (!filled) {
-          paint.style = PaintingStyle.stroke;
-          paint.strokeWidth = 3;
-          _drawDashedPath(canvas, paint, starPath);
-        } else {
-          canvas.drawPath(starPath, paint);
-        }
+        Path starPath = _createStarPath(centerX, centerY, radius);
+        canvas.drawPath(starPath, paint);
+        break;
+
+      case 'heart':
+        Path heartPath = _createHeartPath(centerX, centerY, radius);
+        canvas.drawPath(heartPath, paint);
         break;
 
       case 'balloon':
         // Balloon body
         canvas.drawOval(
-          Rect.fromLTWH(10, 5, size.width - 20, size.height - 25),
+          Rect.fromCenter(
+            center: Offset(centerX, centerY - 5),
+            width: radius * 1.4,
+            height: radius * 1.8,
+          ),
           paint,
         );
 
         // Balloon string
         Paint stringPaint = Paint()
-          ..color = Colors.black
+          ..color = Colors.black87
           ..strokeWidth = 2;
         canvas.drawLine(
-          Offset(centerX, size.height - 20),
-          Offset(centerX, size.height - 5),
+          Offset(centerX, centerY + radius * 0.7),
+          Offset(centerX, centerY + radius * 1.2),
           stringPaint,
         );
 
         // Highlight
-        Paint highlightPaint = Paint()..color = Colors.white.withOpacity(0.6);
-        canvas.drawOval(
-          Rect.fromLTWH(size.width * 0.3, size.height * 0.2, size.width * 0.2,
-              size.height * 0.15),
-          highlightPaint,
-        );
-        break;
-
-      case 'heart':
-        Path heartPath = _createHeartPath(size);
-        canvas.drawPath(heartPath, paint);
+        if (filled) {
+          Paint highlightPaint = Paint()..color = Colors.white.withOpacity(0.4);
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(centerX - radius * 0.3, centerY - radius * 0.5),
+              width: radius * 0.5,
+              height: radius * 0.3,
+            ),
+            highlightPaint,
+          );
+        }
         break;
     }
   }
 
   void _drawDashedRect(Canvas canvas, Paint paint, Rect rect) {
-    double dashWidth = 8;
-    double dashSpace = 5;
-    double startX = rect.left;
+    double dashWidth = 10;
+    double dashSpace = 6;
 
-    // Top line
-    while (startX < rect.right) {
+    // Top edge
+    for (double i = rect.left; i < rect.right; i += dashWidth + dashSpace) {
       canvas.drawLine(
-        Offset(startX, rect.top),
-        Offset(min(startX + dashWidth, rect.right), rect.top),
+        Offset(i, rect.top),
+        Offset(min(i + dashWidth, rect.right), rect.top),
         paint,
       );
-      startX += dashWidth + dashSpace;
     }
 
-    // Right line
-    double startY = rect.top;
-    while (startY < rect.bottom) {
+    // Right edge
+    for (double i = rect.top; i < rect.bottom; i += dashWidth + dashSpace) {
       canvas.drawLine(
-        Offset(rect.right, startY),
-        Offset(rect.right, min(startY + dashWidth, rect.bottom)),
+        Offset(rect.right, i),
+        Offset(rect.right, min(i + dashWidth, rect.bottom)),
         paint,
       );
-      startY += dashWidth + dashSpace;
     }
 
-    // Bottom line
-    startX = rect.right;
-    while (startX > rect.left) {
+    // Bottom edge
+    for (double i = rect.right; i > rect.left; i -= dashWidth + dashSpace) {
       canvas.drawLine(
-        Offset(startX, rect.bottom),
-        Offset(max(startX - dashWidth, rect.left), rect.bottom),
+        Offset(i, rect.bottom),
+        Offset(max(i - dashWidth, rect.left), rect.bottom),
         paint,
       );
-      startX -= dashWidth + dashSpace;
     }
 
-    // Left line
-    startY = rect.bottom;
-    while (startY > rect.top) {
+    // Left edge
+    for (double i = rect.bottom; i > rect.top; i -= dashWidth + dashSpace) {
       canvas.drawLine(
-        Offset(rect.left, startY),
-        Offset(rect.left, max(startY - dashWidth, rect.top)),
+        Offset(rect.left, i),
+        Offset(rect.left, max(i - dashWidth, rect.top)),
         paint,
       );
-      startY -= dashWidth + dashSpace;
     }
   }
 
-  void _drawDashedCircle(Canvas canvas, Paint paint, double centerX,
-      double centerY, double radius) {
-    double dashWidth = 0.2;
-    double dashSpace = 0.1;
-    double angle = 0;
+  void _drawDashedCircle(
+      Canvas canvas, Paint paint, Offset center, double radius) {
+    double dashAngle = 0.3;
+    double gapAngle = 0.2;
+    double currentAngle = 0;
 
-    while (angle < 2 * pi) {
-      double startAngle = angle;
-      double endAngle = min(angle + dashWidth, 2 * pi);
+    while (currentAngle < 2 * pi) {
+      double startAngle = currentAngle;
+      double endAngle = currentAngle + dashAngle;
 
-      Path dashPath = Path();
-      dashPath.addArc(
-        Rect.fromCircle(center: Offset(centerX, centerY), radius: radius),
-        startAngle,
-        endAngle - startAngle,
-      );
+      if (endAngle > 2 * pi) endAngle = 2 * pi;
 
-      canvas.drawPath(dashPath, paint);
-      angle += dashWidth + dashSpace;
+      Path arc = Path();
+      arc.addArc(Rect.fromCircle(center: center, radius: radius), startAngle,
+          endAngle - startAngle);
+      canvas.drawPath(arc, paint);
+
+      currentAngle += dashAngle + gapAngle;
     }
   }
 
-  void _drawDashedPath(Canvas canvas, Paint paint, Path path) {
-    // For simplicity, just draw the path with stroke
-    canvas.drawPath(path, paint);
-  }
-
-  Path _createStarPath(
-      double centerX, double centerY, double radius, int points) {
+  Path _createStarPath(double centerX, double centerY, double radius) {
     Path path = Path();
     double angle = -pi / 2;
-    double angleIncrement = pi / points;
+    int points = 5;
 
     for (int i = 0; i < points * 2; i++) {
       double r = i.isEven ? radius : radius * 0.5;
@@ -909,41 +861,39 @@ class ShapePainter extends CustomPainter {
         path.lineTo(x, y);
       }
 
-      angle += angleIncrement;
+      angle += pi / points;
     }
 
     path.close();
     return path;
   }
 
-  Path _createHeartPath(Size size) {
+  Path _createHeartPath(double centerX, double centerY, double radius) {
     Path path = Path();
-    double width = size.width;
-    double height = size.height;
 
-    path.moveTo(width / 2, height * 0.3);
+    path.moveTo(centerX, centerY + radius * 0.3);
 
     path.cubicTo(
-      width * 0.2,
-      height * 0.1,
-      -width * 0.25,
-      height * 0.6,
-      width / 2,
-      height,
+      centerX - radius * 0.5,
+      centerY - radius * 0.5,
+      centerX - radius,
+      centerY + radius * 0.1,
+      centerX,
+      centerY + radius * 0.7,
     );
 
     path.cubicTo(
-      width * 1.25,
-      height * 0.6,
-      width * 0.8,
-      height * 0.1,
-      width / 2,
-      height * 0.3,
+      centerX + radius,
+      centerY + radius * 0.1,
+      centerX + radius * 0.5,
+      centerY - radius * 0.5,
+      centerX,
+      centerY + radius * 0.3,
     );
 
     return path;
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

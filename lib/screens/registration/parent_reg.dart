@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:capstone_2/controller/register_controller.dart';
 
 class ParentRegister extends StatefulWidget {
   const ParentRegister({Key? key}) : super(key: key);
@@ -17,6 +18,7 @@ class _ParentRegisterState extends State<ParentRegister> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
+  RegisterParentUser controller = RegisterParentUser();
   XFile? _attachFile; // Changed from bool to XFile?
 
   // Add image picker functionality
@@ -141,11 +143,16 @@ class _ParentRegisterState extends State<ParentRegister> {
                               ),
                             ),
                             onPressed: () {
-                              // Add your registration logic here
-                              print('Register button pressed');
-                              if (_attachFile != null) {
-                                print('File attached: ${_attachFile!.name}');
-                              }
+                              controller.registerParentUser(
+                                context,
+                                fullNameController.text,
+                                userNameController.text,
+                                emailController.text,
+                                contactNumberController.text,
+                                addressController.text,
+                                passwordController.text,
+                                confirmPasswordController.text,
+                              );
                             },
                             child: const Text('Register'),
                           ),

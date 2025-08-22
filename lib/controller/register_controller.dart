@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../helper/auth.dart';
+import '../helper/clinic_auth.dart';
 
 class RegisterParentUser {
   Future<void> registerParentUser(
@@ -17,6 +17,8 @@ class RegisterParentUser {
       if (fullName.isEmpty ||
           userName.isEmpty ||
           email.isEmpty ||
+          contactNumber.isEmpty ||
+          address.isEmpty ||
           password.isEmpty) {
         _showErrorDialog(context, 'Please fill in all required fields.');
         return;
@@ -27,28 +29,34 @@ class RegisterParentUser {
         return;
       }
 
-      if (!AuthService.isValidEmail(email)) {
+      if (!ClinicAuthService.isValidEmail(email)) {
         _showErrorDialog(context, 'Please enter a valid email address.');
         return;
       }
 
-      if (!AuthService.isValidPassword(password)) {
+      if (!ClinicAuthService.isValidPassword(password)) {
         _showErrorDialog(
             context, 'Password must be at least 6 characters long.');
         return;
       }
 
-      // Register user
-      await AuthService.registerWithEmailAndPassword(
-        email: email,
-        password: password,
+      // Save parent registration data to ParentsReg collection
+      final result = await ClinicAuthService.saveParentRegistration(
         fullName: fullName,
-        phoneNumber: contactNumber,
+        userName: userName,
+        email: email,
+        contactNumber: contactNumber,
+        address: address,
+        password: password,
       );
 
       // Show success message and navigate
-      _showSuccessDialog(
-          context, 'Registration successful! Please login to continue.');
+      if (result != null && result['success'] == true) {
+        _showSuccessDialog(context,
+            'Parent registration saved successfully! Document ID: ${result['documentId']}');
+      } else {
+        _showErrorDialog(context, 'Failed to save parent registration data.');
+      }
     } catch (e) {
       _showErrorDialog(context, e.toString());
     }
@@ -121,19 +129,19 @@ class RegisterTherapistUser {
         return;
       }
 
-      if (!AuthService.isValidEmail(email)) {
+      if (!ClinicAuthService.isValidEmail(email)) {
         _showErrorDialog(context, 'Please enter a valid email address.');
         return;
       }
 
-      if (!AuthService.isValidPassword(password)) {
+      if (!ClinicAuthService.isValidPassword(password)) {
         _showErrorDialog(
             context, 'Password must be at least 6 characters long.');
         return;
       }
 
       // Register user
-      await AuthService.registerWithEmailAndPassword(
+      await ClinicAuthService.registerWithEmailAndPassword(
         email: email,
         password: password,
         fullName: fullName,
@@ -178,7 +186,7 @@ class RegisterTherapistUser {
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.pushNamedAndRemoveUntil(
-                    context, '/login', (route) => false);
+                    context, '/loginas', (route) => false);
               },
               child: const Text('OK'),
             ),
@@ -205,6 +213,8 @@ class RegisterClinicUser {
       if (clinicName.isEmpty ||
           userName.isEmpty ||
           email.isEmpty ||
+          contactNumber.isEmpty ||
+          address.isEmpty ||
           password.isEmpty) {
         _showErrorDialog(context, 'Please fill in all required fields.');
         return;
@@ -215,29 +225,34 @@ class RegisterClinicUser {
         return;
       }
 
-      if (!AuthService.isValidEmail(email)) {
+      if (!ClinicAuthService.isValidEmail(email)) {
         _showErrorDialog(context, 'Please enter a valid email address.');
         return;
       }
 
-      if (!AuthService.isValidPassword(password)) {
+      if (!ClinicAuthService.isValidPassword(password)) {
         _showErrorDialog(
             context, 'Password must be at least 6 characters long.');
         return;
       }
 
-      // Register user
-      await AuthService.registerWithEmailAndPassword(
-        email: email,
-        password: password,
-        fullName: userName,
+      // Save clinic registration data to ClinicReg collection
+      final result = await ClinicAuthService.saveClinicRegistration(
         clinicName: clinicName,
-        phoneNumber: contactNumber,
+        userName: userName,
+        email: email,
+        contactNumber: contactNumber,
+        address: address,
+        password: password,
       );
 
       // Show success message and navigate
-      _showSuccessDialog(
-          context, 'Registration successful! Please login to continue.');
+      if (result != null && result['success'] == true) {
+        _showSuccessDialog(context,
+            'Clinic registration saved successfully! Document ID: ${result['documentId']}');
+      } else {
+        _showErrorDialog(context, 'Failed to save clinic registration data.');
+      }
     } catch (e) {
       _showErrorDialog(context, e.toString());
     }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../helper/auth.dart';
+import '../helper/clinic_auth.dart';
 import '../splash_page.dart';
 import '../screens/auth/login_as.dart';
 
@@ -10,7 +10,7 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: AuthService.authStateChanges,
+      stream: ClinicAuthService.authStateChanges,
       builder: (context, snapshot) {
         // Show loading while waiting for auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
