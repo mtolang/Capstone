@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PatientSideSelectPage extends StatefulWidget {
   const PatientSideSelectPage({Key? key}) : super(key: key);
@@ -12,6 +13,8 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
   List<TherapistMessage> _allTherapists = [];
   List<TherapistMessage> _filteredTherapists = [];
 
+  final String _patientId = 'PARAcc01'; // Current patient ID
+
   @override
   void initState() {
     super.initState();
@@ -19,54 +22,167 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
     _filteredTherapists = _allTherapists;
   }
 
-  void _loadTherapists() {
-    // Sample therapist data - replace with actual data from your backend
-    _allTherapists = [
-      TherapistMessage(
-        id: '1',
-        name: 'Dr. Maria Santos',
-        lastMessage:
-            'Great progress today! Keep practicing the exercises we discussed.',
-        timestamp: '2:30 PM',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 1,
-        specialization: 'Speech Therapist',
-        isOnline: true,
+  void _loadTherapists() async {
+    // Load conversations from Firestore Message collection
+    try {
+      final messagesSnapshot = await FirebaseFirestore.instance
+          .collection('Message')
+          .where('fromId', isEqualTo: _patientId)
+          .get();
+
+      final receivedSnapshot = await FirebaseFirestore.instance
+          .collection('Message')
+          .where('toId', isEqualTo: _patientId)
+          .get();
+
+      // Combine both sent and received messages
+      final allMessages = [...messagesSnapshot.docs, ...receivedSnapshot.docs];
+
+      // Get unique clinic/therapist IDs
+      final uniqueContacts = <String, Map<String, dynamic>>{};
+
+      for (var doc in allMessages) {
+        final data = doc.data() as Map<String, dynamic>;
+        final fromId = data['fromId']?.toString() ?? '';
+        final toId = data['toId']?.toString() ?? '';
+        final message = data['message']?.toString() ?? '';
+        final timestamp = data['timestamp'];
+
+        // Determine the other party (not the current patient)
+        final otherPartyId = fromId == _patientId ? toId : fromId;
+
+        if (otherPartyId.isNotEmpty && otherPartyId != _patientId) {
+          // Only keep the latest message for each contact
+          if (!uniqueContacts.containsKey(otherPartyId) ||
+              (timestamp != null &&
+                  uniqueContacts[otherPartyId]!['timestamp'] != null &&
+                  (timestamp as Timestamp).compareTo(
+                          uniqueContacts[otherPartyId]!['timestamp']) >
+                      0)) {
+            uniqueContacts[otherPartyId] = {
+              'id': otherPartyId,
+              'lastMessage': message,
+              'timestamp': timestamp,
+              'isFromMe': fromId == _patientId,
+            };
+          }
+        }
+      }
+
+      // Convert to TherapistMessage objects and get clinic names
+      final List<TherapistMessage> conversations = [];
+
+      for (var contact in uniqueContacts.values) {
+        final contactId = contact['id'] as String;
+        final lastMessage = contact['lastMessage'] as String;
+        final timestamp = contact['timestamp'] as Timestamp?;
+        final isFromMe = contact['isFromMe'] as bool;
+
+        // Get clinic/therapist name from ClinicAcc collection
+        String contactName = 'Unknown';
+        try {
+          final clinicDoc = await FirebaseFirestore.instance
+              .collection('ClinicAcc')
+              .doc(contactId)
+              .get();
+          if (clinicDoc.exists) {
+            final clinicData = clinicDoc.data() as Map<String, dynamic>;
+            contactName = clinicData['Clinic Name'] ?? 'Unknown Clinic';
+          }
+        } catch (e) {
+          print('Error fetching clinic name: $e');
+        }
+
+        conversations.add(TherapistMessage(
+          id: contactId,
+          name: contactName,
+          lastMessage: isFromMe ? 'You: $lastMessage' : lastMessage,
+          timestamp: timestamp != null
+              ? _formatTimestamp(timestamp.toDate())
+              : 'Unknown',
+          profileImage: '',
+          unreadCount: 0, // You can implement unread count logic later
+          specialization: 'Clinic',
+          isOnline: false, // You can implement online status later
+        ));
+      }
+
+      setState(() {
+        _allTherapists = conversations;
+        _filteredTherapists = conversations;
+      });
+    } catch (e) {
+      print('Error loading conversations: $e');
+      setState(() {
+        _allTherapists = [];
+        _filteredTherapists = [];
+      });
+    }
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  Future<void> _showNewConversationDialog() async {
+    final clinicsSnapshot =
+        await FirebaseFirestore.instance.collection('ClinicAcc').get();
+    final clinics = clinicsSnapshot.docs;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      TherapistMessage(
-        id: '2',
-        name: 'Dr. Juan Cruz',
-        lastMessage:
-            'Your next appointment is scheduled for tomorrow at 10 AM.',
-        timestamp: '11:45 AM',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 0,
-        specialization: 'Occupational Therapist',
-        isOnline: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Start New Conversation',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF006A5B),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ...clinics.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return ListTile(
+                leading:
+                    const Icon(Icons.local_hospital, color: Color(0xFF006A5B)),
+                title: Text(data['Clinic Name'] ?? 'Clinic'),
+                subtitle: Text(data['email'] ?? ''),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(
+                    context,
+                    '/patientchat',
+                    arguments: {
+                      'therapistId': doc.id,
+                      'therapistName': data['Clinic Name'] ?? 'Clinic',
+                      'isPatientSide': true,
+                    },
+                  );
+                },
+              );
+            }).toList(),
+          ],
+        ),
       ),
-      TherapistMessage(
-        id: '3',
-        name: 'Dr. Sarah Wilson',
-        lastMessage: 'Please bring your exercise chart to our next session.',
-        timestamp: 'Yesterday',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 2,
-        specialization: 'Physical Therapist',
-        isOnline: false,
-      ),
-      TherapistMessage(
-        id: '4',
-        name: 'The Tiny House Therapy Center',
-        lastMessage:
-            'Welcome to our therapy center! How can we help you today?',
-        timestamp: '2 days ago',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 0,
-        specialization: 'Main Reception',
-        isOnline: true,
-      ),
-    ];
-    _filteredTherapists = _allTherapists;
+    );
   }
 
   void _filterTherapists(String query) {
@@ -239,10 +355,7 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
 
       // Floating Action Button
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Handle new message
-          _showNewConversationDialog();
-        },
+        onPressed: _showNewConversationDialog,
         backgroundColor: const Color(0xFF006A5B),
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -412,73 +525,6 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
             },
           );
         },
-      ),
-    );
-  }
-
-  void _showNewConversationDialog() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Start New Conversation',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF006A5B),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading:
-                  const Icon(Icons.local_hospital, color: Color(0xFF006A5B)),
-              title: const Text('Contact Reception'),
-              subtitle: const Text('General inquiries and appointments'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(
-                  context,
-                  '/patientchat',
-                  arguments: {
-                    'therapistId': '4',
-                    'therapistName': 'The Tiny House Therapy Center',
-                    'isPatientSide': true,
-                  },
-                );
-              },
-            ),
-            ListTile(
-              leading:
-                  const Icon(Icons.person_search, color: Color(0xFF006A5B)),
-              title: const Text('Find a Therapist'),
-              subtitle: const Text('Browse available specialists'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Find therapist functionality')),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.help_outline, color: Color(0xFF006A5B)),
-              title: const Text('Help & Support'),
-              subtitle: const Text('Get help with the app'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Help & Support functionality')),
-                );
-              },
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -73,8 +73,13 @@ class MyApp extends StatelessWidget {
             return TherapistChatPage(patientId: args);
           },
           '/patientchat': (context) {
-            final args = ModalRoute.of(context)?.settings.arguments as String?;
-            return PatientChatPage(therapistId: args);
+            final args = ModalRoute.of(context)?.settings.arguments
+                as Map<String, dynamic>?;
+            return PatientChatPage(
+              therapistId: args?['therapistId'] as String?,
+              therapistName: args?['therapistName'] as String?,
+              isPatientSide: args?['isPatientSide'] as bool? ?? true,
+            );
           },
           '/patientsideselect': (context) => const PatientSideSelectPage(),
 

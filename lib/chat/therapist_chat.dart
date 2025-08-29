@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat_call.dart';
 
 class TherapistChatPage extends StatefulWidget {
@@ -13,88 +14,59 @@ class TherapistChatPage extends StatefulWidget {
 class _TherapistChatPageState extends State<TherapistChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<ChatMessage> _messages = [];
   String _patientName = '';
+
+  // Use CLI01 as the current clinic ID - replace with actual clinic ID
+  final String _clinicId = 'CLI01';
 
   @override
   void initState() {
     super.initState();
     _loadPatientInfo();
-    _loadMessages();
   }
 
-  void _loadPatientInfo() {
-    // Load patient information based on the patient ID
-    // This should be replaced with actual data from your backend
-    Map<String, String> patientNames = {
-      '1': 'Tiny House Therapy Clinic',
-      '2': 'Taylor Swift',
-      '3': 'Maria Santos',
-      '4': 'John Doe',
-      '5': 'Sarah Wilson',
-    };
+  void _loadPatientInfo() async {
+    // Load patient information from ParentsAcc collection
+    try {
+      if (widget.patientId != null) {
+        final parentDoc = await FirebaseFirestore.instance
+            .collection('ParentsAcc')
+            .doc(widget.patientId!)
+            .get();
 
-    _patientName = patientNames[widget.patientId] ?? 'Unknown Patient';
-  }
-
-  void _loadMessages() {
-    // Sample messages - replace with actual data from your backend
-    _messages = [
-      ChatMessage(
-        id: '1',
-        senderId: widget.patientId ?? '1',
-        senderName: _patientName,
-        message: 'Hello doctor, I hope you are doing well.',
-        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-        isFromTherapist: false,
-      ),
-      ChatMessage(
-        id: '2',
-        senderId: 'therapist',
-        senderName: 'Dr. Therapist',
-        message: 'Hello! I\'m doing well, thank you. How can I help you today?',
-        timestamp:
-            DateTime.now().subtract(const Duration(hours: 1, minutes: 45)),
-        isFromTherapist: true,
-      ),
-      ChatMessage(
-        id: '3',
-        senderId: widget.patientId ?? '1',
-        senderName: _patientName,
-        message:
-            'I wanted to ask about the exercises you recommended last session.',
-        timestamp:
-            DateTime.now().subtract(const Duration(hours: 1, minutes: 30)),
-        isFromTherapist: false,
-      ),
-    ];
-
-    // Scroll to bottom after loading messages
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        if (parentDoc.exists) {
+          final parentData = parentDoc.data() as Map<String, dynamic>;
+          setState(() {
+            _patientName = parentData['Name'] ?? 'Unknown Patient';
+          });
+        } else {
+          setState(() {
+            _patientName = 'Unknown Patient';
+          });
+        }
       }
-    });
+    } catch (e) {
+      print('Error loading patient info: $e');
+      setState(() {
+        _patientName = 'Unknown Patient';
+      });
+    }
   }
 
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;
 
-    final newMessage = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: 'therapist',
-      senderName: 'Dr. Therapist',
-      message: _messageController.text.trim(),
-      timestamp: DateTime.now(),
-      isFromTherapist: true,
-    );
+    final messageText = _messageController.text.trim();
+    final timestamp = DateTime.now();
+    final fromId = _clinicId;
+    final toId = widget.patientId ?? 'unknown';
 
-    setState(() {
-      _messages.add(newMessage);
+    // Save to Firestore
+    FirebaseFirestore.instance.collection('Message').add({
+      'fromId': fromId,
+      'toId': toId,
+      'message': messageText,
+      'timestamp': timestamp,
     });
 
     _messageController.clear();
@@ -188,8 +160,8 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                   builder: (context) => ChatCallScreen(
                     callId:
                         'call_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: 'therapist_id',
-                    initialParticipants: [widget.patientId ?? 'unknown'],
+                    currentUserId: _clinicId,
+                    initialParticipants: [widget.patientId ?? 'PARAcc01'],
                   ),
                 ),
               );
@@ -204,8 +176,8 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                   builder: (context) => ChatCallScreen(
                     callId:
                         'voice_call_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: 'therapist_id',
-                    initialParticipants: [widget.patientId ?? 'unknown'],
+                    currentUserId: _clinicId,
+                    initialParticipants: [widget.patientId ?? 'PARAcc01'],
                   ),
                 ),
               );
@@ -220,13 +192,54 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
               children: [
                 // Messages Area
                 Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      return _buildMessageBubble(message);
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('Message')
+                        .orderBy('timestamp', descending: false)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(child: CircularProgressIndicator());
+                      }
+                      if (!snapshot.hasData || snapshot.data == null) {
+                        return Center(child: Text('No messages yet.'));
+                      }
+                      final docs = snapshot.data!.docs;
+                      // Filter messages between this clinic and patient
+                      final filteredDocs = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final fromId = data['fromId']?.toString() ?? '';
+                        final toId = data['toId']?.toString() ?? '';
+                        final patientId = widget.patientId ?? 'unknown';
+
+                        // Check if message is between clinic and this patient
+                        return (fromId == _clinicId && toId == patientId) ||
+                            (fromId == patientId && toId == _clinicId);
+                      }).toList();
+
+                      final messages = filteredDocs.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final isFromTherapist = data['fromId'] == _clinicId;
+                        return ChatMessage(
+                          id: doc.id,
+                          senderId: data['fromId']?.toString() ?? '',
+                          senderName: isFromTherapist ? 'You' : _patientName,
+                          message: data['message']?.toString() ?? '',
+                          timestamp: (data['timestamp'] is Timestamp)
+                              ? (data['timestamp'] as Timestamp).toDate()
+                              : DateTime.now(),
+                          isFromTherapist: isFromTherapist,
+                        );
+                      }).toList();
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final message = messages[index];
+                          return _buildMessageBubble(message);
+                        },
+                      );
                     },
                   ),
                 ),

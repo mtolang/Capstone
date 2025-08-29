@@ -199,7 +199,7 @@ class ParentNavbar extends StatelessWidget {
               ),
             ),
             onTap: () {
-              Navigator.pushNamed(context, '/thertherapistsideselect');
+              Navigator.pushNamed(context, '/patientsideselect');
               print('Chat tapped');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Chat selected')),

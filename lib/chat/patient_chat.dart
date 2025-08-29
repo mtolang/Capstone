@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat_call.dart';
 
 class PatientChatPage extends StatefulWidget {
@@ -20,14 +21,12 @@ class PatientChatPage extends StatefulWidget {
 class _PatientChatPageState extends State<PatientChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<ChatMessage> _messages = [];
   String _contactName = '';
 
   @override
   void initState() {
     super.initState();
     _loadContactInfo();
-    _loadMessages();
   }
 
   void _loadContactInfo() {
@@ -56,88 +55,25 @@ class _PatientChatPageState extends State<PatientChatPage> {
     }
   }
 
-  void _loadMessages() {
-    // Sample messages - replace with actual data from your backend
-    if (widget.isPatientSide) {
-      _messages = [
-        ChatMessage(
-          id: '1',
-          senderId: widget.therapistId ?? '1',
-          senderName: _contactName,
-          message: 'Hello! How are you feeling today? Ready for our session?',
-          timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-          isFromTherapist: true,
-        ),
-        ChatMessage(
-          id: '2',
-          senderId: 'patient',
-          senderName: 'You',
-          message: 'Hi Dr! I\'m doing well, thank you. Yes, I\'m ready.',
-          timestamp:
-              DateTime.now().subtract(const Duration(hours: 1, minutes: 45)),
-          isFromTherapist: false,
-        ),
-        ChatMessage(
-          id: '3',
-          senderId: widget.therapistId ?? '1',
-          senderName: _contactName,
-          message:
-              'Great! I\'ve prepared some new exercises for you to try today.',
-          timestamp:
-              DateTime.now().subtract(const Duration(hours: 1, minutes: 30)),
-          isFromTherapist: true,
-        ),
-      ];
-    } else {
-      // Load therapist side messages (reuse from therapist_chat logic)
-      _messages = [
-        ChatMessage(
-          id: '1',
-          senderId: widget.therapistId ?? '1',
-          senderName: _contactName,
-          message: 'Hello doctor, I hope you are doing well.',
-          timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-          isFromTherapist: false,
-        ),
-        ChatMessage(
-          id: '2',
-          senderId: 'therapist',
-          senderName: 'Dr. Therapist',
-          message:
-              'Hello! I\'m doing well, thank you. How can I help you today?',
-          timestamp:
-              DateTime.now().subtract(const Duration(hours: 1, minutes: 45)),
-          isFromTherapist: true,
-        ),
-      ];
-    }
-
-    // Scroll to bottom after loading messages
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
+  // Use the current parent/patient ID from Firestore
+  final String _patientId = 'PARAcc01';
 
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;
 
-    final newMessage = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId: widget.isPatientSide ? 'patient' : 'therapist',
-      senderName: widget.isPatientSide ? 'You' : 'Dr. Therapist',
-      message: _messageController.text.trim(),
-      timestamp: DateTime.now(),
-      isFromTherapist: !widget.isPatientSide,
-    );
+    final messageText = _messageController.text.trim();
+    final timestamp = DateTime.now();
+    final fromId =
+        widget.isPatientSide ? _patientId : (widget.therapistId ?? 'therapist');
+    final toId =
+        widget.isPatientSide ? (widget.therapistId ?? 'therapist') : _patientId;
 
-    setState(() {
-      _messages.add(newMessage);
+    // Save to Firestore
+    FirebaseFirestore.instance.collection('Message').add({
+      'fromId': fromId,
+      'toId': toId,
+      'message': messageText,
+      'timestamp': timestamp,
     });
 
     _messageController.clear();
@@ -231,9 +167,8 @@ class _PatientChatPageState extends State<PatientChatPage> {
                   builder: (context) => ChatCallScreen(
                     callId:
                         'call_${widget.therapistId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId:
-                        widget.isPatientSide ? 'patient_id' : 'therapist_id',
-                    initialParticipants: [widget.therapistId ?? 'unknown'],
+                    currentUserId: _patientId,
+                    initialParticipants: [widget.therapistId ?? 'CLI01'],
                   ),
                 ),
               );
@@ -248,9 +183,8 @@ class _PatientChatPageState extends State<PatientChatPage> {
                   builder: (context) => ChatCallScreen(
                     callId:
                         'voice_call_${widget.therapistId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId:
-                        widget.isPatientSide ? 'patient_id' : 'therapist_id',
-                    initialParticipants: [widget.therapistId ?? 'unknown'],
+                    currentUserId: _patientId,
+                    initialParticipants: [widget.therapistId ?? 'CLI01'],
                   ),
                 ),
               );
@@ -265,17 +199,60 @@ class _PatientChatPageState extends State<PatientChatPage> {
               children: [
                 // Messages Area
                 Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      return _buildMessageBubble(message);
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('Message')
+                        .orderBy('timestamp', descending: false)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(child: CircularProgressIndicator());
+                      }
+                      if (!snapshot.hasData || snapshot.data == null) {
+                        return Center(child: Text('No messages yet.'));
+                      }
+                      final docs = snapshot.data!.docs;
+                      // Filter messages between this patient and clinic
+                      final filteredDocs = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final fromId = data['fromId']?.toString() ?? '';
+                        final toId = data['toId']?.toString() ?? '';
+                        final therapistId = widget.therapistId ?? 'therapist';
+
+                        // Check if message is between patient and this clinic
+                        return (fromId == _patientId && toId == therapistId) ||
+                            (fromId == therapistId && toId == _patientId);
+                      }).toList();
+
+                      final messages = filteredDocs.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final isFromTherapist = data['fromId'] ==
+                            (widget.therapistId ?? 'therapist');
+                        return ChatMessage(
+                          id: doc.id,
+                          senderId: data['fromId']?.toString() ?? '',
+                          senderName: isFromTherapist
+                              ? (widget.therapistName ?? 'Therapist')
+                              : 'You',
+                          message: data['message']?.toString() ?? '',
+                          timestamp: (data['timestamp'] is Timestamp)
+                              ? (data['timestamp'] as Timestamp).toDate()
+                              : DateTime.now(),
+                          isFromTherapist: isFromTherapist,
+                        );
+                      }).toList();
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final message = messages[index];
+                          return _buildMessageBubble(message);
+                        },
+                      );
                     },
                   ),
                 ),
-
                 // Message Input Area
                 Container(
                   constraints: BoxConstraints(

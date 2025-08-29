@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PatientSelectionPage extends StatefulWidget {
   const PatientSelectionPage({Key? key}) : super(key: key);
@@ -12,6 +13,9 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   List<PatientMessage> _allPatients = [];
   List<PatientMessage> _filteredPatients = [];
 
+  // Use CLI01 as the current clinic ID - replace with actual clinic ID
+  final String _clinicId = 'CLI01';
+
   @override
   void initState() {
     super.initState();
@@ -19,54 +23,115 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
     _filteredPatients = _allPatients;
   }
 
-  void _loadPatients() {
-    // Sample patient data - replace with actual data from your backend
-    _allPatients = [
-      PatientMessage(
-        id: '1',
-        name: 'Tiny House Therapy Clinic',
-        lastMessage:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et',
-        timestamp: '10:30 AM',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 2,
-      ),
-      PatientMessage(
-        id: '2',
-        name: 'Taylor Swift',
-        lastMessage:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et',
-        timestamp: '9:15 AM',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 0,
-      ),
-      PatientMessage(
-        id: '3',
-        name: 'Maria Santos',
-        lastMessage: 'Thank you for the session today. See you next week!',
-        timestamp: 'Yesterday',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 1,
-      ),
-      PatientMessage(
-        id: '4',
-        name: 'John Doe',
-        lastMessage: 'Can we reschedule our appointment for tomorrow?',
-        timestamp: 'Yesterday',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 0,
-      ),
-      PatientMessage(
-        id: '5',
-        name: 'Sarah Wilson',
-        lastMessage:
-            'My child showed great improvement after our last session.',
-        timestamp: '2 days ago',
-        profileImage: 'asset/images/profile.jpg',
-        unreadCount: 3,
-      ),
-    ];
-    _filteredPatients = _allPatients;
+  void _loadPatients() async {
+    // Load conversations from Firestore Message collection
+    try {
+      final messagesSnapshot = await FirebaseFirestore.instance
+          .collection('Message')
+          .where('fromId', isEqualTo: _clinicId)
+          .get();
+
+      final receivedSnapshot = await FirebaseFirestore.instance
+          .collection('Message')
+          .where('toId', isEqualTo: _clinicId)
+          .get();
+
+      // Combine both sent and received messages
+      final allMessages = [...messagesSnapshot.docs, ...receivedSnapshot.docs];
+
+      // Get unique patient IDs
+      final uniqueContacts = <String, Map<String, dynamic>>{};
+
+      for (var doc in allMessages) {
+        final data = doc.data() as Map<String, dynamic>;
+        final fromId = data['fromId']?.toString() ?? '';
+        final toId = data['toId']?.toString() ?? '';
+        final message = data['message']?.toString() ?? '';
+        final timestamp = data['timestamp'];
+
+        // Determine the other party (not the current clinic)
+        final otherPartyId = fromId == _clinicId ? toId : fromId;
+
+        if (otherPartyId.isNotEmpty && otherPartyId != _clinicId) {
+          // Only keep the latest message for each contact
+          if (!uniqueContacts.containsKey(otherPartyId) ||
+              (timestamp != null &&
+                  uniqueContacts[otherPartyId]!['timestamp'] != null &&
+                  (timestamp as Timestamp).compareTo(
+                          uniqueContacts[otherPartyId]!['timestamp']) >
+                      0)) {
+            uniqueContacts[otherPartyId] = {
+              'id': otherPartyId,
+              'lastMessage': message,
+              'timestamp': timestamp,
+              'isFromMe': fromId == _clinicId,
+            };
+          }
+        }
+      }
+
+      // Convert to PatientMessage objects and get patient names
+      final List<PatientMessage> conversations = [];
+
+      for (var contact in uniqueContacts.values) {
+        final contactId = contact['id'] as String;
+        final lastMessage = contact['lastMessage'] as String;
+        final timestamp = contact['timestamp'] as Timestamp?;
+        final isFromMe = contact['isFromMe'] as bool;
+
+        // Get patient/parent name from ParentsAcc collection
+        String contactName = 'Unknown';
+        try {
+          final parentDoc = await FirebaseFirestore.instance
+              .collection('ParentsAcc')
+              .doc(contactId)
+              .get();
+          if (parentDoc.exists) {
+            final parentData = parentDoc.data() as Map<String, dynamic>;
+            contactName = parentData['Name'] ?? 'Unknown Parent';
+          }
+        } catch (e) {
+          print('Error fetching parent name: $e');
+        }
+
+        conversations.add(PatientMessage(
+          id: contactId,
+          name: contactName,
+          lastMessage: isFromMe ? 'You: $lastMessage' : lastMessage,
+          timestamp: timestamp != null
+              ? _formatTimestamp(timestamp.toDate())
+              : 'Unknown',
+          profileImage: '',
+          unreadCount: 0, // You can implement unread count logic later
+        ));
+      }
+
+      setState(() {
+        _allPatients = conversations;
+        _filteredPatients = conversations;
+      });
+    } catch (e) {
+      print('Error loading conversations: $e');
+      setState(() {
+        _allPatients = [];
+        _filteredPatients = [];
+      });
+    }
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 
   void _filterPatients(String query) {

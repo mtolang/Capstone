@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatCallScreen extends StatefulWidget {
   final String callId;
@@ -35,6 +36,285 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
     super.initState();
     _initializeCall();
     _loadContacts();
+
+    // Auto-start call if there are initial participants
+    if (widget.initialParticipants.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startDirectCall(widget.initialParticipants.first);
+      });
+    }
+
+    // Listen for incoming calls where this user is the callee and status is 'ringing'
+    FirebaseFirestore.instance
+        .collection('Calls')
+        .where('calleeId', isEqualTo: widget.currentUserId)
+        .where('status', isEqualTo: 'ringing')
+        .snapshots()
+        .listen((snapshot) {
+      for (var doc in snapshot.docs) {
+        _showIncomingCallDialog(doc.id, doc.data()['callerId']);
+      }
+    });
+  }
+
+  void _startDirectCall(String targetUserId) async {
+    // Create a new call document in Firestore and start WebRTC offer
+    final callsCollection = FirebaseFirestore.instance.collection('Calls');
+    final newCallDoc = callsCollection.doc();
+
+    try {
+      await newCallDoc.set({
+        'callerId': widget.currentUserId,
+        'calleeId': targetUserId,
+        'status': 'ringing',
+        'offer': 'Blank',
+        'answer': 'Blank',
+        'iceCandidates': [],
+        'timestamp': DateTime.now(),
+      });
+
+      // Start WebRTC offer
+      final config = {
+        'iceServers': [
+          {'urls': 'stun:stun.l.google.com:19302'},
+        ]
+      };
+      final pc = await createPeerConnection(config);
+      _peerConnections[targetUserId] = pc;
+
+      // Add local stream tracks
+      if (_localStream != null) {
+        _localStream!.getTracks().forEach((track) {
+          pc.addTrack(track, _localStream!);
+        });
+      }
+
+      // Listen for remote stream
+      pc.onAddStream = (stream) {
+        setState(() {
+          final renderer = RTCVideoRenderer();
+          renderer.initialize().then((_) {
+            renderer.srcObject = stream;
+            _remoteRenderers[targetUserId] = renderer;
+          });
+        });
+      };
+
+      // Listen for ICE candidates and save to Firestore
+      pc.onIceCandidate = (candidate) {
+        newCallDoc.update({
+          'iceCandidates': FieldValue.arrayUnion([
+            {
+              'candidate': candidate.candidate,
+              'sdpMid': candidate.sdpMid,
+              'sdpMLineIndex': candidate.sdpMLineIndex,
+            }
+          ])
+        });
+      };
+
+      // Create offer
+      final offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Save offer to Firestore
+      await newCallDoc.update({'offer': offer.sdp});
+
+      // Listen for answer from callee
+      newCallDoc.snapshots().listen((docSnap) async {
+        final data = docSnap.data();
+        if (data == null) return;
+
+        if (data['status'] == 'accepted' && data['answer'] != 'Blank') {
+          try {
+            await pc.setRemoteDescription(
+                RTCSessionDescription(data['answer'], 'answer'));
+          } catch (e) {
+            print('Error setting remote description: $e');
+          }
+        }
+
+        if (data['status'] == 'declined') {
+          _endCall();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Call declined')),
+          );
+        }
+
+        // Handle ICE candidates
+        if (data['iceCandidates'] != null && data['iceCandidates'] is List) {
+          for (var cand in data['iceCandidates']) {
+            try {
+              await pc.addCandidate(RTCIceCandidate(
+                cand['candidate'],
+                cand['sdpMid'],
+                cand['sdpMLineIndex'],
+              ));
+            } catch (e) {
+              print('Error adding ICE candidate: $e');
+            }
+          }
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Calling...')),
+      );
+    } catch (e) {
+      print('Error starting call: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to start call')),
+      );
+    }
+  }
+
+  void _showIncomingCallDialog(String callDocId, String callerId) async {
+    // Get caller name from Firestore
+    String callerName = 'Unknown';
+    try {
+      // Try ClinicAcc first
+      final clinicDoc = await FirebaseFirestore.instance
+          .collection('ClinicAcc')
+          .doc(callerId)
+          .get();
+      if (clinicDoc.exists) {
+        final data = clinicDoc.data() as Map<String, dynamic>;
+        callerName = data['Clinic Name'] ?? 'Unknown Clinic';
+      } else {
+        // Try ParentsAcc
+        final parentDoc = await FirebaseFirestore.instance
+            .collection('ParentsAcc')
+            .doc(callerId)
+            .get();
+        if (parentDoc.exists) {
+          final data = parentDoc.data() as Map<String, dynamic>;
+          callerName = data['Name'] ?? 'Unknown Parent';
+        }
+      }
+    } catch (e) {
+      print('Error fetching caller name: $e');
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Incoming Call'),
+          content: Text('You have an incoming call from: $callerName'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // Decline: update status to 'declined'
+                FirebaseFirestore.instance
+                    .collection('Calls')
+                    .doc(callDocId)
+                    .update({'status': 'declined'});
+                Navigator.of(context).pop();
+              },
+              child: Text('Decline'),
+            ),
+            TextButton(
+              onPressed: () async {
+                // Accept: update status to 'accepted'
+                await FirebaseFirestore.instance
+                    .collection('Calls')
+                    .doc(callDocId)
+                    .update({'status': 'accepted'});
+                Navigator.of(context).pop();
+
+                // --- Callee WebRTC answer logic ---
+                final callDoc = await FirebaseFirestore.instance
+                    .collection('Calls')
+                    .doc(callDocId)
+                    .get();
+                final offerSdp = callDoc['offer'];
+                final config = {
+                  'iceServers': [
+                    {'urls': 'stun:stun.l.google.com:19302'},
+                  ]
+                };
+                final pc = await createPeerConnection(config);
+                _peerConnections[callerId] = pc;
+
+                // Add local stream tracks
+                if (_localStream != null) {
+                  _localStream!.getTracks().forEach((track) {
+                    pc.addTrack(track, _localStream!);
+                  });
+                }
+
+                // Listen for remote stream
+                pc.onAddStream = (stream) {
+                  setState(() {
+                    final renderer = RTCVideoRenderer();
+                    renderer.initialize().then((_) {
+                      renderer.srcObject = stream;
+                      _remoteRenderers[callerId] = renderer;
+                    });
+                  });
+                };
+
+                // Set remote offer
+                await pc.setRemoteDescription(
+                    RTCSessionDescription(offerSdp, 'offer'));
+
+                // Create answer
+                final answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                // Save answer to Firestore
+                await FirebaseFirestore.instance
+                    .collection('Calls')
+                    .doc(callDocId)
+                    .update({'answer': answer.sdp});
+
+                // Listen for ICE candidates and save to Firestore
+                pc.onIceCandidate = (candidate) {
+                  FirebaseFirestore.instance
+                      .collection('Calls')
+                      .doc(callDocId)
+                      .update({
+                    'iceCandidates': FieldValue.arrayUnion([
+                      {
+                        'candidate': candidate.candidate,
+                        'sdpMid': candidate.sdpMid,
+                        'sdpMLineIndex': candidate.sdpMLineIndex,
+                      }
+                    ])
+                  });
+                };
+
+                // Listen for remote ICE candidates from caller
+                FirebaseFirestore.instance
+                    .collection('Calls')
+                    .doc(callDocId)
+                    .snapshots()
+                    .listen((docSnap) async {
+                  final data = docSnap.data();
+                  if (data == null) return;
+                  if (data['iceCandidates'] != null &&
+                      data['iceCandidates'] is List) {
+                    for (var cand in data['iceCandidates']) {
+                      try {
+                        await pc.addCandidate(RTCIceCandidate(
+                          cand['candidate'],
+                          cand['sdpMid'],
+                          cand['sdpMLineIndex'],
+                        ));
+                      } catch (e) {
+                        print('Error adding ICE candidate: $e');
+                      }
+                    }
+                  }
+                });
+              },
+              child: Text('Accept'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _initializeCall() async {
@@ -129,31 +409,57 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
     }
   }
 
-  void _loadContacts() {
-    // Mock contacts data - replace with actual contact fetching
-    _contacts = [
-      Contact(
-          id: '1',
-          name: 'Martin Rey Talang',
-          avatar: 'assets/martin.jpg',
-          isOnline: true),
-      Contact(
-          id: '2',
-          name: 'Andrew Ravago',
-          avatar: 'assets/andrew.jpg',
-          isOnline: true),
-      Contact(
-          id: '3',
-          name: 'Divata Pares',
-          avatar: 'assets/divata.jpg',
-          isOnline: false),
-      Contact(
-          id: '4',
-          name: 'Kuma Toss',
-          avatar: 'assets/kuma.jpg',
-          isOnline: true),
-    ];
-    _filteredContacts = List.from(_contacts);
+  void _loadContacts() async {
+    // Load actual contacts from Firestore
+    try {
+      List<Contact> loadedContacts = [];
+
+      // Load clinics from ClinicAcc collection
+      final clinicsSnapshot =
+          await FirebaseFirestore.instance.collection('ClinicAcc').get();
+
+      for (var doc in clinicsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (doc.id != widget.currentUserId) {
+          // Don't include current user
+          loadedContacts.add(Contact(
+            id: doc.id,
+            name: data['Clinic Name'] ?? 'Unknown Clinic',
+            avatar: 'assets/clinic.jpg',
+            isOnline: true, // You can implement online status later
+          ));
+        }
+      }
+
+      // Load parents from ParentsAcc collection
+      final parentsSnapshot =
+          await FirebaseFirestore.instance.collection('ParentsAcc').get();
+
+      for (var doc in parentsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (doc.id != widget.currentUserId) {
+          // Don't include current user
+          loadedContacts.add(Contact(
+            id: doc.id,
+            name: data['Name'] ?? 'Unknown Parent',
+            avatar: 'assets/parent.jpg',
+            isOnline: true, // You can implement online status later
+          ));
+        }
+      }
+
+      setState(() {
+        _contacts = loadedContacts;
+        _filteredContacts = List.from(_contacts);
+      });
+    } catch (e) {
+      print('Error loading contacts: $e');
+      // Fallback to empty list
+      setState(() {
+        _contacts = [];
+        _filteredContacts = [];
+      });
+    }
   }
 
   void _filterContacts(String query) {
@@ -289,12 +595,47 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
   }
 
   void _inviteToCall(Contact contact) {
-    // Implement call invitation logic
+    // Create a new call document in Firestore and start WebRTC offer
+    final callsCollection = FirebaseFirestore.instance.collection('Calls');
+    final newCallDoc = callsCollection.doc();
+    newCallDoc.set({
+      'callerId': widget.currentUserId,
+      'calleeId': contact.id,
+      'status': 'ringing',
+      'offer': 'Blank',
+      'answer': 'Blank',
+      'iceCandidates': 'Blank',
+    }).then((_) async {
+      // Start WebRTC offer
+      final config = {
+        'iceServers': [
+          {'urls': 'stun:stun.l.google.com:19302'},
+        ]
+      };
+      final pc = await createPeerConnection(config);
+      _peerConnections[contact.id] = pc;
+      // Add local stream tracks
+      if (_localStream != null) {
+        _localStream!.getTracks().forEach((track) {
+          pc.addTrack(track, _localStream!);
+        });
+      }
+      // Listen for ICE candidates and save to Firestore
+      pc.onIceCandidate = (candidate) {
+        newCallDoc.update({
+          'iceCandidates': FieldValue.arrayUnion([candidate.toMap()])
+        });
+      };
+      // Create offer
+      final offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      // Save offer to Firestore
+      await newCallDoc.update({'offer': offer.sdp});
+    });
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Inviting ${contact.name} to call...')),
     );
-    // Here you would send the invitation through your backend/signaling server
   }
 
   void _toggleMute() {
@@ -317,7 +658,42 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
     }
   }
 
-  void _endCall() {
+  void _endCall() async {
+    // Update call status to 'ended' in Firestore
+    try {
+      final callsSnapshot = await FirebaseFirestore.instance
+          .collection('Calls')
+          .where('callerId', isEqualTo: widget.currentUserId)
+          .where('status', whereIn: ['ringing', 'accepted']).get();
+
+      for (var doc in callsSnapshot.docs) {
+        await doc.reference.update({'status': 'ended'});
+      }
+
+      final calleeSnapshot = await FirebaseFirestore.instance
+          .collection('Calls')
+          .where('calleeId', isEqualTo: widget.currentUserId)
+          .where('status', whereIn: ['ringing', 'accepted']).get();
+
+      for (var doc in calleeSnapshot.docs) {
+        await doc.reference.update({'status': 'ended'});
+      }
+    } catch (e) {
+      print('Error ending call in Firestore: $e');
+    }
+
+    // Close all peer connections
+    for (var connection in _peerConnections.values) {
+      await connection.close();
+    }
+    _peerConnections.clear();
+
+    // Dispose remote renderers
+    for (var renderer in _remoteRenderers.values) {
+      await renderer.dispose();
+    }
+    _remoteRenderers.clear();
+
     Navigator.pop(context);
   }
 
