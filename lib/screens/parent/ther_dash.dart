@@ -4,7 +4,7 @@ import 'package:capstone_2/screens/parent/parent_navbar.dart';
 import 'package:capstone_2/widgets/map.dart';
 
 class TherapistsDashboard extends StatelessWidget {
-  const TherapistsDashboard({Key? key}) : super(key: key);
+  const TherapistsDashboard({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class GamesOption extends StatelessWidget {
-  const GamesOption({Key? key}) : super(key: key);
+  const GamesOption({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +83,7 @@ class GamesOption extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Logo with fallback
-                  Container(
+                  SizedBox(
                     height: 100,
                     child: Image.asset(
                       'asset/logo1.png',
@@ -141,12 +141,12 @@ class GamesOption extends StatelessWidget {
                       // Add navigation to talk with tiles game
                       Navigator.pushNamed(context, '/talkwithtiles');
                     },
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.chat_bubble_outline, size: 24),
-                        const SizedBox(width: 10),
-                        const Text(
+                        SizedBox(width: 10),
+                        Text(
                           'Talk with Tiles',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold),
@@ -179,12 +179,12 @@ class GamesOption extends StatelessWidget {
                       // Navigate to Shape Shifters game
                       Navigator.pushNamed(context, '/shapeshifters');
                     },
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.category, size: 24),
-                        const SizedBox(width: 10),
-                        const Text(
+                        SizedBox(width: 10),
+                        Text(
                           'Shape Shifters',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold),
@@ -207,12 +207,12 @@ class GamesOption extends StatelessWidget {
                       elevation: 4,
                     ),
                     onPressed: null, // Disabled for now
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.lock_outline, size: 24),
-                        const SizedBox(width: 10),
-                        const Text(
+                        SizedBox(width: 10),
+                        Text(
                           'Coming Soon',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold),

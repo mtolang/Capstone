@@ -8,11 +8,11 @@ class PatientChatPage extends StatefulWidget {
   final bool isPatientSide;
 
   const PatientChatPage({
-    Key? key,
+    super.key,
     this.therapistId,
     this.therapistName,
     this.isPatientSide = true,
-  }) : super(key: key);
+  });
 
   @override
   State<PatientChatPage> createState() => _PatientChatPageState();
@@ -206,10 +206,10 @@ class _PatientChatPageState extends State<PatientChatPage> {
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
+                        return const Center(child: CircularProgressIndicator());
                       }
                       if (!snapshot.hasData || snapshot.data == null) {
-                        return Center(child: Text('No messages yet.'));
+                        return const Center(child: Text('No messages yet.'));
                       }
                       final docs = snapshot.data!.docs;
                       // Filter messages between this patient and clinic

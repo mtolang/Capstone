@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PatientSelectionPage extends StatefulWidget {
-  const PatientSelectionPage({Key? key}) : super(key: key);
+  const PatientSelectionPage({super.key});
 
   @override
   State<PatientSelectionPage> createState() => _PatientSelectionPageState();
@@ -43,7 +43,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
       final uniqueContacts = <String, Map<String, dynamic>>{};
 
       for (var doc in allMessages) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         final fromId = data['fromId']?.toString() ?? '';
         final toId = data['toId']?.toString() ?? '';
         final message = data['message']?.toString() ?? '';

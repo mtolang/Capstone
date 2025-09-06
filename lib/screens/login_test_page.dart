@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../helper/clinic_auth.dart';
 
 class LoginTestPage extends StatefulWidget {
-  const LoginTestPage({Key? key}) : super(key: key);
+  const LoginTestPage({super.key});
 
   @override
   State<LoginTestPage> createState() => _LoginTestPageState();

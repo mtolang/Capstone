@@ -3,7 +3,7 @@ import 'package:capstone_2/screens/parent/games_option.dart';
 import 'package:capstone_2/screens/auth/login_as.dart';
 
 class ParentNavbar extends StatelessWidget {
-  const ParentNavbar({Key? key}) : super(key: key);
+  const ParentNavbar({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -245,7 +245,7 @@ class ParentNavbar extends StatelessWidget {
 }
 
 class TherapistNavbar extends StatelessWidget {
-  const TherapistNavbar({Key? key}) : super(key: key);
+  const TherapistNavbar({super.key});
 
   @override
   Widget build(BuildContext context) {

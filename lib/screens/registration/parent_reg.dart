@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:capstone_2/controller/register_controller.dart';
 
 class ParentRegister extends StatefulWidget {
-  const ParentRegister({Key? key}) : super(key: key);
+  const ParentRegister({super.key});
 
   @override
   State<ParentRegister> createState() => _ParentRegisterState();

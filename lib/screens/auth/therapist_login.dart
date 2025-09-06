@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class TherapistLogin extends StatelessWidget {
-  const TherapistLogin({Key? key}) : super(key: key);
+  const TherapistLogin({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -59,10 +59,10 @@ class TherapistLogin extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10.0),
                       border: Border.all(
-                        color: Color.fromARGB(255, 255, 255, 255),
+                        color: const Color.fromARGB(255, 255, 255, 255),
                       ),
                       color: Colors.white,
-                      boxShadow: [
+                      boxShadow: const [
                         BoxShadow(
                           color: Color(0x3F000000),
                           blurRadius: 4,
@@ -84,10 +84,10 @@ class TherapistLogin extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10.0),
                       border: Border.all(
-                        color: Color.fromARGB(255, 245, 250, 255),
+                        color: const Color.fromARGB(255, 245, 250, 255),
                       ),
                       color: Colors.white,
-                      boxShadow: [
+                      boxShadow: const [
                         BoxShadow(
                           color: Color(0x3F000000),
                           blurRadius: 4,
@@ -107,8 +107,8 @@ class TherapistLogin extends StatelessWidget {
                   const SizedBox(height: 30.0),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF006A5B),
-                      padding: EdgeInsets.symmetric(vertical: 20.0),
+                      backgroundColor: const Color(0xFF006A5B),
+                      padding: const EdgeInsets.symmetric(vertical: 20.0),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -117,9 +117,9 @@ class TherapistLogin extends StatelessWidget {
                     onPressed: null, // Disabled
                     child: const Text('Login'),
                   ),
-                  TextButton(
+                  const TextButton(
                     onPressed: null, // Disabled
-                    child: const Text('Forgot Password?'),
+                    child: Text('Forgot Password?'),
                   ),
                   const SizedBox(height: 16.0),
                   Row(

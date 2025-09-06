@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 class ShapeShiftersGame extends StatelessWidget {
+  const ShapeShiftersGame({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -10,7 +12,7 @@ class ShapeShiftersGame extends StatelessWidget {
         primarySwatch: Colors.teal,
         fontFamily: 'Roboto',
       ),
-      home: DragToShapeGame(),
+      home: const DragToShapeGame(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -53,6 +55,8 @@ class GameDragObject {
 }
 
 class DragToShapeGame extends StatefulWidget {
+  const DragToShapeGame({super.key});
+
   @override
   _DragToShapeGameState createState() => _DragToShapeGameState();
 }
@@ -71,7 +75,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
@@ -97,7 +101,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
       case 0: // Level 1
         shapes.add(GameShape(
           type: 'square',
-          center: Offset(200, 250),
+          center: const Offset(200, 250),
           size: 100,
           color: Colors.grey.shade400,
         ));
@@ -106,14 +110,14 @@ class _DragToShapeGameState extends State<DragToShapeGame>
           type: 'balloon',
           color: Colors.red,
           size: 60,
-          position: Offset(200, 400),
+          position: const Offset(200, 400),
         ));
         break;
 
       case 1: // Level 2
         shapes.add(GameShape(
           type: 'circle',
-          center: Offset(200, 250),
+          center: const Offset(200, 250),
           size: 120,
           color: Colors.blue.shade300,
         ));
@@ -123,14 +127,14 @@ class _DragToShapeGameState extends State<DragToShapeGame>
             type: 'star',
             color: Colors.yellow,
             size: 50,
-            position: Offset(150, 400),
+            position: const Offset(150, 400),
           ),
           GameDragObject(
             id: 'heart1',
             type: 'heart',
             color: Colors.pink,
             size: 50,
-            position: Offset(250, 400),
+            position: const Offset(250, 400),
           ),
         ]);
         break;
@@ -139,13 +143,13 @@ class _DragToShapeGameState extends State<DragToShapeGame>
         shapes.addAll([
           GameShape(
             type: 'square',
-            center: Offset(150, 250),
+            center: const Offset(150, 250),
             size: 90,
             color: Colors.green.shade300,
           ),
           GameShape(
             type: 'circle',
-            center: Offset(270, 250),
+            center: const Offset(270, 250),
             size: 90,
             color: Colors.purple.shade300,
           ),
@@ -156,14 +160,14 @@ class _DragToShapeGameState extends State<DragToShapeGame>
             type: 'square',
             color: Colors.green,
             size: 60,
-            position: Offset(120, 400),
+            position: const Offset(120, 400),
           ),
           GameDragObject(
             id: 'circle_obj',
             type: 'circle',
             color: Colors.purple,
             size: 60,
-            position: Offset(280, 400),
+            position: const Offset(280, 400),
           ),
         ]);
         break;
@@ -172,13 +176,13 @@ class _DragToShapeGameState extends State<DragToShapeGame>
         shapes.addAll([
           GameShape(
             type: 'triangle',
-            center: Offset(140, 250),
+            center: const Offset(140, 250),
             size: 90,
             color: Colors.orange.shade300,
           ),
           GameShape(
             type: 'star',
-            center: Offset(280, 250),
+            center: const Offset(280, 250),
             size: 90,
             color: Colors.teal.shade300,
           ),
@@ -189,21 +193,21 @@ class _DragToShapeGameState extends State<DragToShapeGame>
             type: 'triangle',
             color: Colors.orange,
             size: 50,
-            position: Offset(100, 400),
+            position: const Offset(100, 400),
           ),
           GameDragObject(
             id: 'star_obj',
             type: 'star',
             color: Colors.teal,
             size: 50,
-            position: Offset(180, 400),
+            position: const Offset(180, 400),
           ),
           GameDragObject(
             id: 'balloon2',
             type: 'balloon',
             color: Colors.red,
             size: 50,
-            position: Offset(300, 400),
+            position: const Offset(300, 400),
           ),
         ]);
         break;
@@ -212,19 +216,19 @@ class _DragToShapeGameState extends State<DragToShapeGame>
         shapes.addAll([
           GameShape(
             type: 'square',
-            center: Offset(110, 250),
+            center: const Offset(110, 250),
             size: 80,
             color: Colors.red.shade300,
           ),
           GameShape(
             type: 'circle',
-            center: Offset(200, 250),
+            center: const Offset(200, 250),
             size: 80,
             color: Colors.blue.shade300,
           ),
           GameShape(
             type: 'triangle',
-            center: Offset(290, 250),
+            center: const Offset(290, 250),
             size: 80,
             color: Colors.green.shade300,
           ),
@@ -235,28 +239,28 @@ class _DragToShapeGameState extends State<DragToShapeGame>
             type: 'square',
             color: Colors.red,
             size: 45,
-            position: Offset(80, 400),
+            position: const Offset(80, 400),
           ),
           GameDragObject(
             id: 'blue_circle',
             type: 'circle',
             color: Colors.blue,
             size: 45,
-            position: Offset(160, 400),
+            position: const Offset(160, 400),
           ),
           GameDragObject(
             id: 'green_triangle',
             type: 'triangle',
             color: Colors.green,
             size: 45,
-            position: Offset(240, 400),
+            position: const Offset(240, 400),
           ),
           GameDragObject(
             id: 'extra_balloon',
             type: 'balloon',
             color: Colors.yellow,
             size: 45,
-            position: Offset(320, 400),
+            position: const Offset(320, 400),
           ),
         ]);
         break;
@@ -353,7 +357,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
 
     _animationController.forward();
 
-    Future.delayed(Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 2), () {
       _animationController.reverse();
       if (currentLevel < 4) {
         setState(() {
@@ -372,14 +376,14 @@ class _DragToShapeGameState extends State<DragToShapeGame>
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Row(
+          title: const Row(
             children: [
               Icon(Icons.celebration, color: Colors.orange, size: 30),
               SizedBox(width: 10),
               Text('Congratulations!'),
             ],
           ),
-          content: Text('You completed all 5 levels!\nWell done!'),
+          content: const Text('You completed all 5 levels!\nWell done!'),
           actions: [
             TextButton(
               onPressed: () {
@@ -389,7 +393,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                 });
                 _loadLevel();
               },
-              child: Text('Play Again'),
+              child: const Text('Play Again'),
             ),
           ],
         );
@@ -447,7 +451,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
             children: [
               // Header
               Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -456,11 +460,11 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                         Navigator.of(context).pop();
                       },
                       child:
-                          Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                          const Icon(Icons.arrow_back, color: Colors.white, size: 28),
                     ),
                     Container(
                       padding:
-                          EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -478,7 +482,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                     ),
                     GestureDetector(
                       onTap: _loadLevel,
-                      child: Icon(Icons.refresh, color: Colors.white, size: 28),
+                      child: const Icon(Icons.refresh, color: Colors.white, size: 28),
                     ),
                   ],
                 ),
@@ -487,7 +491,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
               // Game Container
               Expanded(
                 child: Container(
-                  margin: EdgeInsets.all(16),
+                  margin: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
@@ -495,7 +499,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
                         blurRadius: 10,
-                        offset: Offset(0, 5),
+                        offset: const Offset(0, 5),
                       ),
                     ],
                   ),
@@ -503,7 +507,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                     children: [
                       // Instruction
                       Padding(
-                        padding: EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(20),
                         child: Text(
                           _getLevelInstruction(),
                           style: TextStyle(
@@ -517,7 +521,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
 
                       // Game Area
                       Expanded(
-                        child: Container(
+                        child: SizedBox(
                           width: double.infinity,
                           child: Stack(
                             children: [
@@ -525,7 +529,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                               ...shapes.map((shape) => Positioned(
                                     left: shape.center.dx - shape.size / 2,
                                     top: shape.center.dy - shape.size / 2,
-                                    child: Container(
+                                    child: SizedBox(
                                       width: shape.size,
                                       height: shape.size,
                                       child: CustomPaint(
@@ -545,19 +549,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                     top: object.position.dy - object.size / 2,
                                     child: Draggable<GameDragObject>(
                                       data: object,
-                                      child: Container(
-                                        width: object.size,
-                                        height: object.size,
-                                        child: CustomPaint(
-                                          painter: ShapePainter(
-                                            shapeType: object.type,
-                                            color: object.color,
-                                            filled: true,
-                                            size: object.size,
-                                          ),
-                                        ),
-                                      ),
-                                      feedback: Container(
+                                      feedback: SizedBox(
                                         width: object.size * 1.2,
                                         height: object.size * 1.2,
                                         child: CustomPaint(
@@ -578,6 +570,18 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                             .globalToLocal(details.offset);
                                         _onObjectDragEnd(object, localPosition);
                                       },
+                                      child: SizedBox(
+                                        width: object.size,
+                                        height: object.size,
+                                        child: CustomPaint(
+                                          painter: ShapePainter(
+                                            shapeType: object.type,
+                                            color: object.color,
+                                            filled: true,
+                                            size: object.size,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   )),
 
@@ -590,12 +594,12 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                       return Transform.scale(
                                         scale: _scaleAnimation.value,
                                         child: Container(
-                                          padding: EdgeInsets.all(30),
+                                          padding: const EdgeInsets.all(30),
                                           decoration: BoxDecoration(
                                             color: Colors.green,
                                             borderRadius:
                                                 BorderRadius.circular(20),
-                                            boxShadow: [
+                                            boxShadow: const [
                                               BoxShadow(
                                                 color: Colors.black26,
                                                 blurRadius: 15,
@@ -603,7 +607,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                               ),
                                             ],
                                           ),
-                                          child: Column(
+                                          child: const Column(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Icon(
@@ -635,8 +639,8 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                       // Hints section
                       Container(
                         width: double.infinity,
-                        margin: EdgeInsets.all(16),
-                        padding: EdgeInsets.all(16),
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.teal.shade50,
                           borderRadius: BorderRadius.circular(12),
@@ -653,7 +657,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                                 fontSize: 16,
                               ),
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Text(
                               _getHint(),
                               style: TextStyle(

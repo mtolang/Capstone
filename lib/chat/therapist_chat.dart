@@ -5,7 +5,7 @@ import 'chat_call.dart';
 class TherapistChatPage extends StatefulWidget {
   final String? patientId;
 
-  const TherapistChatPage({Key? key, this.patientId}) : super(key: key);
+  const TherapistChatPage({super.key, this.patientId});
 
   @override
   State<TherapistChatPage> createState() => _TherapistChatPageState();
@@ -199,10 +199,10 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(child: CircularProgressIndicator());
+                        return const Center(child: CircularProgressIndicator());
                       }
                       if (!snapshot.hasData || snapshot.data == null) {
-                        return Center(child: Text('No messages yet.'));
+                        return const Center(child: Text('No messages yet.'));
                       }
                       final docs = snapshot.data!.docs;
                       // Filter messages between this clinic and patient

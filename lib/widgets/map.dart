@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:async';
 
 class Maps extends StatefulWidget {
-  const Maps({Key? key, required this.title}) : super(key: key);
+  const Maps({super.key, required this.title});
 
   final String title;
 

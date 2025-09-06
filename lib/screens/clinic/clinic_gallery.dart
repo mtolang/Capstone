@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/clinic/custom_tabbar.dart';
 
 class ClinicGallery extends StatefulWidget {
-  const ClinicGallery({Key? key}) : super(key: key);
+  const ClinicGallery({super.key});
 
   @override
   State<ClinicGallery> createState() => _ClinicGalleryState();
@@ -391,9 +391,9 @@ class _ClinicGalleryState extends State<ClinicGallery> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
+            const Text(
               'Image Options',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),

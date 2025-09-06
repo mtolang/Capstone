@@ -4,7 +4,7 @@ import 'package:capstone_2/screens/parent/parent_navbar.dart';
 import 'package:capstone_2/widgets/map.dart';
 
 class Dashboard extends StatefulWidget {
-  const Dashboard({Key? key}) : super(key: key);
+  const Dashboard({super.key});
 
   @override
   State<Dashboard> createState() => _DashboardState();

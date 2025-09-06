@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 class TherapistRegister extends StatefulWidget {
-  const TherapistRegister({Key? key}) : super(key: key);
+  const TherapistRegister({super.key});
 
   @override
   State<TherapistRegister> createState() => _TherapistRegisterState();

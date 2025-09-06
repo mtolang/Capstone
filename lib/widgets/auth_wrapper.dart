@@ -5,7 +5,7 @@ import '../splash_page.dart';
 import '../screens/auth/login_as.dart';
 
 class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({Key? key}) : super(key: key);
+  const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {

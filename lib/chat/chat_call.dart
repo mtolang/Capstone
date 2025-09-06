@@ -9,11 +9,11 @@ class ChatCallScreen extends StatefulWidget {
   final List<String> initialParticipants;
 
   const ChatCallScreen({
-    Key? key,
+    super.key,
     required this.callId,
     required this.currentUserId,
     required this.initialParticipants,
-  }) : super(key: key);
+  });
 
   @override
   State<ChatCallScreen> createState() => _ChatCallScreenState();
@@ -137,7 +137,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
         if (data['status'] == 'declined') {
           _endCall();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Call declined')),
+            const SnackBar(content: Text('Call declined')),
           );
         }
 
@@ -158,12 +158,12 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Calling...')),
+        const SnackBar(content: Text('Calling...')),
       );
     } catch (e) {
       print('Error starting call: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start call')),
+        const SnackBar(content: Text('Failed to start call')),
       );
     }
   }
@@ -200,7 +200,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          title: Text('Incoming Call'),
+          title: const Text('Incoming Call'),
           content: Text('You have an incoming call from: $callerName'),
           actions: [
             TextButton(
@@ -212,7 +212,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
                     .update({'status': 'declined'});
                 Navigator.of(context).pop();
               },
-              child: Text('Decline'),
+              child: const Text('Decline'),
             ),
             TextButton(
               onPressed: () async {
@@ -309,7 +309,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
                   }
                 });
               },
-              child: Text('Accept'),
+              child: const Text('Accept'),
             ),
           ],
         );
@@ -419,7 +419,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
           await FirebaseFirestore.instance.collection('ClinicAcc').get();
 
       for (var doc in clinicsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         if (doc.id != widget.currentUserId) {
           // Don't include current user
           loadedContacts.add(Contact(
@@ -436,7 +436,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
           await FirebaseFirestore.instance.collection('ParentsAcc').get();
 
       for (var doc in parentsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         if (doc.id != widget.currentUserId) {
           // Don't include current user
           loadedContacts.add(Contact(
@@ -739,7 +739,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
 
   Widget _buildRemoteVideos() {
     if (_remoteRenderers.length == 1) {
-      return Container(
+      return SizedBox(
         width: double.infinity,
         height: double.infinity,
         child: RTCVideoView(_remoteRenderers.values.first),
@@ -763,7 +763,7 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
   }
 
   Widget _buildLocalVideoFullScreen() {
-    return Container(
+    return SizedBox(
       width: double.infinity,
       height: double.infinity,
       child: RTCVideoView(_localRenderer, mirror: true),
@@ -912,9 +912,13 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
   @override
   void dispose() {
     _localRenderer.dispose();
-    _remoteRenderers.values.forEach((renderer) => renderer.dispose());
+    for (var renderer in _remoteRenderers.values) {
+      renderer.dispose();
+    }
     _localStream?.dispose();
-    _peerConnections.values.forEach((connection) => connection.dispose());
+    for (var connection in _peerConnections.values) {
+      connection.dispose();
+    }
     _searchController.dispose();
     super.dispose();
   }

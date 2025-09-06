@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../helper/clinic_auth.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -164,10 +164,10 @@ class _LoginPageState extends State<LoginPage> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10.0),
                           border: Border.all(
-                            color: Color.fromARGB(255, 255, 255, 255),
+                            color: const Color.fromARGB(255, 255, 255, 255),
                           ),
                           color: Colors.white,
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Color(0x3F000000),
                               blurRadius: 4,
@@ -200,10 +200,10 @@ class _LoginPageState extends State<LoginPage> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10.0),
                           border: Border.all(
-                            color: Color.fromARGB(255, 245, 250, 255),
+                            color: const Color.fromARGB(255, 245, 250, 255),
                           ),
                           color: Colors.white,
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Color(0x3F000000),
                               blurRadius: 4,
@@ -245,8 +245,8 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 30.0),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF006A5B),
-                          padding: EdgeInsets.symmetric(vertical: 20.0),
+                          backgroundColor: const Color(0xFF006A5B),
+                          padding: const EdgeInsets.symmetric(vertical: 20.0),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),

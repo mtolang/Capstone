@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/clinic/custom_tabbar.dart';
 
 class ClinicProfile extends StatelessWidget {
-  const ClinicProfile({Key? key}) : super(key: key);
+  const ClinicProfile({super.key});
 
   @override
   Widget build(BuildContext context) {

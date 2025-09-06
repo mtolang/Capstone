@@ -4,7 +4,7 @@ import 'package:capstone_2/controller/register_controller.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ClinicRegister extends StatefulWidget {
-  const ClinicRegister({Key? key}) : super(key: key);
+  const ClinicRegister({super.key});
 
   @override
   State<ClinicRegister> createState() => _ClinicRegisterState();

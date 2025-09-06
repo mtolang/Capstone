@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PatientSideSelectPage extends StatefulWidget {
-  const PatientSideSelectPage({Key? key}) : super(key: key);
+  const PatientSideSelectPage({super.key});
 
   @override
   State<PatientSideSelectPage> createState() => _PatientSideSelectPageState();
@@ -42,7 +42,7 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
       final uniqueContacts = <String, Map<String, dynamic>>{};
 
       for (var doc in allMessages) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         final fromId = data['fromId']?.toString() ?? '';
         final toId = data['toId']?.toString() ?? '';
         final message = data['message']?.toString() ?? '';
@@ -159,7 +159,7 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
             ),
             const SizedBox(height: 20),
             ...clinics.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
+              final data = doc.data();
               return ListTile(
                 leading:
                     const Icon(Icons.local_hospital, color: Color(0xFF006A5B)),
@@ -178,7 +178,7 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
                   );
                 },
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

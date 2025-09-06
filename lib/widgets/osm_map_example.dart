@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class OSMMapExample extends StatefulWidget {
-  const OSMMapExample({Key? key}) : super(key: key);
+  const OSMMapExample({super.key});
 
   @override
   State<OSMMapExample> createState() => _OSMMapExampleState();

@@ -5,10 +5,10 @@ class DashTab extends StatefulWidget {
   final int initialSelectedIndex; // Add this parameter
 
   const DashTab({
-    Key? key,
+    super.key,
     this.onTabChanged,
     this.initialSelectedIndex = 0, // Default to first tab
-  }) : super(key: key);
+  });
 
   @override
   State<DashTab> createState() => _DashTabState();
@@ -65,9 +65,7 @@ class _DashTabState extends State<DashTab> {
 
   void _onMaterialsPressed() {
     print('Materials tab pressed');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Materials tab selected')),
-    );
+    Navigator.pushNamed(context, '/materials');
   }
 
   Widget buildTab(String label, int index) {

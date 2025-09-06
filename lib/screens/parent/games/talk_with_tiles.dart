@@ -28,7 +28,7 @@ class LevelData {
 }
 
 class TalkWithTilesGame extends StatefulWidget {
-  const TalkWithTilesGame({Key? key}) : super(key: key);
+  const TalkWithTilesGame({super.key});
 
   @override
   _TalkWithTilesGameState createState() => _TalkWithTilesGameState();
@@ -569,7 +569,7 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
 
                     // Hints
                     Container(

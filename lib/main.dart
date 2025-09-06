@@ -15,6 +15,7 @@ import 'package:capstone_2/screens/registration/therapist_reg.dart';
 //parent page imports
 import 'package:capstone_2/screens/parent/dashboard.dart';
 import 'package:capstone_2/screens/parent/ther_dash.dart';
+import 'package:capstone_2/screens/parent/materials.dart';
 import 'package:capstone_2/screens/parent/games_option.dart';
 import 'package:capstone_2/screens/parent/games/talk_with_tiles.dart';
 import 'package:capstone_2/screens/parent/games/shape_shifters.dart';
@@ -62,9 +63,10 @@ class MyApp extends StatelessWidget {
           //Parent Page Routes
           '/parentdashboard': (context) => const Dashboard(),
           '/therdashboard': (context) => const TherapistsDashboard(),
+          '/materials': (context) => const MaterialsPage(),
           '/gamesoption': (context) => const GamesOption(),
           '/talkwithtiles': (context) => const TalkWithTilesGame(),
-          '/shapeshifters': (context) => ShapeShiftersGame(),
+          '/shapeshifters': (context) => const ShapeShiftersGame(),
 
           //Chat Page Routes
           '/patientselection': (context) => const PatientSelectionPage(),
