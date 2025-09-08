@@ -20,6 +20,9 @@ import 'package:capstone_2/screens/parent/games_option.dart';
 import 'package:capstone_2/screens/parent/games/talk_with_tiles.dart';
 import 'package:capstone_2/screens/parent/games/shape_shifters.dart';
 //therapist page imports
+import 'package:capstone_2/screens/therapist/ther_profile.dart';
+import 'package:capstone_2/screens/therapist/ther_gallery.dart';
+import 'package:capstone_2/screens/therapist/ther_review.dart';
 //clinic page imports
 import 'package:capstone_2/screens/clinic/clinic_gallery.dart';
 import 'package:capstone_2/screens/clinic/clinic_profile.dart';
@@ -67,6 +70,11 @@ class MyApp extends StatelessWidget {
           '/gamesoption': (context) => const GamesOption(),
           '/talkwithtiles': (context) => const TalkWithTilesGame(),
           '/shapeshifters': (context) => const ShapeShiftersGame(),
+
+          //Therapist Page Routes
+          '/therapistprofile': (context) => const TherapistProfile(),
+          '/therapistgallery': (context) => const TherapistGallery(),
+          '/therapistreview': (context) => const TherapistReview(),
 
           //Chat Page Routes
           '/patientselection': (context) => const PatientSelectionPage(),
