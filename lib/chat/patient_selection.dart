@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PatientSelectionPage extends StatefulWidget {
   const PatientSelectionPage({Key? key}) : super(key: key);
@@ -13,14 +14,41 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   List<PatientMessage> _allPatients = [];
   List<PatientMessage> _filteredPatients = [];
 
-  // Use CLI01 as the current clinic ID - replace with actual clinic ID
-  final String _clinicId = 'CLI01';
+  String _clinicId = 'CLI01'; // Default fallback
 
   @override
   void initState() {
     super.initState();
-    _loadPatients();
-    _filteredPatients = _allPatients;
+    _loadUserIdFromStorage();
+  }
+
+  // Load current user ID from SharedPreferences
+  Future<void> _loadUserIdFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      final userType = prefs.getString('user_type');
+
+      if (userId != null && userType == 'clinic') {
+        setState(() {
+          _clinicId = userId;
+        });
+        print('Loading conversations for clinic ID: $_clinicId'); // Debug log
+        // Load patients after getting the correct clinic ID
+        _loadPatients();
+      } else {
+        print(
+            'No clinic user ID found, using default: $_clinicId'); // Debug log
+        // If no stored ID or not clinic user, use default and load patients
+        _loadPatients();
+      }
+      _filteredPatients = _allPatients;
+    } catch (e) {
+      print('Error loading user ID: $e');
+      // Keep default fallback value and load patients
+      _loadPatients();
+      _filteredPatients = _allPatients;
+    }
   }
 
   void _loadPatients() async {

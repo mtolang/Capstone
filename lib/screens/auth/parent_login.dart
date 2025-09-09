@@ -1,7 +1,106 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class ParentLogin extends StatelessWidget {
+class ParentLogin extends StatefulWidget {
   const ParentLogin({Key? key}) : super(key: key);
+
+  @override
+  State<ParentLogin> createState() => _ParentLoginState();
+}
+
+class _ParentLoginState extends State<ParentLogin> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorDialog('Please fill in all fields');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Query ParentsAcc collection for matching email and password
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('ParentsAcc')
+          .where('Email', isEqualTo: email)
+          .where('Password', isEqualTo: password)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        // Login successful
+        final parentDoc = querySnapshot.docs.first;
+        final parentData = parentDoc.data();
+        final parentName = parentData['Name'] ?? 'Parent';
+        final parentId = parentDoc.id; // Get the document ID
+
+        // Store user data in SharedPreferences for easy retrieval
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_id', parentId);
+        await prefs.setString('user_name', parentName);
+        await prefs.setString('user_email', email);
+        await prefs.setString('user_type', 'parent');
+        await prefs.setBool('is_logged_in', true);
+
+        _showSuccessDialog('Welcome back, $parentName!');
+
+        // Navigate to parent dashboard after short delay
+        Future.delayed(const Duration(seconds: 1), () {
+          Navigator.pushReplacementNamed(context, '/parentdashboard');
+        });
+      } else {
+        // Login failed
+        _showErrorDialog('Invalid email or password');
+      }
+    } catch (e) {
+      _showErrorDialog('Login failed. Please try again.');
+      print('Login error: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Login Successful'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +170,10 @@ class ParentLogin extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const TextField(
-                      decoration: InputDecoration(
+                    child: TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
                         labelText: 'Email or username',
                         border: InputBorder.none,
                       ),
@@ -96,9 +197,10 @@ class ParentLogin extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const TextField(
+                    child: TextField(
+                      controller: _passwordController,
                       obscureText: true,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: 'Password',
                         border: InputBorder.none,
                       ),
@@ -114,10 +216,10 @@ class ParentLogin extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/parentdashboard');
-                    },
-                    child: const Text('Login'),
+                    onPressed: _isLoading ? null : _login,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Login'),
                   ),
                   TextButton(
                     onPressed: null, // Disabled
@@ -143,5 +245,12 @@ class ParentLogin extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
