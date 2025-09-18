@@ -24,6 +24,8 @@ import 'package:capstone_2/screens/parent/games/shape_shifters.dart';
 import 'package:capstone_2/screens/clinic/clinic_gallery.dart';
 import 'package:capstone_2/screens/clinic/clinic_profile.dart';
 import 'package:capstone_2/screens/clinic/clinic_booking.dart';
+import 'package:capstone_2/screens/clinic/clinic_schedule.dart';
+import 'package:capstone_2/screens/clinic/clinic_edit_schedule.dart';
 //chat page imports
 import 'package:capstone_2/chat/patient_selection.dart';
 import 'package:capstone_2/chat/therapist_chat.dart';
@@ -91,6 +93,8 @@ class MyApp extends StatelessWidget {
             '/clinicgallery': (context) => const ClinicGallery(),
             '/clinicprofile': (context) => const ClinicProfile(),
             '/clinicbooking': (context) => const ClinicBookingPage(),
+            '/clinicschedule': (context) => const ClinicSchedulePage(),
+            '/cliniceditschedule': (context) => const ClinicEditSchedulePage(),
           } // Show splash screen first
           ),
     );

@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:capstone_2/chat/calling.dart';
+import 'package:capstone_2/services/global_call_service.dart';
 
 class ChatCallScreen extends StatefulWidget {
   final String callId;
@@ -55,15 +56,12 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
     } else {
       // Check if this is joining an existing call (callee scenario)
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _checkAndJoinExistingCall();
+        _joinExistingCall();
       });
     }
-
-    // REMOVED: Duplicate incoming call listener - now handled by GlobalCallService
-    // This prevents the infinite loop issue
   }
 
-  void _checkAndJoinExistingCall() async {
+  Future<void> _joinExistingCall() async {
     try {
       // Get the current call document
       final callDoc = await FirebaseFirestore.instance
@@ -74,36 +72,123 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
       if (!callDoc.exists) return;
 
       final callData = callDoc.data() as Map<String, dynamic>;
+      final participants = List<String>.from(callData['participants'] ?? []);
+      final invitations =
+          callData['invitations'] as Map<String, dynamic>? ?? {};
+      final offers = callData['offers'] as Map<String, dynamic>? ?? {};
 
-      // Check if this user is the callee and call is accepted
-      if (callData['calleeId'] == widget.currentUserId &&
-          callData['status'] == 'accepted') {
-        // This user accepted the call, now create answer
-        await _createAnswerForCall(callData);
+      // Check if this user accepted the call
+      if (invitations.containsKey(widget.currentUserId)) {
+        final invitation =
+            invitations[widget.currentUserId] as Map<String, dynamic>;
+        if (invitation['status'] == 'accepted') {
+          // Start call timer for the joiner
+          _startCallTimer();
 
-        // Start call timer for the callee
-        _startCallTimer();
+          // Setup WebRTC connections with other participants
+          for (String participantId in participants) {
+            if (participantId != widget.currentUserId) {
+              await _setupAnswerPeerConnection(participantId, offers);
+            }
+          }
+        }
       }
     } catch (e) {
-      print('Error checking existing call: $e');
+      print('Error joining existing call: $e');
     }
   }
 
-  Future<void> _createAnswerForCall(Map<String, dynamic> callData) async {
+  Future<void> _setupAnswerPeerConnection(
+      String participantId, Map<String, dynamic> offers) async {
     try {
-      final callerId = callData['callerId'];
-      final offer = callData['offer'];
-
-      if (offer == null || offer == 'Blank') return;
-
-      // Create peer connection
       final config = {
         'iceServers': [
           {'urls': 'stun:stun.l.google.com:19302'},
         ]
       };
       final pc = await createPeerConnection(config);
-      _peerConnections[callerId] = pc;
+      _peerConnections[participantId] = pc;
+
+      // Add local stream tracks
+      if (_localStream != null) {
+        _localStream!.getTracks().forEach((track) {
+          pc.addTrack(track, _localStream!);
+        });
+      }
+
+      // Listen for remote stream
+      pc.onAddStream = (stream) {
+        setState(() {
+          if (!_remoteRenderers.containsKey(participantId)) {
+            _remoteRenderers[participantId] = RTCVideoRenderer();
+            _remoteRenderers[participantId]!.initialize().then((_) {
+              _remoteRenderers[participantId]!.srcObject = stream;
+              setState(() {});
+            });
+          }
+        });
+      };
+
+      // Handle ICE candidates
+      pc.onIceCandidate = (candidate) {
+        FirebaseFirestore.instance
+            .collection('Calls')
+            .doc(widget.callId)
+            .update({
+          'iceCandidates': FieldValue.arrayUnion([
+            {
+              'candidate': candidate.candidate,
+              'sdpMid': candidate.sdpMid,
+              'sdpMLineIndex': candidate.sdpMLineIndex,
+              'from': widget.currentUserId,
+              'to': participantId,
+            }
+          ])
+        });
+      };
+
+      // Check if there's an offer from this participant
+      final participantOffers =
+          offers[participantId] as Map<String, dynamic>? ?? {};
+      final offerData = participantOffers[widget.currentUserId];
+
+      if (offerData != null) {
+        // Set remote description from the offer
+        final offerDesc =
+            RTCSessionDescription(offerData['sdp'], offerData['type']);
+        await pc.setRemoteDescription(offerDesc);
+
+        // Create and send answer
+        final answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        // Save answer to Firestore
+        await FirebaseFirestore.instance
+            .collection('Calls')
+            .doc(widget.callId)
+            .update({
+          'answers.$participantId.${widget.currentUserId}': {
+            'sdp': answer.sdp,
+            'type': answer.type,
+          }
+        });
+      }
+
+      print('Setup answer peer connection with $participantId');
+    } catch (e) {
+      print('Error setting up answer peer connection with $participantId: $e');
+    }
+  }
+
+  Future<void> _setupPeerConnectionWithParticipant(String participantId) async {
+    try {
+      final config = {
+        'iceServers': [
+          {'urls': 'stun:stun.l.google.com:19302'},
+        ]
+      };
+      final pc = await createPeerConnection(config);
+      _peerConnections[participantId] = pc;
 
       // Add local stream tracks
       if (_localStream != null) {
@@ -118,37 +203,35 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
           final renderer = RTCVideoRenderer();
           renderer.initialize().then((_) {
             renderer.srcObject = stream;
-            _remoteRenderers[callerId] = renderer;
+            _remoteRenderers[participantId] = renderer;
           });
         });
       };
 
-      // Listen for ICE candidates
+      // Handle ICE candidates
       pc.onIceCandidate = (candidate) {
         FirebaseFirestore.instance
             .collection('Calls')
             .doc(widget.callId)
             .update({
-          'iceCandidates': FieldValue.arrayUnion([candidate.toMap()])
+          'iceCandidates.${widget.currentUserId}.$participantId':
+              FieldValue.arrayUnion([candidate.toMap()])
         });
       };
 
-      // Set remote description (offer)
-      await pc.setRemoteDescription(RTCSessionDescription(offer, 'offer'));
+      // Create offer for this participant
+      final offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
 
-      // Create answer
-      final answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      // Save answer to Firestore
+      // Save offer to Firestore
       await FirebaseFirestore.instance
           .collection('Calls')
           .doc(widget.callId)
-          .update({'answer': answer.sdp});
+          .update({'offers.${widget.currentUserId}.$participantId': offer.sdp});
 
-      print('Answer created and saved to Firestore');
+      print('Setup peer connection with $participantId');
     } catch (e) {
-      print('Error creating answer: $e');
+      print('Error setting up peer connection with $participantId: $e');
     }
   }
 
@@ -1047,31 +1130,59 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
   }
 
   void _inviteToCall(Contact contact) async {
-    // Check if widget is still mounted
     if (!mounted) return;
 
-    // Create a new call document in Firestore and start WebRTC offer
-    final callsCollection = FirebaseFirestore.instance.collection('Calls');
-    final newCallDoc = callsCollection.doc();
-
     try {
-      await newCallDoc.set({
-        'callerId': widget.currentUserId,
-        'calleeId': contact.id,
-        'status': 'ringing',
-        'offer': 'Blank',
-        'answer': 'Blank',
-        'iceCandidates': 'Blank',
-      });
+      // Use GlobalCallService to initiate the call
+      final peerConnectionConfig = {
+        'iceServers': [
+          {'urls': 'stun:stun.l.google.com:19302'},
+        ]
+      };
 
-      // Start WebRTC offer
+      final callId = await GlobalCallService().initiateCall(
+        targetUserId: contact.id,
+        peerConnectionConfig: peerConnectionConfig,
+      );
+
+      if (callId != null) {
+        // Setup peer connection for this call
+        await _setupPeerConnectionForCall(callId, contact.id);
+
+        if (mounted) {
+          Navigator.pop(context); // Close invite bottom sheet
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Calling ${contact.name}...')),
+          );
+        }
+      } else {
+        throw Exception('Failed to create call');
+      }
+    } catch (e) {
+      print('Error inviting to call: $e');
+      if (mounted) {
+        Navigator.pop(context); // Close invite bottom sheet
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to call ${contact.name}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _setupPeerConnectionForCall(
+      String callId, String targetUserId) async {
+    try {
       final config = {
         'iceServers': [
           {'urls': 'stun:stun.l.google.com:19302'},
         ]
       };
+
       final pc = await createPeerConnection(config);
-      _peerConnections[contact.id] = pc;
+      _peerConnections[targetUserId] = pc;
 
       // Add local stream tracks
       if (_localStream != null) {
@@ -1080,13 +1191,32 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
         });
       }
 
-      // Listen for ICE candidates and save to Firestore
+      // Listen for remote stream
+      pc.onAddStream = (stream) {
+        setState(() {
+          if (!_remoteRenderers.containsKey(targetUserId)) {
+            _remoteRenderers[targetUserId] = RTCVideoRenderer();
+            _remoteRenderers[targetUserId]!.initialize().then((_) {
+              _remoteRenderers[targetUserId]!.srcObject = stream;
+              setState(() {});
+            });
+          }
+        });
+      };
+
+      // Handle ICE candidates
       pc.onIceCandidate = (candidate) {
-        if (mounted) {
-          newCallDoc.update({
-            'iceCandidates': FieldValue.arrayUnion([candidate.toMap()])
-          });
-        }
+        FirebaseFirestore.instance.collection('Calls').doc(callId).update({
+          'iceCandidates': FieldValue.arrayUnion([
+            {
+              'candidate': candidate.candidate,
+              'sdpMid': candidate.sdpMid,
+              'sdpMLineIndex': candidate.sdpMLineIndex,
+              'from': widget.currentUserId,
+              'to': targetUserId,
+            }
+          ])
+        });
       };
 
       // Create offer
@@ -1094,23 +1224,166 @@ class _ChatCallScreenState extends State<ChatCallScreen> {
       await pc.setLocalDescription(offer);
 
       // Save offer to Firestore
-      await newCallDoc.update({'offer': offer.sdp});
+      await FirebaseFirestore.instance.collection('Calls').doc(callId).update({
+        'offers.${widget.currentUserId}.$targetUserId': {
+          'sdp': offer.sdp,
+          'type': offer.type,
+        }
+      });
 
-      // Check if still mounted before showing UI feedback
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Inviting ${contact.name} to call...')),
-        );
-      }
+      // Listen for answer and call status changes
+      _listenForCallUpdates(callId, targetUserId);
+
+      print('Setup peer connection for call $callId with $targetUserId');
     } catch (e) {
-      print('Error inviting to call: $e');
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to invite ${contact.name}')),
-        );
+      print('Error setting up peer connection for call: $e');
+      throw e;
+    }
+  }
+
+  void _listenForCallUpdates(String callId, String targetUserId) {
+    FirebaseFirestore.instance
+        .collection('Calls')
+        .doc(callId)
+        .snapshots()
+        .listen((docSnap) async {
+      if (!docSnap.exists) return;
+
+      final data = docSnap.data() as Map<String, dynamic>;
+      final invitations = data['invitations'] as Map<String, dynamic>? ?? {};
+
+      // Check if target user accepted the call
+      if (invitations.containsKey(targetUserId)) {
+        final invitation = invitations[targetUserId] as Map<String, dynamic>;
+        if (invitation['status'] == 'accepted') {
+          _startCallTimer();
+
+          // Handle answer if available
+          final answers = data['answers'] as Map<String, dynamic>? ?? {};
+          final userAnswers =
+              answers[targetUserId] as Map<String, dynamic>? ?? {};
+          final answer = userAnswers[widget.currentUserId];
+
+          if (answer != null && _peerConnections.containsKey(targetUserId)) {
+            final pc = _peerConnections[targetUserId]!;
+            final answerDesc =
+                RTCSessionDescription(answer['sdp'], answer['type']);
+            await pc.setRemoteDescription(answerDesc);
+          }
+        } else if (invitation['status'] == 'declined') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Call declined')),
+            );
+          }
+          // Clean up peer connection
+          _peerConnections[targetUserId]?.close();
+          _peerConnections.remove(targetUserId);
+        }
       }
+
+      // Handle ICE candidates
+      final iceCandidates = data['iceCandidates'] as List? ?? [];
+      for (var candidate in iceCandidates) {
+        if (candidate['to'] == widget.currentUserId &&
+            candidate['from'] == targetUserId &&
+            _peerConnections.containsKey(targetUserId)) {
+          final pc = _peerConnections[targetUserId]!;
+          await pc.addCandidate(RTCIceCandidate(
+            candidate['candidate'],
+            candidate['sdpMid'],
+            candidate['sdpMLineIndex'],
+          ));
+        }
+      }
+    });
+  }
+
+  Future<String?> _findActiveCall() async {
+    try {
+      // Look for active calls where current user is participant
+      final snapshot = await FirebaseFirestore.instance
+          .collection('Calls')
+          .where('participants', arrayContains: widget.currentUserId)
+          .where('status', whereIn: ['active', 'ringing'])
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return snapshot.docs.first.id;
+      }
+      return null;
+    } catch (e) {
+      print('Error finding active call: $e');
+      return null;
+    }
+  }
+
+  Future<void> _addParticipantToCall(String callId, Contact contact) async {
+    try {
+      // Get current call data
+      final callDoc = await FirebaseFirestore.instance
+          .collection('Calls')
+          .doc(callId)
+          .get();
+
+      if (!callDoc.exists) return;
+
+      final callData = callDoc.data() as Map<String, dynamic>;
+      final currentParticipants =
+          List<String>.from(callData['participants'] ?? []);
+
+      // Limit to 4 participants maximum
+      if (currentParticipants.length >= 4) {
+        throw 'Maximum 4 participants allowed in a call';
+      }
+
+      // Add new participant
+      await FirebaseFirestore.instance.collection('Calls').doc(callId).update({
+        'participants': FieldValue.arrayUnion([contact.id]),
+        'type': 'group',
+        'invitations.${contact.id}': {
+          'status': 'pending',
+          'invitedBy': widget.currentUserId,
+          'invitedAt': DateTime.now(),
+        }
+      });
+
+      print('Added ${contact.name} to existing call $callId');
+    } catch (e) {
+      print('Error adding participant: $e');
+      throw e;
+    }
+  }
+
+  Future<void> _createNewCall(Contact contact) async {
+    try {
+      final callDoc = FirebaseFirestore.instance.collection('Calls').doc();
+
+      // Create call document with proper structure
+      await callDoc.set({
+        'callId': callDoc.id,
+        'participants': [widget.currentUserId, contact.id],
+        'status': 'ringing',
+        'type': '1-on-1',
+        'createdBy': widget.currentUserId,
+        'createdAt': DateTime.now(),
+        'offers': {},
+        'answers': {},
+        'iceCandidates': {},
+        'invitations': {
+          contact.id: {
+            'status': 'pending',
+            'invitedBy': widget.currentUserId,
+            'invitedAt': DateTime.now(),
+          }
+        }
+      });
+
+      print('Created new call ${callDoc.id} for ${contact.name}');
+    } catch (e) {
+      print('Error creating new call: $e');
+      throw e;
     }
   }
 

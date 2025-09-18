@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_2/chat/chat_call.dart';
+import 'package:capstone_2/services/global_call_service.dart';
 
 class CallingScreen extends StatefulWidget {
   final String callDocId;
@@ -53,24 +52,8 @@ class _CallingScreenState extends State<CallingScreen>
 
   Future<void> _acceptCall() async {
     try {
-      // Update call status to accepted
-      await FirebaseFirestore.instance
-          .collection('Calls')
-          .doc(widget.callDocId)
-          .update({'status': 'accepted'});
-
-      // Navigate to chat call screen WITHOUT initial participants
-      // This prevents creating a new call - we're joining an existing one
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatCallScreen(
-            callId: widget.callDocId,
-            currentUserId: widget.currentUserId,
-            initialParticipants: [], // Empty - don't start new call
-          ),
-        ),
-      );
+      // Use GlobalCallService to accept the call
+      await GlobalCallService().acceptCall(widget.callDocId);
     } catch (e) {
       print('Error accepting call: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -81,33 +64,31 @@ class _CallingScreenState extends State<CallingScreen>
 
   Future<void> _declineCall() async {
     try {
-      // Update call status to declined
-      await FirebaseFirestore.instance
-          .collection('Calls')
-          .doc(widget.callDocId)
-          .update({'status': 'declined'});
+      // Use GlobalCallService to decline the call
+      await GlobalCallService().declineCall(widget.callDocId);
 
-      // Go back
-      Navigator.pop(context);
+      // Close the dialog overlay
+      Navigator.of(context).pop();
     } catch (e) {
       print('Error declining call: $e');
-      Navigator.pop(context);
+      // Still close the dialog even if there's an error
+      Navigator.of(context).pop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black87,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        width: MediaQuery.of(context).size.width,
+        height: MediaQuery.of(context).size.height,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.blue.shade900.withOpacity(0.8),
+              Colors.blue.shade900.withOpacity(0.9),
               Colors.black87,
               Colors.black,
             ],

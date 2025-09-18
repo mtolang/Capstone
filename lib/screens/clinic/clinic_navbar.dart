@@ -201,7 +201,7 @@ class ClinicNavBar extends StatelessWidget {
                         Navigator.pop(context);
                         Navigator.pushNamedAndRemoveUntil(
                           context,
-                          '/login',
+                          '/loginas',
                           (route) => false,
                         );
                       },

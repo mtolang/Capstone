@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
 import 'package:capstone_2/screens/parent/parent_navbar.dart';
 import 'package:capstone_2/widgets/map.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:capstone_2/screens/parent/parent_clinic_profile.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({Key? key}) : super(key: key);
@@ -11,9 +13,18 @@ class Dashboard extends StatefulWidget {
 }
 
 class _DashboardState extends State<Dashboard> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -170,8 +181,14 @@ class _DashboardState extends State<Dashboard> {
                       ],
                     ),
                     child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value.toLowerCase();
+                        });
+                      },
                       decoration: InputDecoration(
-                        hintText: 'Search...',
+                        hintText: 'Search clinics...',
                         border: InputBorder.none,
                         suffixIcon: IconButton(
                           icon: const Icon(
@@ -179,11 +196,8 @@ class _DashboardState extends State<Dashboard> {
                             color: Color(0xFF67AFA5),
                           ),
                           onPressed: () {
-                            print('Search pressed');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Search functionality')),
-                            );
+                            // Optional: trigger search on button press
+                            FocusScope.of(context).unfocus();
                           },
                         ),
                       ),
@@ -193,94 +207,290 @@ class _DashboardState extends State<Dashboard> {
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 15),
                 ),
-                SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200.0,
-                    mainAxisSpacing: 12.0,
-                    crossAxisSpacing: 12.0,
-                    childAspectRatio: 0.45,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      return Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10.0),
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.5),
-                                spreadRadius: 2,
-                                blurRadius: 5,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              Container(
-                                height: 150,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(10),
-                                    topRight: Radius.circular(10),
-                                  ),
-                                ),
-                                child: Image.asset(
-                                  'asset/images/tiny.png',
-                                  height: 150,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                      child: Icon(
-                                        Icons.business,
-                                        size: 50,
-                                        color: Colors.grey,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 10.0),
-                              const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Text('The Tiny House Clinic',
-                                    style: TextStyle(
-                                        fontSize: 16.0,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: List.generate(5, (starIndex) {
-                                    return Icon(
-                                      Icons.star,
-                                      color: starIndex < 5
-                                          ? Colors.yellow
-                                          : Colors.grey,
-                                      size: 15,
-                                    );
-                                  }),
-                                ),
-                              ),
-                              const SizedBox(height: 5.0),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8.0),
-                                child: Text(
-                                    'A center with all your needed services',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 12.0)),
-                              ),
-                            ],
+                // Firebase clinic grid
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('ClinicAcc')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF006A5B),
+                            ),
                           ),
                         ),
                       );
-                    },
-                    childCount: 8,
-                  ),
+                    }
+
+                    if (snapshot.hasError) {
+                      return SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Text(
+                              'Error loading clinics: ${snapshot.error}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text(
+                              'No clinics available',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final clinics = snapshot.data!.docs;
+
+                    // Filter clinics based on search query
+                    final filteredClinics = clinics.where((clinic) {
+                      if (_searchQuery.isEmpty) return true;
+
+                      final clinicData = clinic.data() as Map<String, dynamic>;
+                      final clinicName = (clinicData['Clinic_Name'] ?? '')
+                          .toString()
+                          .toLowerCase();
+                      final clinicAddress = (clinicData['Address'] ?? '')
+                          .toString()
+                          .toLowerCase();
+                      final userName = (clinicData['User_name'] ?? '')
+                          .toString()
+                          .toLowerCase();
+
+                      return clinicName.contains(_searchQuery) ||
+                          clinicAddress.contains(_searchQuery) ||
+                          userName.contains(_searchQuery);
+                    }).toList();
+                    if (filteredClinics.isEmpty && _searchQuery.isNotEmpty) {
+                      return const SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text(
+                              'No clinics found matching your search',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    return SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 200.0,
+                        mainAxisSpacing: 12.0,
+                        crossAxisSpacing: 12.0,
+                        childAspectRatio: 0.45,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (BuildContext context, int index) {
+                          final clinic = filteredClinics[index];
+                          final clinicData =
+                              clinic.data() as Map<String, dynamic>;
+
+                          return Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        ParentClinicProfilePage(
+                                      clinicId: clinic.id,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10.0),
+                                  color: Colors.white,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withOpacity(0.5),
+                                      spreadRadius: 2,
+                                      blurRadius: 5,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      height: 150,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[300],
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(10),
+                                          topRight: Radius.circular(10),
+                                        ),
+                                      ),
+                                      child: clinicData['Clinic_Image'] !=
+                                                  null &&
+                                              clinicData['Clinic_Image']
+                                                  .toString()
+                                                  .isNotEmpty
+                                          ? Image.network(
+                                              clinicData['Clinic_Image'],
+                                              height: 150,
+                                              width: double.infinity,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return Center(
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.local_hospital,
+                                                        size: 40,
+                                                        color:
+                                                            Color(0xFF006A5B),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        (clinicData['Clinic_Name'] ??
+                                                                'Clinic')[0]
+                                                            .toUpperCase(),
+                                                        style: const TextStyle(
+                                                          fontSize: 24,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              Color(0xFF006A5B),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            )
+                                          : Center(
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.local_hospital,
+                                                    size: 40,
+                                                    color: Color(0xFF006A5B),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    (clinicData['Clinic_Name'] ??
+                                                            'Clinic')[0]
+                                                        .toUpperCase(),
+                                                    style: const TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Color(0xFF006A5B),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                    ),
+                                    const SizedBox(height: 10.0),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8.0),
+                                      child: Text(
+                                        clinicData['Clinic_Name'] ??
+                                            'Unknown Clinic',
+                                        style: const TextStyle(
+                                          fontSize: 16.0,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (clinicData['Contact_Number'] != null)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8.0),
+                                        child: Text(
+                                          clinicData['Contact_Number'],
+                                          style: const TextStyle(
+                                            fontSize: 12.0,
+                                            color: Color(0xFF006A5B),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: List.generate(5, (starIndex) {
+                                          return Icon(
+                                            Icons.star,
+                                            color: starIndex <
+                                                    (clinicData['rating'] ?? 5)
+                                                ? Colors.yellow
+                                                : Colors.grey,
+                                            size: 15,
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5.0),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8.0),
+                                        child: Text(
+                                          clinicData['Address'] ??
+                                              'Address not available',
+                                          textAlign: TextAlign.center,
+                                          style:
+                                              const TextStyle(fontSize: 12.0),
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        childCount: filteredClinics.length,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

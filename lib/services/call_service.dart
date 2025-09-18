@@ -1,8 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:capstone_2/chat/calling.dart';
+import 'package:capstone_2/services/call_utility.dart';
+
+/// Basic Call Connection Service
+///
+/// PURPOSE: Creates basic connection between parent and clinic calls
+/// FEATURES:
+/// - Listens for calls with status = 'ringing'
+/// - Shows IncomingCallOverlay dialog
+/// - Basic call detection and handling
+/// - Manual context management
+///
+/// USE WHEN: You need simple call connection without advanced features
 
 class CallService {
   static final CallService _instance = CallService._internal();
@@ -23,39 +34,27 @@ class CallService {
     _context = context;
   }
 
-  // Try to get user ID from multiple sources
+  // Try to get user ID from utility
   Future<String?> _getCurrentUserId() async {
     if (_currentUserId != null) return _currentUserId;
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Try different storage keys
-      String? userId = prefs.getString('user_id'); // For parents
-      if (userId == null) {
-        userId = prefs.getString('clinic_id'); // For clinics
-      }
-
-      if (userId != null) {
-        _currentUserId = userId;
-        return userId;
-      }
-    } catch (e) {
-      print('Error getting user ID from SharedPreferences: $e');
+    final userId = await CallUtility.getCurrentUserId();
+    if (userId != null) {
+      _currentUserId = userId;
     }
-
-    // Could add more sources here like Firebase Auth
-    return null;
+    return userId;
   }
 
   void _startListening() async {
     final userId = await _getCurrentUserId();
     if (userId == null) {
-      print('CallService: No user ID available, cannot start listening');
+      CallUtility.log(
+          'CallService', 'No user ID available, cannot start listening');
       return;
     }
 
-    print('CallService: Starting to listen for calls for user: $userId');
+    CallUtility.log(
+        'CallService', 'Starting to listen for calls for user: $userId');
 
     _callSubscription = FirebaseFirestore.instance
         .collection('Calls')
@@ -68,30 +67,36 @@ class CallService {
           final data = change.doc.data() as Map<String, dynamic>;
           final callerId = data['callerId'] as String?;
 
-          print(
-              'CallService: Incoming call detected from $callerId to $userId');
+          CallUtility.log('CallService',
+              'Incoming call detected from $callerId to $userId');
 
-          // Only show incoming call if current user is not the caller
-          if (callerId != null && callerId != userId) {
+          // Only show incoming call if validation passes
+          if (callerId != null &&
+              CallUtility.shouldShowCall(
+                currentUserId: userId,
+                callerId: callerId,
+              )) {
             _showIncomingCall(change.doc.id, data);
           }
         }
       }
     }, onError: (error) {
-      print('CallService: Error listening for calls: $error');
+      CallUtility.log('CallService', 'Error listening for calls: $error');
     });
   }
 
   void _showIncomingCall(String callDocId, Map<String, dynamic> callData) {
     if (_context == null) {
-      print('CallService: No context available to show incoming call');
+      CallUtility.log(
+          'CallService', 'No context available to show incoming call');
       return;
     }
 
     final callerId = callData['callerId'] as String? ?? 'Unknown';
     final callerName = callData['callerName'] as String? ?? 'Unknown Caller';
 
-    print('CallService: Showing incoming call dialog for $callerName');
+    CallUtility.log(
+        'CallService', 'Showing incoming call dialog for $callerName');
 
     // Show incoming call overlay or navigate to calling screen
     showDialog(
@@ -128,7 +133,7 @@ class CallService {
   }
 
   void dispose() {
-    print('CallService: Disposing call service');
+    CallUtility.log('CallService', 'Disposing call service');
     _callSubscription?.cancel();
     _callSubscription = null;
     _currentUserId = null;
