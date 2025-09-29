@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'chat_call.dart';
 
 class PatientChatPage extends StatefulWidget {
@@ -22,11 +23,29 @@ class _PatientChatPageState extends State<PatientChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String _contactName = '';
+  String _patientId = 'PARAcc01'; // Default fallback
 
   @override
   void initState() {
     super.initState();
     _loadContactInfo();
+    _loadUserIdFromStorage();
+  }
+
+  // Load current user ID from SharedPreferences
+  Future<void> _loadUserIdFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId != null) {
+        setState(() {
+          _patientId = userId;
+        });
+      }
+    } catch (e) {
+      print('Error loading user ID: $e');
+      // Keep default fallback value
+    }
   }
 
   void _loadContactInfo() {
@@ -54,9 +73,6 @@ class _PatientChatPageState extends State<PatientChatPage> {
       _contactName = patientNames[widget.therapistId] ?? 'Unknown Patient';
     }
   }
-
-  // Use the current parent/patient ID from Firestore
-  final String _patientId = 'PARAcc01';
 
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty) return;

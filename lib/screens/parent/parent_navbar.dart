@@ -226,10 +226,11 @@ class ParentNavbar extends StatelessWidget {
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        Navigator.push(
+                        Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => const LoginAs()));
+                                builder: (context) => const LoginAs()),
+                            (route) => false);
                       },
                       child: const Text('Logout'),
                     ),
@@ -460,10 +461,11 @@ class TherapistNavbar extends StatelessWidget {
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        Navigator.push(
+                        Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => const LoginAs()));
+                                builder: (context) => const LoginAs()),
+                            (route) => false);
                       },
                       child: const Text('Logout'),
                     ),

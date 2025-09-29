@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:capstone_2/widgets/call_button.dart';
 
 class PatientSideSelectPage extends StatefulWidget {
   const PatientSideSelectPage({super.key});
@@ -13,18 +15,43 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
   List<TherapistMessage> _allTherapists = [];
   List<TherapistMessage> _filteredTherapists = [];
 
-  final String _patientId = 'PARAcc01'; // Current patient ID
+  String _patientId = 'PARAcc01'; // Default fallback
 
   @override
   void initState() {
     super.initState();
-    _loadTherapists();
-    _filteredTherapists = _allTherapists;
+    _loadUserIdFromStorage();
+  }
+
+  // Load current user ID from SharedPreferences
+  Future<void> _loadUserIdFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId != null) {
+        setState(() {
+          _patientId = userId;
+        });
+        // Load therapists after getting the correct user ID
+        _loadTherapists();
+      } else {
+        // If no stored ID, use default and load therapists
+        _loadTherapists();
+      }
+      _filteredTherapists = _allTherapists;
+    } catch (e) {
+      print('Error loading user ID: $e');
+      // Keep default fallback value and load therapists
+      _loadTherapists();
+      _filteredTherapists = _allTherapists;
+    }
   }
 
   void _loadTherapists() async {
     // Load conversations from Firestore Message collection
     try {
+      print('Loading conversations for patient ID: $_patientId'); // Debug log
+
       final messagesSnapshot = await FirebaseFirestore.instance
           .collection('Message')
           .where('fromId', isEqualTo: _patientId)
@@ -34,6 +61,10 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
           .collection('Message')
           .where('toId', isEqualTo: _patientId)
           .get();
+
+      print('Found ${messagesSnapshot.docs.length} sent messages'); // Debug log
+      print(
+          'Found ${receivedSnapshot.docs.length} received messages'); // Debug log
 
       // Combine both sent and received messages
       final allMessages = [...messagesSnapshot.docs, ...receivedSnapshot.docs];
@@ -105,7 +136,12 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
           specialization: 'Clinic',
           isOnline: false, // You can implement online status later
         ));
+
+        print(
+            'Added conversation with: $contactName (ID: $contactId)'); // Debug log
       }
+
+      print('Total conversations loaded: ${conversations.length}'); // Debug log
 
       setState(() {
         _allTherapists = conversations;
@@ -136,6 +172,17 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
   }
 
   Future<void> _showNewConversationDialog() async {
+    // Ensure we have a valid patient ID before showing new conversation options
+    if (_patientId.isEmpty || _patientId == 'PARAcc01') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to start a conversation'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final clinicsSnapshot =
         await FirebaseFirestore.instance.collection('ClinicAcc').get();
     final clinics = clinicsSnapshot.docs;

@@ -1,0 +1,521 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/schedule_database_service.dart';
+
+class ClinicEditSchedulePage extends StatefulWidget {
+  const ClinicEditSchedulePage({Key? key}) : super(key: key);
+
+  @override
+  State<ClinicEditSchedulePage> createState() => _ClinicEditSchedulePageState();
+}
+
+class _ClinicEditSchedulePageState extends State<ClinicEditSchedulePage> {
+  final Map<String, Map<String, dynamic>> weeklySchedule = {
+    'Monday': {'startTime': '08:00', 'endTime': '17:00', 'isActive': true},
+    'Tuesday': {'startTime': '08:00', 'endTime': '17:00', 'isActive': true},
+    'Wednesday': {'startTime': '08:00', 'endTime': '17:00', 'isActive': true},
+    'Thursday': {'startTime': '08:00', 'endTime': '17:00', 'isActive': true},
+    'Friday': {'startTime': '08:00', 'endTime': '17:00', 'isActive': true},
+    'Saturday': {'startTime': '09:00', 'endTime': '15:00', 'isActive': false},
+    'Sunday': {'startTime': '09:00', 'endTime': '15:00', 'isActive': false},
+  };
+
+  String? _therapistId;
+  bool _isLoading = false;
+  bool _isLoadingSchedule = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTherapistId();
+  }
+
+  Future<void> _loadTherapistId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final therapistId =
+        prefs.getString('clinic_id') ?? prefs.getString('user_id');
+
+    setState(() {
+      _therapistId = therapistId;
+    });
+
+    // Load existing schedule if available
+    if (therapistId != null) {
+      await _loadExistingSchedule(therapistId);
+    }
+  }
+
+  Future<void> _loadExistingSchedule(String therapistId) async {
+    try {
+      final existingSchedule =
+          await ScheduleDatabaseService.loadSchedule(therapistId);
+
+      if (existingSchedule != null &&
+          existingSchedule['weeklySchedule'] != null) {
+        final weekly =
+            existingSchedule['weeklySchedule'] as Map<String, dynamic>;
+
+        setState(() {
+          // Convert Firebase format back to UI format
+          weeklySchedule.forEach((day, _) {
+            final dayKey = day.toLowerCase();
+            if (weekly.containsKey(dayKey)) {
+              final dayData = weekly[dayKey] as Map<String, dynamic>;
+              weeklySchedule[day] = {
+                'startTime': dayData['startTime'] ?? '08:00',
+                'endTime': dayData['endTime'] ?? '17:00',
+                'isActive': dayData['isWorkingDay'] ?? false,
+              };
+            }
+          });
+          _isLoadingSchedule = false;
+        });
+
+        print('Loaded existing schedule for therapist: $therapistId');
+      } else {
+        setState(() {
+          _isLoadingSchedule = false;
+        });
+        print('No existing schedule found, using defaults');
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingSchedule = false;
+      });
+      print('Error loading existing schedule: $e');
+      // Continue with default schedule if loading fails
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF006A5B),
+        elevation: 0,
+        title: const Text(
+          'Edit Schedule',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontFamily: 'Poppins',
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: _saveSchedule,
+              child: const Text(
+                'Save',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // Top wave background
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(height: size.height * 0.30),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container();
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Bottom wave background
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(height: size.height * 0.3),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xFF67AFA5), Colors.white],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 2.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container();
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Main content
+          _isLoadingSchedule
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(50.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Colors.white,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading schedule...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 40),
+                      const Text(
+                        'Weekly Schedule',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ...weeklySchedule.entries.map((entry) {
+                        return _buildDayScheduleCard(entry.key, entry.value);
+                      }).toList(),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayScheduleCard(String day, Map<String, dynamic> schedule) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 1,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  day,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                Switch(
+                  value: schedule['isActive'],
+                  activeColor: const Color(0xFF006A5B),
+                  onChanged: (value) {
+                    setState(() {
+                      weeklySchedule[day]!['isActive'] = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            if (schedule['isActive']) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTimeSelector(
+                      'Start Time',
+                      schedule['startTime'],
+                      (time) {
+                        setState(() {
+                          weeklySchedule[day]!['startTime'] = time;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildTimeSelector(
+                      'End Time',
+                      schedule['endTime'],
+                      (time) {
+                        setState(() {
+                          weeklySchedule[day]!['endTime'] = time;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSelector(
+      String label, String currentTime, Function(String) onTimeChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Color(0xFF67AFA5),
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => _selectTime(currentTime, onTimeChanged),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF67AFA5)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  currentTime,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const Icon(
+                  Icons.access_time,
+                  size: 16,
+                  color: Color(0xFF67AFA5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _selectTime(
+      String currentTime, Function(String) onTimeChanged) async {
+    final List<String> timeParts = currentTime.split(':');
+    final TimeOfDay initialTime = TimeOfDay(
+      hour: int.parse(timeParts[0]),
+      minute: int.parse(timeParts[1]),
+    );
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+
+    if (picked != null) {
+      final String formattedTime =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+      onTimeChanged(formattedTime);
+    }
+  }
+
+  void _saveSchedule() async {
+    if (_therapistId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to identify therapist. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('Saving schedule for therapist: $_therapistId');
+      print('Weekly schedule data: $weeklySchedule');
+
+      // Use the ScheduleDatabaseService
+      await ScheduleDatabaseService.saveSchedule(
+        therapistId: _therapistId!,
+        weeklySchedule: _convertToFirebaseFormat(),
+        constraints: {
+          'maxPatientsPerDay': 8,
+          'maxPatientsPerSlot': 1,
+          'slotDurationMinutes': 60,
+          'bufferTimeMinutes': 15,
+          'advanceBookingDays': 30,
+          'cancellationHours': 24,
+          'rescheduleHours': 48,
+          'sameDayBooking': false,
+          'weekendBooking': false,
+        },
+        exceptions: [],
+        recurringSettings: {
+          'allowRecurring': true,
+          'maxRecurringWeeks': 52,
+          'defaultRecurrenceType': 'weekly',
+          'maxRecurringAppointments': 50,
+          'requireContractApproval': true,
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Schedule saved successfully! Patients can now book appointments.'),
+            backgroundColor: Color(0xFF006A5B),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print('Error saving schedule: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save schedule: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic> _convertToFirebaseFormat() {
+    Map<String, dynamic> firebaseSchedule = {};
+
+    weeklySchedule.forEach((day, schedule) {
+      String dayKey = day.toLowerCase();
+      firebaseSchedule[dayKey] = {
+        'isWorkingDay': schedule['isActive'],
+        'startTime': schedule['startTime'],
+        'endTime': schedule['endTime'],
+        'breakTimes': [
+          {
+            'startTime': '12:00',
+            'endTime': '13:00',
+            'breakType': 'lunch',
+          }
+        ],
+        'timeSlots': schedule['isActive']
+            ? _generateTimeSlots(
+                schedule['startTime'],
+                schedule['endTime'],
+              )
+            : [],
+      };
+    });
+
+    return firebaseSchedule;
+  }
+
+  List<Map<String, dynamic>> _generateTimeSlots(
+      String startTime, String endTime) {
+    List<Map<String, dynamic>> slots = [];
+
+    final startHour = int.parse(startTime.split(':')[0]);
+    final endHour = int.parse(endTime.split(':')[0]);
+
+    for (int hour = startHour; hour < endHour; hour++) {
+      // Skip lunch hour (12:00-13:00)
+      if (hour == 12) continue;
+
+      slots.add({
+        'slotId': 'slot_${hour}_00',
+        'startTime': '${hour.toString().padLeft(2, '0')}:00',
+        'endTime': '${(hour + 1).toString().padLeft(2, '0')}:00',
+        'isAvailable': true,
+        'isBooked': false,
+        'patientId': null,
+        'patientName': null,
+        'appointmentType': 'therapy',
+        'notes': '',
+        'bookedAt': null,
+        'cancelledAt': null,
+      });
+    }
+
+    return slots;
+  }
+}
