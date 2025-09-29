@@ -114,7 +114,9 @@ class TherapistLogin extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed: null, // Disabled
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/therapistprofile');
+                    },
                     child: const Text('Login'),
                   ),
                   const TextButton(
