@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:capstone_2/helper/clinic_auth.dart';
 
 class PatientSelectionPage extends StatefulWidget {
   const PatientSelectionPage({super.key});
@@ -25,26 +26,47 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   // Load current user ID from SharedPreferences
   Future<void> _loadUserIdFromStorage() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
-      final userType = prefs.getString('user_type');
+      // Use ClinicAuthService to check authentication
+      final isLoggedIn = await ClinicAuthService.isLoggedIn;
+      final clinicId = await ClinicAuthService.getStoredClinicId();
 
-      if (userId != null && userType == 'clinic') {
+      final prefs = await SharedPreferences.getInstance();
+      final userType = prefs.getString('user_type');
+      final storedIsLoggedIn = prefs.getBool('is_logged_in');
+
+      print('PatientSelection: Debug clinic auth state:');
+      print('  clinic_id from ClinicAuthService: $clinicId');
+      print('  isLoggedIn from ClinicAuthService: $isLoggedIn');
+      print('  user_type from prefs: $userType');
+      print('  is_logged_in from prefs: $storedIsLoggedIn');
+
+      if (clinicId != null && isLoggedIn && userType == 'clinic') {
         setState(() {
-          _clinicId = userId;
+          _clinicId = clinicId;
         });
-        print('Loading conversations for clinic ID: $_clinicId'); // Debug log
+        print('PatientSelection: Using validated clinic ID: $_clinicId');
         // Load patients after getting the correct clinic ID
         _loadPatients();
       } else {
-        print(
-            'No clinic user ID found, using default: $_clinicId'); // Debug log
-        // If no stored ID or not clinic user, use default and load patients
+        print('PatientSelection: No valid clinic authentication found');
+        print('PatientSelection: User might need to log in as clinic');
+        // Show a message that user needs to log in
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('Please log in as a clinic to view patient messages'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        // Still load with default ID for testing
+        print('PatientSelection: Using default clinic ID: $_clinicId');
         _loadPatients();
       }
       _filteredPatients = _allPatients;
     } catch (e) {
-      print('Error loading user ID: $e');
+      print('PatientSelection: Error loading clinic ID: $e');
       // Keep default fallback value and load patients
       _loadPatients();
       _filteredPatients = _allPatients;
@@ -54,6 +76,12 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   void _loadPatients() async {
     // Load conversations from Firestore Message collection
     try {
+      print(
+          'PatientSelection: Loading conversations for clinic ID: $_clinicId');
+
+      // Check Firebase connection
+      print('PatientSelection: Checking Firebase connection...');
+
       final messagesSnapshot = await FirebaseFirestore.instance
           .collection('Message')
           .where('fromId', isEqualTo: _clinicId)
@@ -64,8 +92,38 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
           .where('toId', isEqualTo: _clinicId)
           .get();
 
+      print('PatientSelection: Firebase query results:');
+      print('  Sent messages: ${messagesSnapshot.docs.length}');
+      print('  Received messages: ${receivedSnapshot.docs.length}');
+
+      // Debug: Log all found messages
+      print('PatientSelection: Sent message details:');
+      for (var doc in messagesSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        print(
+            '  From: ${data['fromId']} To: ${data['toId']} Message: ${data['message']}');
+      }
+
+      print('PatientSelection: Received message details:');
+      for (var doc in receivedSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        print(
+            '  From: ${data['fromId']} To: ${data['toId']} Message: ${data['message']}');
+      }
+
       // Combine both sent and received messages
       final allMessages = [...messagesSnapshot.docs, ...receivedSnapshot.docs];
+      print('PatientSelection: Total messages found: ${allMessages.length}');
+
+      // Debug: Let's also check what parent accounts exist
+      final parentsSnapshot =
+          await FirebaseFirestore.instance.collection('ParentsAcc').get();
+      print('PatientSelection: Available parent accounts:');
+      for (var doc in parentsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        print(
+            '  ID: ${doc.id}, Name: ${data['Name']}, Email: ${data['Email']}');
+      }
 
       // Get unique patient IDs
       final uniqueContacts = <String, Map<String, dynamic>>{};

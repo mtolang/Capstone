@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'chat_call.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:capstone_2/widgets/call_button.dart';
+import 'package:capstone_2/helper/clinic_auth.dart';
 
 class TherapistChatPage extends StatefulWidget {
   final String? patientId;
@@ -16,13 +18,54 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
   final ScrollController _scrollController = ScrollController();
   String _patientName = '';
 
-  // Use CLI01 as the current clinic ID - replace with actual clinic ID
-  final String _clinicId = 'CLI01';
+  // Dynamic clinic ID - will be loaded from storage
+  String _clinicId = 'CLI01'; // Default fallback
 
   @override
   void initState() {
     super.initState();
+    _loadClinicIdFromStorage();
     _loadPatientInfo();
+  }
+
+  // Load current clinic ID from SharedPreferences
+  Future<void> _loadClinicIdFromStorage() async {
+    try {
+      // Use ClinicAuthService to check authentication
+      final isLoggedIn = await ClinicAuthService.isLoggedIn;
+      final clinicId = await ClinicAuthService.getStoredClinicId();
+
+      final prefs = await SharedPreferences.getInstance();
+      final userType = prefs.getString('user_type');
+
+      print('TherapistChat: Debug clinic auth state:');
+      print('  clinic_id from ClinicAuthService: $clinicId');
+      print('  isLoggedIn from ClinicAuthService: $isLoggedIn');
+      print('  user_type from prefs: $userType');
+
+      if (clinicId != null && isLoggedIn && userType == 'clinic') {
+        setState(() {
+          _clinicId = clinicId;
+        });
+        print('TherapistChat: Using validated clinic ID: $_clinicId');
+      } else {
+        print('TherapistChat: No valid clinic authentication found');
+        print('TherapistChat: Using default clinic ID: $_clinicId');
+        // Show a warning that user might need to log in
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('Warning: Please ensure you are logged in as a clinic'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('TherapistChat: Error loading clinic ID: $e');
+      // Keep default fallback value
+    }
   }
 
   void _loadPatientInfo() async {
@@ -61,12 +104,21 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
     final fromId = _clinicId;
     final toId = widget.patientId ?? 'unknown';
 
+    print('TherapistChat: Sending message:');
+    print('  From (clinic): $fromId');
+    print('  To (patient): $toId');
+    print('  Message: $messageText');
+
     // Save to Firestore
     FirebaseFirestore.instance.collection('Message').add({
       'fromId': fromId,
       'toId': toId,
       'message': messageText,
       'timestamp': timestamp,
+    }).then((docRef) {
+      print('TherapistChat: Message saved successfully with ID: ${docRef.id}');
+    }).catchError((error) {
+      print('TherapistChat: Error saving message: $error');
     });
 
     _messageController.clear();
@@ -151,37 +203,10 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatCallScreen(
-                    callId:
-                        'call_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: _clinicId,
-                    initialParticipants: [widget.patientId ?? 'PARAcc01'],
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.call, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatCallScreen(
-                    callId:
-                        'voice_call_${widget.patientId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: _clinicId,
-                    initialParticipants: [widget.patientId ?? 'PARAcc01'],
-                  ),
-                ),
-              );
-            },
+          CallButton(
+            targetUserId: widget.patientId ?? '',
+            targetUserName: _patientName.isNotEmpty ? _patientName : 'Patient',
+            currentUserId: _clinicId,
           ),
         ],
       ),

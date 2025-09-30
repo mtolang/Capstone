@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_2/widgets/call_button.dart';
+import 'package:capstone_2/helper/parent_auth.dart';
 
 class PatientSideSelectPage extends StatefulWidget {
   const PatientSideSelectPage({super.key});
@@ -26,21 +26,45 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
   // Load current user ID from SharedPreferences
   Future<void> _loadUserIdFromStorage() async {
     try {
+      // Use ParentAuthService to check authentication
+      final isLoggedIn = await ParentAuthService.isLoggedIn();
+      final userId = await ParentAuthService.getCurrentParentId();
+
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
-      if (userId != null) {
+      final userType = prefs.getString('user_type');
+      final storedIsLoggedIn = prefs.getBool('is_logged_in');
+
+      print('PatientSideSelect: Debug auth state:');
+      print('  user_id from ParentAuthService: $userId');
+      print('  isLoggedIn from ParentAuthService: $isLoggedIn');
+      print('  user_type from prefs: $userType');
+      print('  is_logged_in from prefs: $storedIsLoggedIn');
+
+      if (userId != null && isLoggedIn) {
         setState(() {
           _patientId = userId;
         });
+        print('PatientSideSelect: Using validated patient ID: $_patientId');
         // Load therapists after getting the correct user ID
         _loadTherapists();
       } else {
-        // If no stored ID, use default and load therapists
+        print('PatientSideSelect: No valid parent authentication found');
+        print('PatientSideSelect: User might need to log in as parent');
+        // Show a message that user needs to log in
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please log in as a parent to view conversations'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        // Still load with default ID for testing
         _loadTherapists();
       }
       _filteredTherapists = _allTherapists;
     } catch (e) {
-      print('Error loading user ID: $e');
+      print('PatientSideSelect: Error loading user ID: $e');
       // Keep default fallback value and load therapists
       _loadTherapists();
       _filteredTherapists = _allTherapists;
@@ -50,7 +74,11 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
   void _loadTherapists() async {
     // Load conversations from Firestore Message collection
     try {
-      print('Loading conversations for patient ID: $_patientId'); // Debug log
+      print(
+          'PatientSideSelect: Loading conversations for patient ID: $_patientId');
+
+      // Check if Firebase is properly connected
+      print('PatientSideSelect: Checking Firebase connection...');
 
       final messagesSnapshot = await FirebaseFirestore.instance
           .collection('Message')
@@ -62,12 +90,38 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
           .where('toId', isEqualTo: _patientId)
           .get();
 
-      print('Found ${messagesSnapshot.docs.length} sent messages'); // Debug log
-      print(
-          'Found ${receivedSnapshot.docs.length} received messages'); // Debug log
+      print('PatientSideSelect: Firebase query results:');
+      print('  Sent messages: ${messagesSnapshot.docs.length}');
+      print('  Received messages: ${receivedSnapshot.docs.length}');
+
+      // Debug: Log all found messages
+      print('PatientSideSelect: Sent message details:');
+      for (var doc in messagesSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        print(
+            '  From: ${data['fromId']} To: ${data['toId']} Message: ${data['message']}');
+      }
+
+      print('PatientSideSelect: Received message details:');
+      for (var doc in receivedSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        print(
+            '  From: ${data['fromId']} To: ${data['toId']} Message: ${data['message']}');
+      }
 
       // Combine both sent and received messages
       final allMessages = [...messagesSnapshot.docs, ...receivedSnapshot.docs];
+      print('PatientSideSelect: Total messages found: ${allMessages.length}');
+
+      // Debug: Let's also check what parent accounts exist
+      final parentsSnapshot =
+          await FirebaseFirestore.instance.collection('ParentsAcc').get();
+      print('PatientSideSelect: Available parent accounts:');
+      for (var doc in parentsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        print(
+            '  ID: ${doc.id}, Name: ${data['Name']}, Email: ${data['Email']}');
+      }
 
       // Get unique clinic/therapist IDs
       final uniqueContacts = <String, Map<String, dynamic>>{};
@@ -141,7 +195,8 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
             'Added conversation with: $contactName (ID: $contactId)'); // Debug log
       }
 
-      print('Total conversations loaded: ${conversations.length}'); // Debug log
+      print(
+          'PatientSideSelect: Total conversations loaded: ${conversations.length}');
 
       setState(() {
         _allTherapists = conversations;

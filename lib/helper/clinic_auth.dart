@@ -71,6 +71,8 @@ class ClinicAuthService {
       await prefs.setString(_clinicIdKey, documentId);
       await prefs.setString(_clinicEmailKey, email.trim());
       await prefs.setBool(_isLoggedInKey, true);
+      await prefs.setString('user_type',
+          'clinic'); // CRITICAL: Set user type for DynamicUserService
 
       // Try to sign in with Firebase Auth (optional, for session management)
       try {
@@ -198,6 +200,7 @@ class ClinicAuthService {
       await prefs.remove(_clinicIdKey);
       await prefs.remove(_clinicEmailKey);
       await prefs.setBool(_isLoggedInKey, false);
+      await prefs.remove('user_type'); // Clear user type as well
 
       // Sign out from Firebase Auth
       await _auth.signOut();
