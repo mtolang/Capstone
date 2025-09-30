@@ -23,6 +23,7 @@ import 'package:capstone_2/screens/parent/games/shape_shifters.dart';
 import 'package:capstone_2/screens/therapist/ther_profile.dart';
 import 'package:capstone_2/screens/therapist/ther_gallery.dart';
 import 'package:capstone_2/screens/therapist/ther_review.dart';
+import 'package:capstone_2/screens/therapist/ther_progress.dart';
 //clinic page imports
 import 'package:capstone_2/screens/clinic/clinic_gallery.dart';
 import 'package:capstone_2/screens/clinic/clinic_profile.dart';
@@ -75,6 +76,7 @@ class MyApp extends StatelessWidget {
           '/therapistprofile': (context) => const TherapistProfile(),
           '/therapistgallery': (context) => const TherapistGallery(),
           '/therapistreview': (context) => const TherapistReview(),
+          '/therapistprogress': (context) => const TherProgress(),
 
           //Chat Page Routes
           '/patientselection': (context) => const PatientSelectionPage(),
