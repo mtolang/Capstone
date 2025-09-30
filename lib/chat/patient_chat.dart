@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'chat_call.dart';
+import 'package:capstone_2/widgets/call_button.dart';
 
 class PatientChatPage extends StatefulWidget {
   final String? therapistId;
@@ -174,37 +174,10 @@ class _PatientChatPageState extends State<PatientChatPage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.videocam, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatCallScreen(
-                    callId:
-                        'call_${widget.therapistId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: _patientId,
-                    initialParticipants: [widget.therapistId ?? 'CLI01'],
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.call, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatCallScreen(
-                    callId:
-                        'voice_call_${widget.therapistId}_${DateTime.now().millisecondsSinceEpoch}',
-                    currentUserId: _patientId,
-                    initialParticipants: [widget.therapistId ?? 'CLI01'],
-                  ),
-                ),
-              );
-            },
+          CallButton(
+            targetUserId: widget.therapistId ?? '',
+            targetUserName: widget.therapistName ?? 'Therapist',
+            currentUserId: _patientId,
           ),
         ],
       ),

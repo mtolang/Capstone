@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../helper/clinic_auth.dart';
+import '../services/global_call_service.dart';
 
 class LoginTestPage extends StatefulWidget {
   const LoginTestPage({super.key});
@@ -189,6 +190,25 @@ class _LoginTestPageState extends State<LoginTestPage> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              // Debug call system button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    // Check call service status
+                    final status = GlobalCallService().getServiceStatus();
+                    _showMessage('Call service status: $status');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Check Call Service Status'),
+                ),
+              ),
+              const SizedBox(height: 8),
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

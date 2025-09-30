@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/games_option.dart';
+import 'package:capstone_2/screens/parent/parent_materials.dart';
 import 'package:capstone_2/screens/auth/login_as.dart';
+import 'package:capstone_2/helper/parent_auth.dart';
 
 class ParentNavbar extends StatelessWidget {
   const ParentNavbar({super.key});
@@ -79,9 +81,7 @@ class ParentNavbar extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               print('Dashboard tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dashboard selected')),
-              );
+              Navigator.pushReplacementNamed(context, '/parentdashboard');
             },
           ),
           ListTile(
@@ -118,9 +118,11 @@ class ParentNavbar extends StatelessWidget {
             ),
             onTap: () {
               Navigator.pop(context);
-              print('Materials tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Materials selected')),
+              // Direct navigation instead of named route
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const ParentMaterials()),
               );
             },
           ),
