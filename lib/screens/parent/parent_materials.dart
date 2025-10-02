@@ -4,7 +4,7 @@ import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-//import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ParentMaterials extends StatefulWidget {
   const ParentMaterials({Key? key}) : super(key: key);
@@ -681,70 +681,28 @@ class _ParentMaterialsState extends State<ParentMaterials> {
         child: Center(
           child: Padding(
             padding: EdgeInsets.all(20.0),
-            child: CircularProgressIndicator(
-              color: Color(0xFF006A5B),
-            ),
+            child: CircularProgressIndicator(color: Color(0xFF006A5B)),
           ),
         ),
       );
     }
 
     if (_youtubeVideos.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.video_library,
-                  size: 64,
-                  color: Colors.grey,
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'No YouTube videos found',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return const SliverToBoxAdapter(child: SizedBox(height: 0));
     }
 
-    // Filter videos based on search query and limit to 3 videos
-    final filteredVideos = _youtubeVideos
-        .where((video) {
+    final videos = _youtubeVideos
+        .where((v) {
           if (_searchQuery.isEmpty) return true;
-          final title = video['title'].toString().toLowerCase();
-          final description = video['description'].toString().toLowerCase();
-          return title.contains(_searchQuery) ||
-              description.contains(_searchQuery);
+          final t = v['title']?.toString().toLowerCase() ?? '';
+          final d = v['description']?.toString().toLowerCase() ?? '';
+          return t.contains(_searchQuery) || d.contains(_searchQuery);
         })
         .take(3)
-        .toList(); // Limit to exactly 3 videos
+        .toList();
 
-    if (filteredVideos.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: Text(
-              'No YouTube videos found for the selected category',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ),
-        ),
-      );
+    if (videos.isEmpty) {
+      return const SliverToBoxAdapter(child: SizedBox(height: 0));
     }
 
     return SliverToBoxAdapter(
@@ -753,106 +711,69 @@ class _ParentMaterialsState extends State<ParentMaterials> {
         margin: const EdgeInsets.symmetric(horizontal: 16.0),
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
-          itemCount: filteredVideos.length,
+          itemCount: videos.length,
           itemBuilder: (context, index) {
-            final video = filteredVideos[index];
-
+            final video = videos[index];
             return Container(
               width: 280,
               margin: const EdgeInsets.only(right: 12.0),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12.0),
                 color: Colors.white,
+                borderRadius: BorderRadius.circular(12.0),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.3),
-                    spreadRadius: 2,
-                    blurRadius: 5,
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
                 ],
               ),
-              child: GestureDetector(
-                onTap: () {
-                  _showVideoDetail(video);
-                },
+              child: InkWell(
+                onTap: () => _showVideoDetail(video),
                 child: Column(
                   children: [
-                    // Video thumbnail
                     Expanded(
                       flex: 3,
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(12.0),
-                              topRight: Radius.circular(12.0),
-                            ),
-                            child: Image.network(
-                              video['thumbnail'],
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Icons.video_library,
-                                    size: 40,
-                                    color: Colors.grey,
-                                  ),
-                                );
-                              },
-                            ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12.0),
+                          topRight: Radius.circular(12.0),
+                        ),
+                        child: Image.network(
+                          video['thumbnail'] ?? '',
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.video_library, size: 40, color: Colors.grey),
                           ),
-                          // Play button overlay
-                          Center(
-                            child: Container(
-                              padding: const EdgeInsets.all(12.0),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.8),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                    // Video info
                     Expanded(
                       flex: 1,
                       child: Padding(
                         padding: const EdgeInsets.all(12.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              video['title'] ?? 'Untitled Video',
+                              video['title']?.toString() ?? 'Untitled Video',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF006A5B),
                                 fontFamily: 'Poppins',
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              video['channelTitle'] ?? '',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                                fontFamily: 'Poppins',
-                              ),
+                              video['channelTitle']?.toString() ?? '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Poppins'),
                             ),
                           ],
                         ),

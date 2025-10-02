@@ -194,26 +194,34 @@ class GamesOption extends StatelessWidget {
                   ),
                   const SizedBox(height: 20.0),
 
-                  // Game Button 3 - Coming Soon
+                  // Game Button 3 - Trace & Pop Pro (Motor Skills)
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[400],
+                      backgroundColor: const Color(0xFF006A5B),
                       padding: const EdgeInsets.symmetric(vertical: 20.0),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),
                       shadowColor: Colors.black.withOpacity(0.3),
-                      elevation: 4,
+                      elevation: 8,
                     ),
-                    onPressed: null, // Disabled for now
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Loading Trace & Pop Pro...'),
+                          backgroundColor: Color(0xFF006A5B),
+                        ),
+                      );
+                      Navigator.pushNamed(context, '/traceandpoppro');
+                    },
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.lock_outline, size: 24),
+                        Icon(Icons.gesture, size: 24),
                         SizedBox(width: 10),
                         Text(
-                          'Coming Soon',
+                          'Trace & Pop Pro',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold),
                         ),
