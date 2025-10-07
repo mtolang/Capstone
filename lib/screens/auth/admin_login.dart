@@ -31,23 +31,43 @@ class _AdminLoginState extends State<AdminLogin> {
     });
 
     // Simulate login process
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
 
-    // TODO: Add actual admin authentication logic here
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Admin login successful!'),
-          backgroundColor: Color(0xFF006A5B),
-        ),
-      );
-      
-      // Navigate to admin dashboard
-      Navigator.pushReplacementNamed(context, '/admindashboard');
+    // Admin credentials validation
+    final username = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    
+    if (username == 'Admin' && password == 'adanbayot') {
+      // Successful login
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome, Admin! Login successful!'),
+            backgroundColor: Color(0xFF006A5B),
+          ),
+        );
+        
+        // Navigate to admin dashboard
+        Navigator.pushReplacementNamed(context, '/admindashboard');
+      }
+    } else {
+      // Failed login
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid admin credentials. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -150,13 +170,13 @@ class _AdminLoginState extends State<AdminLogin> {
                       ),
                       child: TextFormField(
                         controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
+                        keyboardType: TextInputType.text,
                         style: const TextStyle(
                           fontSize: 16,
                           color: Color(0xFF333333),
                         ),
                         decoration: const InputDecoration(
-                          hintText: 'Email or username',
+                          hintText: 'Admin Username',
                           hintStyle: TextStyle(
                             color: Color(0xFF999999),
                             fontSize: 16,
@@ -166,7 +186,7 @@ class _AdminLoginState extends State<AdminLogin> {
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Please enter your email or username';
+                            return 'Please enter admin username';
                           }
                           return null;
                         },
