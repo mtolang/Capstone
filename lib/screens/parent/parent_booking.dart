@@ -24,6 +24,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
   Map<String, dynamic>? clinicSchedule;
   bool isLoading = true;
   List<Map<String, dynamic>> availableSlots = [];
+  String bookingProcessType = 'single'; // Default to single session
 
   @override
   void initState() {
@@ -45,6 +46,16 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       if (schedule != null) {
         setState(() {
           clinicSchedule = schedule;
+
+          // Extract booking process type from recurring settings
+          final recurringSettings =
+              schedule['recurringSettings'] as Map<String, dynamic>?;
+          if (recurringSettings != null &&
+              recurringSettings['bookingProcessType'] != null) {
+            bookingProcessType =
+                recurringSettings['bookingProcessType'] as String;
+          }
+
           isLoading = false;
         });
         _loadAvailableSlotsForDate(selectedDate);
@@ -566,6 +577,8 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
           selectedTime: _getSelectedSlotTime(),
           clinicId: widget.clinicId,
           therapistId: widget.therapistId,
+          bookingProcessType:
+              bookingProcessType, // Pass the booking process type
         ),
       ),
     ).then((_) {

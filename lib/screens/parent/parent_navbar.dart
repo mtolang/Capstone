@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_2/screens/parent/games_option.dart';
-import 'package:capstone_2/screens/parent/parent_materials.dart';
+import 'package:capstone_2/screens/parent/materials.dart';
+import 'package:capstone_2/screens/parent/parent_schedule.dart';
 import 'package:capstone_2/screens/auth/login_as.dart';
-import 'package:capstone_2/helper/parent_auth.dart';
+import 'package:capstone_2/helper/parent_auth.dart'; // Add ParentAuthService import
+import 'package:capstone_2/helper/clinic_auth.dart'; // Add ClinicAuthService import for therapists
 
 class ParentNavbar extends StatelessWidget {
   const ParentNavbar({super.key});
@@ -121,8 +123,7 @@ class ParentNavbar extends StatelessWidget {
               // Direct navigation instead of named route
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                    builder: (context) => const ParentMaterials()),
+                MaterialPageRoute(builder: (context) => const MaterialsPage()),
               );
             },
           ),
@@ -160,12 +161,28 @@ class ParentNavbar extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            onTap: () {
+            onTap: () async {
               Navigator.pop(context);
               print('Schedule tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Schedule selected')),
-              );
+              try {
+                // Direct navigation instead of named route for better reliability
+                await Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ParentSchedulePage()),
+                );
+              } catch (e) {
+                print('Error navigating to schedule: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text('Failed to load schedule. Please try again.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
           ),
           ListTile(
@@ -226,13 +243,25 @@ class ParentNavbar extends StatelessWidget {
                       child: const Text('Cancel'),
                     ),
                     TextButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(context);
-                        Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const LoginAs()),
-                            (route) => false);
+                        try {
+                          // Clear all stored authentication data for parent
+                          await ParentAuthService.signOut();
+                          Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginAs()),
+                              (route) => false);
+                        } catch (e) {
+                          // Show error if logout fails
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Parent logout failed: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                       child: const Text('Logout'),
                     ),
@@ -382,11 +411,7 @@ class TherapistNavbar extends StatelessWidget {
               ),
             ),
             onTap: () {
-              Navigator.pop(context);
-              print('Schedule tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Schedule selected')),
-              );
+              Navigator.pushNamed(context, '/parentschedule');
             },
           ),
           ListTile(
@@ -461,13 +486,25 @@ class TherapistNavbar extends StatelessWidget {
                       child: const Text('Cancel'),
                     ),
                     TextButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(context);
-                        Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const LoginAs()),
-                            (route) => false);
+                        try {
+                          // Clear all stored authentication data for clinic/therapist
+                          await ClinicAuthService.signOut();
+                          Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginAs()),
+                              (route) => false);
+                        } catch (e) {
+                          // Show error if logout fails
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Therapist logout failed: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                       child: const Text('Logout'),
                     ),

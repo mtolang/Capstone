@@ -338,4 +338,408 @@ class BookingRequestService {
       throw Exception('Failed to get request: $e');
     }
   }
+
+  /// Save contract booking request
+  /// This creates a recurring booking that reserves the same time slot every week
+  static Future<String> saveContractBookingRequest({
+    // Parent Information
+    required String parentName,
+    required String parentPhone,
+    required String parentEmail,
+    required String parentId,
+
+    // Child Information
+    required String childName,
+    required int childAge,
+    required String childGender,
+
+    // Appointment Information
+    required DateTime startDate,
+    required String appointmentTime,
+    required String timeSlotId,
+    required String appointmentType,
+    required String dayOfWeek, // e.g., 'Monday', 'Tuesday', etc.
+
+    // Contract Information
+    int contractDurationWeeks = 52, // Default to 1 year
+    String contractType = 'weekly_recurring',
+
+    // Additional Information
+    String? additionalNotes,
+
+    // Clinic/Therapist Information
+    String? clinicId,
+    String? therapistId,
+  }) async {
+    try {
+      // Generate a unique contract request ID
+      final requestRef = _firestore.collection(COLLECTION_NAME).doc();
+      final requestId = requestRef.id;
+
+      // Calculate end date based on contract duration
+      final endDate = startDate.add(Duration(days: contractDurationWeeks * 7));
+
+      // Prepare contract booking request data
+      final requestData = {
+        // === REQUEST METADATA ===
+        'requestId': requestId,
+        'status': 'pending', // pending, approved, declined, cancelled
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'requestType': 'contract_booking',
+        'bookingProcessType': 'contract',
+
+        // === PARENT INFORMATION ===
+        'parentInfo': {
+          'parentId': parentId,
+          'parentName': parentName.trim(),
+          'parentPhone': parentPhone.trim(),
+          'parentEmail': parentEmail.trim().toLowerCase(),
+        },
+
+        // === CHILD INFORMATION ===
+        'childInfo': {
+          'childName': childName.trim(),
+          'childAge': childAge,
+          'childGender': childGender,
+        },
+
+        // === CONTRACT APPOINTMENT INFORMATION ===
+        'contractInfo': {
+          'startDate': Timestamp.fromDate(startDate),
+          'endDate': Timestamp.fromDate(endDate),
+          'dayOfWeek': dayOfWeek,
+          'appointmentTime': appointmentTime,
+          'timeSlotId': timeSlotId,
+          'appointmentType': appointmentType,
+          'contractDurationWeeks': contractDurationWeeks,
+          'contractType': contractType,
+          'isRecurring': true,
+          'recurrencePattern': 'weekly',
+        },
+
+        // === CLINIC/THERAPIST INFORMATION ===
+        'serviceProvider': {
+          'clinicId': clinicId,
+          'therapistId': therapistId,
+        },
+
+        // === ADDITIONAL INFORMATION ===
+        'additionalInfo': {
+          'notes': additionalNotes?.trim() ?? '',
+          'specialRequirements': [],
+          'parentPreferences': {},
+        },
+
+        // === REQUEST TRACKING ===
+        'tracking': {
+          'requestSource': 'parent_booking_form',
+          'requestVersion': '2.0',
+          'submissionMethod': 'contract_booking',
+        },
+
+        // === PROCESSING INFORMATION ===
+        'processingInfo': {
+          'reviewedBy': null,
+          'reviewedAt': null,
+          'approvedBy': null,
+          'approvedAt': null,
+          'declinedBy': null,
+          'declinedAt': null,
+          'declineReason': null,
+          'contractStartedAt': null,
+          'contractEndedAt': null,
+          'earlyTerminationReason': null,
+        },
+
+        // === COMMUNICATION LOG ===
+        'communicationLog': [],
+
+        // === CONVENIENCE FIELDS FOR QUERYING ===
+        'parentName': parentName.trim(),
+        'childName': childName.trim(),
+        'startDate': Timestamp.fromDate(startDate),
+        'dayOfWeek': dayOfWeek,
+        'appointmentTime': appointmentTime,
+        'appointmentType': appointmentType,
+        'ageGroup': _determineAgeGroup(childAge),
+        'searchKeywords': _generateSearchKeywords(
+          parentName: parentName,
+          childName: childName,
+          appointmentType: appointmentType,
+        ),
+      };
+
+      // Save to Firebase
+      await requestRef.set(requestData);
+
+      print('Contract booking request saved successfully');
+      print(
+          'Contract details: $dayOfWeek at $appointmentTime for $contractDurationWeeks weeks');
+
+      return requestId;
+    } catch (e) {
+      print('Error saving contract booking request: $e');
+      throw Exception('Failed to save contract booking request: $e');
+    }
+  }
+
+  /// Check if a time slot is available for contract booking
+  static Future<bool> isTimeSlotAvailableForContract({
+    required String clinicId,
+    required String dayOfWeek,
+    required String timeSlotId,
+    required DateTime startDate,
+    required int durationWeeks,
+  }) async {
+    try {
+      // Check if there are any existing contract bookings for this time slot
+      final querySnapshot = await _firestore
+          .collection(COLLECTION_NAME)
+          .where('serviceProvider.clinicId', isEqualTo: clinicId)
+          .where('contractInfo.dayOfWeek', isEqualTo: dayOfWeek)
+          .where('contractInfo.timeSlotId', isEqualTo: timeSlotId)
+          .where('status', whereIn: ['pending', 'approved']).get();
+
+      // If no existing contracts, the slot is available
+      if (querySnapshot.docs.isEmpty) {
+        return true;
+      }
+
+      // Check for date conflicts
+      final endDate = startDate.add(Duration(days: durationWeeks * 7));
+
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data();
+        final existingStart =
+            (data['contractInfo']['startDate'] as Timestamp).toDate();
+        final existingEnd =
+            (data['contractInfo']['endDate'] as Timestamp).toDate();
+
+        // Check if dates overlap
+        if (startDate.isBefore(existingEnd) && endDate.isAfter(existingStart)) {
+          return false; // Time slot is already booked for this period
+        }
+      }
+
+      return true; // No conflicts found
+    } catch (e) {
+      print('Error checking time slot availability: $e');
+      return false; // Be conservative and return false if there's an error
+    }
+  }
+
+  /// Approve a booking request, move it to AcceptedBooking database, and remove from Request collection
+  static Future<bool> approveBookingRequest({
+    required String requestId,
+    required String reviewerId,
+    String? assignedTherapistId,
+    String? additionalNotes,
+  }) async {
+    try {
+      // Get the request data
+      final requestDoc =
+          await _firestore.collection(COLLECTION_NAME).doc(requestId).get();
+
+      if (!requestDoc.exists) {
+        return false;
+      }
+
+      final requestData = requestDoc.data()!;
+
+      // Create AcceptedBooking entry with flexible data mapping
+      final acceptedBookingData = <String, dynamic>{};
+
+      // Service Provider Information
+      final serviceProvider =
+          requestData['serviceProvider'] as Map<String, dynamic>? ?? {};
+      acceptedBookingData['clinicId'] =
+          serviceProvider['clinicId'] ?? requestData['clinicId'] ?? 'unknown';
+      acceptedBookingData['therapistId'] = assignedTherapistId ??
+          serviceProvider['therapistId'] ??
+          requestData['therapistId'];
+
+      // Basic Information
+      acceptedBookingData['requestId'] = requestId;
+      acceptedBookingData['parentId'] = requestData['parentId'] ?? 'unknown';
+
+      // Parent Information (try multiple possible structures)
+      final parentInfo =
+          requestData['parentInfo'] as Map<String, dynamic>? ?? requestData;
+      acceptedBookingData['parentName'] = parentInfo['parentName'] ??
+          requestData['parentName'] ??
+          'Unknown Parent';
+      acceptedBookingData['parentPhone'] =
+          parentInfo['parentPhone'] ?? requestData['parentPhone'] ?? '';
+      acceptedBookingData['parentEmail'] =
+          parentInfo['parentEmail'] ?? requestData['parentEmail'] ?? '';
+
+      // Child/Patient Information (try multiple possible structures)
+      final childInfo =
+          requestData['childInfo'] as Map<String, dynamic>? ?? requestData;
+      acceptedBookingData['patientName'] =
+          childInfo['childName'] ?? requestData['childName'] ?? 'Unknown Child';
+      acceptedBookingData['childAge'] =
+          childInfo['childAge'] ?? requestData['childAge'] ?? 0;
+      acceptedBookingData['childGender'] =
+          childInfo['childGender'] ?? requestData['childGender'] ?? 'Unknown';
+
+      // Appointment Details (try multiple possible structures)
+      final appointmentDetails =
+          requestData['appointmentDetails'] as Map<String, dynamic>? ??
+              requestData;
+
+      // Handle different date field names
+      var appointmentDate = appointmentDetails['requestedDate'] ??
+          appointmentDetails['appointmentDate'] ??
+          requestData['startDate'] ??
+          requestData['appointmentDate'];
+
+      var appointmentTime = appointmentDetails['requestedTime'] ??
+          appointmentDetails['appointmentTime'] ??
+          requestData['startTime'] ??
+          requestData['appointmentTime'] ??
+          '09:00';
+
+      acceptedBookingData['appointmentDate'] = appointmentDate;
+      acceptedBookingData['appointmentTime'] = appointmentTime;
+      acceptedBookingData['appointmentType'] =
+          appointmentDetails['appointmentType'] ??
+              requestData['appointmentType'] ??
+              'therapy_session';
+      acceptedBookingData['timeSlotId'] = appointmentDetails['timeSlotId'] ??
+          requestData['timeSlotId'] ??
+          'slot_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Additional Information
+      final additionalInfo =
+          requestData['additionalInfo'] as Map<String, dynamic>? ?? {};
+      acceptedBookingData['additionalNotes'] = additionalNotes ??
+          additionalInfo['notes'] ??
+          requestData['notes'] ??
+          '';
+
+      // Status and metadata
+      acceptedBookingData['status'] = 'confirmed';
+      acceptedBookingData['bookingType'] =
+          requestData['bookingType'] ?? 'single_session';
+
+      // System Information
+      acceptedBookingData['createdAt'] = FieldValue.serverTimestamp();
+      acceptedBookingData['updatedAt'] = FieldValue.serverTimestamp();
+      acceptedBookingData['approvedBy'] = reviewerId;
+      acceptedBookingData['approvedAt'] = FieldValue.serverTimestamp();
+      acceptedBookingData['originalRequestData'] =
+          requestData; // Keep original for reference
+
+      // Color coding for calendar
+      acceptedBookingData['color'] = '#006A5B';
+
+      // Perform atomic transaction to ensure data integrity
+      await _firestore.runTransaction((transaction) async {
+        // 1. Add to AcceptedBooking collection
+        final acceptedBookingRef =
+            _firestore.collection('AcceptedBooking').doc();
+        transaction.set(acceptedBookingRef, acceptedBookingData);
+
+        // 2. Remove from Request collection
+        final requestRef =
+            _firestore.collection(COLLECTION_NAME).doc(requestId);
+        transaction.delete(requestRef);
+      });
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Decline a booking request
+  static Future<bool> declineBookingRequest({
+    required String requestId,
+    required String reviewerId,
+    required String reason,
+  }) async {
+    try {
+      // Update request status to declined
+      await updateRequestStatus(
+        requestId: requestId,
+        status: 'declined',
+        reviewerId: reviewerId,
+        reason: reason,
+      );
+
+      print('✅ Booking request declined: $requestId');
+      return true;
+    } catch (e) {
+      print('❌ Error declining booking request: $e');
+      return false;
+    }
+  }
+
+  /// Get all pending requests for a clinic
+  static Future<List<Map<String, dynamic>>> getPendingRequests(
+      String clinicId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(COLLECTION_NAME)
+          .where('clinicInfo.clinicId', isEqualTo: clinicId)
+          .where('status', isEqualTo: 'pending')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print('Error getting pending requests: $e');
+      return [];
+    }
+  }
+
+  /// Get all approved requests for a clinic
+  static Future<List<Map<String, dynamic>>> getApprovedRequests(
+      String clinicId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(COLLECTION_NAME)
+          .where('clinicInfo.clinicId', isEqualTo: clinicId)
+          .where('status', isEqualTo: 'approved')
+          .orderBy('updatedAt', descending: true)
+          .get();
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print('Error getting approved requests: $e');
+      return [];
+    }
+  }
+
+  /// Get all declined requests for a clinic
+  static Future<List<Map<String, dynamic>>> getDeclinedRequests(
+      String clinicId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection(COLLECTION_NAME)
+          .where('clinicInfo.clinicId', isEqualTo: clinicId)
+          .where('status', isEqualTo: 'declined')
+          .orderBy('updatedAt', descending: true)
+          .get();
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print('Error getting declined requests: $e');
+      return [];
+    }
+  }
 }

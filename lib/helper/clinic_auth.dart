@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/firebase_storage_service.dart';
 
 class ClinicAuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -195,15 +197,32 @@ class ClinicAuthService {
   // Sign out and clear local storage
   static Future<void> signOut() async {
     try {
-      // Clear local storage
+      // Clear all local storage data
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_clinicIdKey);
       await prefs.remove(_clinicEmailKey);
       await prefs.setBool(_isLoggedInKey, false);
       await prefs.remove('user_type'); // Clear user type as well
 
+      // Clear any potential fallback IDs to prevent conflicts
+      await prefs.remove('current_user_id');
+      await prefs.remove('userId');
+      await prefs.remove('static_clinic_id');
+      await prefs.remove('fallback_id');
+
+      // Clear parent data to prevent cross-user conflicts
+      await prefs.remove('user_id');
+      await prefs.remove('user_name');
+      await prefs.remove('user_email');
+      await prefs.remove('user_phone');
+      await prefs.remove('parent_id');
+      await prefs.remove('static_parent_id');
+
       // Sign out from Firebase Auth
       await _auth.signOut();
+
+      print(
+          'ClinicAuthService: Successfully cleared all authentication data and potential ID conflicts');
     } catch (e) {
       throw 'Error signing out. Please try again.';
     }
@@ -427,6 +446,169 @@ class ClinicAuthService {
       throw _handleAuthException(e);
     } catch (e) {
       throw 'An unexpected error occurred during registration. Please try again.';
+    }
+  }
+
+  // Enhanced method to save parent registration with file upload
+  static Future<Map<String, dynamic>?> saveParentRegistrationWithFile({
+    required String fullName,
+    required String userName,
+    required String email,
+    required String contactNumber,
+    required String address,
+    required String password,
+    XFile? governmentIdFile,
+  }) async {
+    try {
+      // Get all existing documents in ParentsReg collection to find the next available ID
+      final QuerySnapshot existingDocs = await _firestore
+          .collection('ParentsReg')
+          .orderBy(FieldPath.documentId)
+          .get();
+
+      // Generate the next document ID
+      String nextDocId = 'PARReg01'; // Default first ID
+      if (existingDocs.docs.isNotEmpty) {
+        // Extract numbers from existing document IDs and find the highest
+        int maxNumber = 0;
+        for (var doc in existingDocs.docs) {
+          String docId = doc.id;
+          if (docId.startsWith('PARReg')) {
+            String numberPart = docId.substring(6); // Remove 'PARReg' prefix
+            int? number = int.tryParse(numberPart);
+            if (number != null && number > maxNumber) {
+              maxNumber = number;
+            }
+          }
+        }
+
+        // Generate next ID with proper zero padding
+        int nextNumber = maxNumber + 1;
+        nextDocId = 'PARReg${nextNumber.toString().padLeft(2, '0')}';
+      }
+
+      // Upload government ID file if provided
+      String? documentUrl;
+      if (governmentIdFile != null) {
+        documentUrl = await FirebaseStorageService.uploadParentDocument(
+          file: governmentIdFile,
+          parentId: nextDocId,
+        );
+      }
+
+      // Save parent registration data to ParentsReg collection with generated document ID
+      Map<String, dynamic> registrationData = {
+        'Full_Name': fullName,
+        'User_Name': userName,
+        'Email': email.trim(),
+        'Contact_Number': contactNumber,
+        'Address': address,
+        'Password':
+            password, // Note: Consider encrypting passwords in production
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Add document URL if file was uploaded
+      if (documentUrl != null) {
+        registrationData['Government_ID_Document'] = documentUrl;
+      }
+
+      await _firestore
+          .collection('ParentsReg')
+          .doc(nextDocId)
+          .set(registrationData);
+
+      return {
+        'success': true,
+        'documentId': nextDocId,
+        'message': 'Parent registration data saved successfully!',
+        'documentUrl': documentUrl,
+      };
+    } catch (e) {
+      throw 'Error saving parent registration: $e';
+    }
+  }
+
+  // Enhanced method to save clinic registration with file upload
+  static Future<Map<String, dynamic>?> saveClinicRegistrationWithFile({
+    required String clinicName,
+    required String userName,
+    required String email,
+    required String contactNumber,
+    required String address,
+    required String password,
+    XFile? documentFile,
+  }) async {
+    try {
+      // Get all existing documents in ClinicReg collection to find the next available ID
+      final QuerySnapshot existingDocs = await _firestore
+          .collection('ClinicReg')
+          .orderBy(FieldPath.documentId)
+          .get();
+
+      // Generate the next document ID
+      String nextDocId = 'CLIReg01'; // Default first ID
+      if (existingDocs.docs.isNotEmpty) {
+        // Extract numbers from existing document IDs and find the highest
+        int maxNumber = 0;
+        for (var doc in existingDocs.docs) {
+          String docId = doc.id;
+          if (docId.startsWith('CLIReg')) {
+            String numberPart = docId.substring(6); // Remove 'CLIReg' prefix
+            int? number = int.tryParse(numberPart);
+            if (number != null && number > maxNumber) {
+              maxNumber = number;
+            }
+          }
+        }
+
+        // Generate next ID with proper zero padding
+        int nextNumber = maxNumber + 1;
+        nextDocId = 'CLIReg${nextNumber.toString().padLeft(2, '0')}';
+      }
+
+      // Upload clinic document file if provided
+      String? documentUrl;
+      if (documentFile != null) {
+        documentUrl = await FirebaseStorageService.uploadClinicDocument(
+          file: documentFile,
+          clinicId: nextDocId,
+          documentType: 'registration',
+        );
+      }
+
+      // Save clinic registration data to ClinicReg collection with generated document ID
+      Map<String, dynamic> registrationData = {
+        'Clinic_Name': clinicName,
+        'User_Name': userName,
+        'Email': email.trim(),
+        'Contact_Number': contactNumber,
+        'Address': address,
+        'Password':
+            password, // Note: Consider encrypting passwords in production
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Add document URL if file was uploaded
+      if (documentUrl != null) {
+        registrationData['Registration_Document'] = documentUrl;
+      }
+
+      await _firestore
+          .collection('ClinicReg')
+          .doc(nextDocId)
+          .set(registrationData);
+
+      return {
+        'success': true,
+        'documentId': nextDocId,
+        'message': 'Clinic registration data saved successfully!',
+        'documentUrl': documentUrl,
+      };
+    } catch (e) {
+      throw 'Error saving clinic registration: $e';
     }
   }
 }

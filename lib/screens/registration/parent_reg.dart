@@ -152,6 +152,7 @@ class _ParentRegisterState extends State<ParentRegister> {
                                 addressController.text,
                                 passwordController.text,
                                 confirmPasswordController.text,
+                                governmentIdFile: _attachFile,
                               );
                             },
                             child: const Text('Register'),

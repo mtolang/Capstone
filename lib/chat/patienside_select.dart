@@ -15,7 +15,7 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
   List<TherapistMessage> _allTherapists = [];
   List<TherapistMessage> _filteredTherapists = [];
 
-  String _patientId = 'PARAcc01'; // Default fallback
+  String? _patientId; // Remove static fallback - must be properly authenticated
 
   @override
   void initState() {
@@ -40,7 +40,7 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
       print('  user_type from prefs: $userType');
       print('  is_logged_in from prefs: $storedIsLoggedIn');
 
-      if (userId != null && isLoggedIn) {
+      if (userId != null && isLoggedIn && userType == 'parent') {
         setState(() {
           _patientId = userId;
         });
@@ -49,7 +49,6 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
         _loadTherapists();
       } else {
         print('PatientSideSelect: No valid parent authentication found');
-        print('PatientSideSelect: User might need to log in as parent');
         // Show a message that user needs to log in
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -59,19 +58,36 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
             ),
           );
         }
-        // Still load with default ID for testing
-        _loadTherapists();
+        // Load with empty data
+        setState(() {
+          _patientId = null;
+          _allTherapists = [];
+          _filteredTherapists = [];
+        });
       }
-      _filteredTherapists = _allTherapists;
     } catch (e) {
       print('PatientSideSelect: Error loading user ID: $e');
-      // Keep default fallback value and load therapists
-      _loadTherapists();
-      _filteredTherapists = _allTherapists;
+      // Load with empty data
+      setState(() {
+        _patientId = null;
+        _allTherapists = [];
+        _filteredTherapists = [];
+      });
     }
   }
 
   void _loadTherapists() async {
+    // Only load conversations if we have a valid authenticated patient ID
+    if (_patientId == null) {
+      print(
+          'PatientSideSelect: No valid patient ID - cannot load conversations');
+      setState(() {
+        _allTherapists = [];
+        _filteredTherapists = [];
+      });
+      return;
+    }
+
     // Load conversations from Firestore Message collection
     try {
       print(
@@ -228,10 +244,10 @@ class _PatientSideSelectPageState extends State<PatientSideSelectPage> {
 
   Future<void> _showNewConversationDialog() async {
     // Ensure we have a valid patient ID before showing new conversation options
-    if (_patientId.isEmpty || _patientId == 'PARAcc01') {
+    if (_patientId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please log in to start a conversation'),
+          content: Text('Please log in as a parent to start a conversation'),
           backgroundColor: Colors.red,
         ),
       );

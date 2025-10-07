@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_2/services/global_call_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:capstone_2/chat/agora_chat_call.dart';
 import 'dart:async';
 
 /// Caller Screen - for the person initiating the call
@@ -76,6 +77,9 @@ class _CallerScreenState extends State<CallerScreen>
   }
 
   void _listenForCallStatus() {
+    print(
+        '👂 CallerScreen: Starting to listen for call status changes for ${widget.callDocId}');
+
     _callStatusSubscription = FirebaseFirestore.instance
         .collection('Calls')
         .doc(widget.callDocId)
@@ -85,30 +89,72 @@ class _CallerScreenState extends State<CallerScreen>
         final data = snapshot.data() as Map<String, dynamic>;
         final status = data['status'] as String?;
 
+        print('📊 CallerScreen: Call status changed to: $status');
+
         if (mounted) {
           setState(() {
             switch (status) {
               case 'ringing':
                 _callStatus = 'Calling...';
+                print('📞 CallerScreen: Call is ringing');
                 break;
-              case 'active':
+              case 'accepted': // Changed from 'active' to 'accepted'
                 _callStatus = 'Connecting...';
-                // The GlobalCallService will handle navigation
+                print(
+                    '✅ CallerScreen: Call was ACCEPTED - navigating to call screen');
+                _navigateToCallScreen();
                 break;
               case 'declined':
                 _callStatus = 'Call Declined';
+                print('❌ CallerScreen: Call was declined');
                 _showCallResult('Call declined by ${widget.targetUserName}');
                 break;
               case 'cancelled':
                 _callStatus = 'Call Cancelled';
+                print('🚫 CallerScreen: Call was cancelled');
                 break;
               default:
                 _callStatus = 'Calling...';
+                print('🔄 CallerScreen: Unknown status: $status');
             }
           });
         }
+      } else {
+        print('❌ CallerScreen: Call document no longer exists');
       }
     });
+  }
+
+  void _navigateToCallScreen() {
+    print('🎯 CallerScreen: Starting navigation to ChatCallScreen');
+
+    if (!mounted) {
+      print('❌ CallerScreen: Widget not mounted, cannot navigate');
+      return;
+    }
+
+    // Cancel the subscription before navigating
+    _callStatusSubscription?.cancel();
+    print('📡 CallerScreen: Call status subscription cancelled');
+
+    // Use pop + push instead of pushReplacement for better navigation
+    Navigator.of(context).pop(); // Remove CallerScreen from stack
+
+    Navigator.of(context)
+        .push(
+      MaterialPageRoute(
+        builder: (context) => AgoraChatCallScreen(
+          callId: widget.callDocId,
+          currentUserId: widget.currentUserId,
+          initialParticipants: [widget.targetUserId],
+        ),
+      ),
+    )
+        .then((_) {
+      print('📞 CallerScreen: Returned from ChatCallScreen');
+    });
+
+    print('✅ CallerScreen: Navigation to ChatCallScreen initiated');
   }
 
   void _showCallResult(String message) {
@@ -136,7 +182,7 @@ class _CallerScreenState extends State<CallerScreen>
         Navigator.of(context).pop();
       }
 
-      // End the call in background - use cancelCall for caller cancellation
+      // Cancel the call using new clean system
       GlobalCallService().cancelCall(widget.callDocId).catchError((error) {
         print('Error cancelling call: $error');
       });
