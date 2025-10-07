@@ -7,6 +7,8 @@ import 'package:capstone_2/screens/auth/login_page.dart';
 import 'package:capstone_2/screens/auth/parent_login.dart';
 import 'package:capstone_2/screens/auth/therapist_login.dart';
 import 'package:capstone_2/screens/auth/login_as.dart';
+import 'package:capstone_2/screens/auth/admin_login.dart';
+import 'package:capstone_2/screens/admin/admin_dashboard.dart';
 import 'package:capstone_2/screens/login_test_page.dart';
 //registration imports
 import 'package:capstone_2/screens/registration/clinic_reg.dart';
@@ -57,6 +59,8 @@ class MyApp extends StatelessWidget {
           '/parentlogin': (context) => const ParentLogin(), // <-- Add this
           '/therlogin': (context) => const TherapistLogin(), // <-- Add this
           '/loginas': (context) => const LoginAs(),
+          '/adminlogin': (context) => const AdminLogin(), // <-- Admin login route
+          '/admindashboard': (context) => const AdminDashboard(), // <-- Admin dashboard route
           '/logintest': (context) => const LoginTestPage(), // Test route
 
           //Registration Routes

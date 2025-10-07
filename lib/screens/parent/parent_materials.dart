@@ -4,7 +4,7 @@ import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-//import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ParentMaterials extends StatefulWidget {
   const ParentMaterials({Key? key}) : super(key: key);
