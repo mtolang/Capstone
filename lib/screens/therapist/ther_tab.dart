@@ -33,6 +33,9 @@ class _TherDashTabState extends State<TherDashTab> {
       case 2:
         Navigator.pushReplacementNamed(context, '/therapistreview');
         break;
+      case 3:
+        Navigator.pushReplacementNamed(context, '/therapistprogress');
+        break;
     }
   }
 
@@ -81,6 +84,7 @@ class _TherDashTabState extends State<TherDashTab> {
           buildTab('Profile', 0),
           buildTab('Gallery', 1),
           buildTab('Reviews', 2),
+          buildTab('Progress', 3),
         ],
       ),
     );

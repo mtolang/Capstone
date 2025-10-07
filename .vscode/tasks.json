@@ -1,0 +1,24 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Flutter web app (Chrome)",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"run",
+				"-d",
+				"chrome",
+				"--web-renderer",
+				"html",
+				"--dart-define",
+				"DEMO_START=/therapistprogress2"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$dart"
+			],
+			"group": "build"
+		}
+	]
+}
