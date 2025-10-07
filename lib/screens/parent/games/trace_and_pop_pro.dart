@@ -98,19 +98,25 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     try {
       final sessionData = GameSessionData(
         timestamp: DateTime.now(),
+        gameType: 'trace_pop_pro',
         gameMode: _mode.name,
         level: _level,
         sessionDuration: DateTime.now().difference(_sessionStart),
         progress: _progress,
-        bubblesPopped: _bubblesPoppedCount,
-        averageSpeed: _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
-        accuracy: _totalSamples > 0 ? _onPathSamples / _totalSamples : 0,
+        score: _bubblesPoppedCount * 10 + (_completed ? 50 : 0),
         completed: _completed,
-        twoHandMode: _twoHandMode,
-        metadata: {
+        gameSpecificData: {
+          'bubblesPopped': _bubblesPoppedCount,
+          'averageSpeed': _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
+          'accuracy': _totalSamples > 0 ? _onPathSamples / _totalSamples : 0,
+          'twoHandMode': _twoHandMode,
           'targetSpeed': _targetSpeed,
           'showGuideDots': _showGuideDots,
           'bpm': _bpm,
+        },
+        metadata: {
+          'gameVersion': '1.0',
+          'deviceType': 'mobile',
         },
       );
 

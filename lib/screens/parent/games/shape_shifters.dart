@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import '../../../services/game_data_service.dart';
 
 class ShapeShiftersGame extends StatelessWidget {
   const ShapeShiftersGame({super.key});
@@ -70,10 +71,19 @@ class _DragToShapeGameState extends State<DragToShapeGame>
 
   List<GameShape> shapes = [];
   List<GameDragObject> objects = [];
+  
+  // Firebase tracking variables
+  DateTime _sessionStart = DateTime.now();
+  int _shapesPlaced = 0;
+  int _levelsCompleted = 0;
+  int _totalAttempts = 0;
+  int _correctPlacements = 0;
+  Map<String, int> _shapeTypeUsage = {};
 
   @override
   void initState() {
     super.initState();
+    _newSession();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -84,10 +94,113 @@ class _DragToShapeGameState extends State<DragToShapeGame>
     _loadLevel();
   }
 
+  void _newSession() {
+    _sessionStart = DateTime.now();
+    _shapesPlaced = 0;
+    _levelsCompleted = 0;
+    _totalAttempts = 0;
+    _correctPlacements = 0;
+    _shapeTypeUsage.clear();
+  }
+
   @override
   void dispose() {
+    // Save session data when exiting
+    if (DateTime.now().difference(_sessionStart).inSeconds > 10) {
+      _saveGameSession();
+    }
     _animationController.dispose();
     super.dispose();
+  }
+
+  /// Save current game session to Firebase
+  Future<void> _saveGameSession() async {
+    try {
+      final sessionData = GameSessionData(
+        timestamp: DateTime.now(),
+        gameType: 'shape_shifters',
+        gameMode: 'spatial_coordination',
+        level: currentLevel + 1, // currentLevel is 0-based, display as 1-based
+        sessionDuration: DateTime.now().difference(_sessionStart),
+        progress: currentLevel / 5.0, // 5 levels total (0-4)
+        score: _correctPlacements * 10 + _levelsCompleted * 50,
+        completed: currentLevel >= 4, // All 5 levels completed
+        gameSpecificData: {
+          'shapesPlaced': _shapesPlaced,
+          'levelsCompleted': _levelsCompleted,
+          'totalAttempts': _totalAttempts,
+          'correctPlacements': _correctPlacements,
+          'accuracy': _totalAttempts > 0 ? _correctPlacements / _totalAttempts : 0.0,
+          'shapeTypeUsage': _shapeTypeUsage,
+          'finalLevel': currentLevel + 1,
+        },
+        metadata: {
+          'gameVersion': '1.0',
+          'dragAndDrop': true,
+        },
+      );
+
+      await GameDataService.saveGameSession(sessionData);
+      
+      // Update user progress
+      await _updateUserProgress();
+      
+      print('Shape Shifters session saved successfully');
+    } catch (e) {
+      print('Error saving Shape Shifters session: $e');
+    }
+  }
+
+  /// Update user progress
+  Future<void> _updateUserProgress() async {
+    try {
+      final currentProgress = await GameDataService.getUserProgress();
+      
+      final newProgress = UserProgress(
+        highestLevel: currentProgress.highestLevel > (currentLevel + 1) ? currentProgress.highestLevel : (currentLevel + 1),
+        modeCompletions: {
+          ...currentProgress.modeCompletions,
+          'shape_shifters': (currentProgress.modeCompletions['shape_shifters'] ?? 0) + _levelsCompleted,
+        },
+        totalSessions: currentProgress.totalSessions + 1,
+        totalBubblesPopped: currentProgress.totalBubblesPopped, // Not applicable for this game
+        totalPlayTime: currentProgress.totalPlayTime + DateTime.now().difference(_sessionStart),
+        achievements: _checkNewAchievements(currentProgress),
+        lastPlayed: DateTime.now(),
+      );
+
+      await GameDataService.saveUserProgress(newProgress);
+    } catch (e) {
+      print('Error updating Shape Shifters progress: $e');
+    }
+  }
+
+  /// Check for new achievements
+  List<String> _checkNewAchievements(UserProgress currentProgress) {
+    final achievements = List<String>.from(currentProgress.achievements);
+    
+    // First shape placement
+    if (_shapesPlaced >= 1 && !achievements.contains('first_shape_placed')) {
+      achievements.add('first_shape_placed');
+    }
+    
+    // Shape master
+    if (_shapesPlaced >= 20 && !achievements.contains('shape_master')) {
+      achievements.add('shape_master');
+    }
+    
+    // Accuracy achievement
+    final accuracy = _totalAttempts > 0 ? _correctPlacements / _totalAttempts : 0.0;
+    if (accuracy >= 0.8 && _totalAttempts >= 10 && !achievements.contains('accurate_placer')) {
+      achievements.add('accurate_placer');
+    }
+    
+    // All levels completed
+    if (currentLevel >= 4 && !achievements.contains('shape_shifters_complete')) {
+      achievements.add('shape_shifters_complete');
+    }
+    
+    return achievements;
   }
 
   void _loadLevel() {
@@ -287,6 +400,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
 
   void _onObjectDragEnd(GameDragObject object, Offset position) {
     bool wasPlaced = false;
+    _totalAttempts++; // Track every placement attempt
 
     for (GameShape shape in shapes) {
       if (_isInsideShape(position, shape)) {
@@ -298,6 +412,11 @@ class _DragToShapeGameState extends State<DragToShapeGame>
             shape.hasObject = true;
           });
           wasPlaced = true;
+          _correctPlacements++; // Track successful placement
+          _shapesPlaced++;
+          
+          // Track shape type usage
+          _shapeTypeUsage[object.type] = (_shapeTypeUsage[object.type] ?? 0) + 1;
           break;
         }
       }
@@ -355,6 +474,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
       showSuccess = true;
     });
 
+    _levelsCompleted++; // Track level completion
     _animationController.forward();
 
     Future.delayed(const Duration(seconds: 2), () {
@@ -365,6 +485,8 @@ class _DragToShapeGameState extends State<DragToShapeGame>
         });
         _loadLevel();
       } else {
+        // Game fully completed, save session
+        _saveGameSession();
         _showGameComplete();
       }
     });

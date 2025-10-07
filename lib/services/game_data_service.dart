@@ -102,48 +102,45 @@ class GameDataService {
   }
 }
 
-/// Game session data model
+/// Game session data model - supports all game types
 class GameSessionData {
   final String? id;
   final DateTime timestamp;
+  final String gameType; // 'trace_pop_pro', 'talk_with_tiles', 'shape_shifters'
   final String gameMode;
   final int level;
   final Duration sessionDuration;
   final double progress;
-  final int bubblesPopped;
-  final double averageSpeed;
-  final double accuracy;
+  final int score;
   final bool completed;
-  final bool twoHandMode;
+  final Map<String, dynamic> gameSpecificData; // Game-specific metrics
   final Map<String, dynamic> metadata;
 
   GameSessionData({
     this.id,
     required this.timestamp,
+    required this.gameType,
     required this.gameMode,
     required this.level,
     required this.sessionDuration,
     required this.progress,
-    required this.bubblesPopped,
-    required this.averageSpeed,
-    required this.accuracy,
+    required this.score,
     required this.completed,
-    required this.twoHandMode,
+    required this.gameSpecificData,
     this.metadata = const {},
   });
 
   Map<String, dynamic> toMap() {
     return {
       'timestamp': Timestamp.fromDate(timestamp),
+      'gameType': gameType,
       'gameMode': gameMode,
       'level': level,
       'sessionDuration': sessionDuration.inMilliseconds,
       'progress': progress,
-      'bubblesPopped': bubblesPopped,
-      'averageSpeed': averageSpeed,
-      'accuracy': accuracy,
+      'score': score,
       'completed': completed,
-      'twoHandMode': twoHandMode,
+      'gameSpecificData': gameSpecificData,
       'metadata': metadata,
     };
   }
@@ -152,15 +149,14 @@ class GameSessionData {
     return GameSessionData(
       id: id,
       timestamp: (map['timestamp'] as Timestamp).toDate(),
+      gameType: map['gameType'] ?? 'trace_pop_pro',
       gameMode: map['gameMode'] ?? 'trace',
       level: map['level'] ?? 1,
       sessionDuration: Duration(milliseconds: map['sessionDuration'] ?? 0),
       progress: (map['progress'] ?? 0.0).toDouble(),
-      bubblesPopped: map['bubblesPopped'] ?? 0,
-      averageSpeed: (map['averageSpeed'] ?? 0.0).toDouble(),
-      accuracy: (map['accuracy'] ?? 0.0).toDouble(),
+      score: map['score'] ?? 0,
       completed: map['completed'] ?? false,
-      twoHandMode: map['twoHandMode'] ?? false,
+      gameSpecificData: Map<String, dynamic>.from(map['gameSpecificData'] ?? {}),
       metadata: Map<String, dynamic>.from(map['metadata'] ?? {}),
     );
   }
@@ -266,8 +262,12 @@ class GameStatistics {
     Map<int, int> levelCounts = {};
 
     for (final session in sessions) {
-      totalAccuracy += session.accuracy;
-      totalSpeed += session.averageSpeed;
+      // Extract accuracy and speed from gameSpecificData if available
+      final accuracy = session.gameSpecificData['accuracy']?.toDouble() ?? 0.0;
+      final speed = session.gameSpecificData['averageSpeed']?.toDouble() ?? 0.0;
+      
+      totalAccuracy += accuracy;
+      totalSpeed += speed;
       totalDuration += session.sessionDuration;
       
       if (session.completed) completedCount++;
@@ -277,12 +277,12 @@ class GameStatistics {
     }
 
     return GameStatistics(
-      averageAccuracy: totalAccuracy / sessions.length,
-      averageSpeed: totalSpeed / sessions.length,
+      averageAccuracy: sessions.isNotEmpty ? totalAccuracy / sessions.length : 0.0,
+      averageSpeed: sessions.isNotEmpty ? totalSpeed / sessions.length : 0.0,
       totalCompletedSessions: completedCount,
       totalSessions: sessions.length,
       averageSessionDuration: Duration(
-        milliseconds: totalDuration.inMilliseconds ~/ sessions.length,
+        milliseconds: sessions.isNotEmpty ? totalDuration.inMilliseconds ~/ sessions.length : 0,
       ),
       modePlayCounts: modeCounts,
       levelPlayCounts: levelCounts,

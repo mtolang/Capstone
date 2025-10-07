@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../../../services/game_data_service.dart';
 
 class TileData {
   final String id;
@@ -43,6 +44,13 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
   int gameScore = 0;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
+  
+  // Firebase tracking variables
+  DateTime _sessionStart = DateTime.now();
+  int _tilesUsed = 0;
+  int _sentencesFormed = 0;
+  int _levelsCompleted = 0;
+  Map<String, int> _categoryUsage = {};
 
   // Available tiles organized by category
   final Map<String, List<TileData>> tileCategories = {
@@ -96,6 +104,7 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
   void initState() {
     super.initState();
     _initTts();
+    _newSession();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -105,11 +114,110 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
     );
   }
 
+  void _newSession() {
+    _sessionStart = DateTime.now();
+    _tilesUsed = 0;
+    _sentencesFormed = 0;
+    _levelsCompleted = 0;
+    _categoryUsage.clear();
+  }
+
   @override
   void dispose() {
+    // Save session data when exiting
+    if (DateTime.now().difference(_sessionStart).inSeconds > 10) {
+      _saveGameSession();
+    }
     _animationController.dispose();
     flutterTts.stop();
     super.dispose();
+  }
+
+  /// Save current game session to Firebase
+  Future<void> _saveGameSession() async {
+    try {
+      final sessionData = GameSessionData(
+        timestamp: DateTime.now(),
+        gameType: 'talk_with_tiles',
+        gameMode: 'communication',
+        level: currentLevel,
+        sessionDuration: DateTime.now().difference(_sessionStart),
+        progress: (currentLevel - 1) / 3.0, // 3 levels total
+        score: gameScore,
+        completed: currentLevel >= 3,
+        gameSpecificData: {
+          'tilesUsed': _tilesUsed,
+          'sentencesFormed': _sentencesFormed,
+          'levelsCompleted': _levelsCompleted,
+          'categoryUsage': _categoryUsage,
+          'finalLevel': currentLevel,
+        },
+        metadata: {
+          'gameVersion': '1.0',
+          'ttsEnabled': true,
+        },
+      );
+
+      await GameDataService.saveGameSession(sessionData);
+      
+      // Update user progress
+      await _updateUserProgress();
+      
+      print('Talk with Tiles session saved successfully');
+    } catch (e) {
+      print('Error saving Talk with Tiles session: $e');
+    }
+  }
+
+  /// Update user progress
+  Future<void> _updateUserProgress() async {
+    try {
+      final currentProgress = await GameDataService.getUserProgress();
+      
+      final newProgress = UserProgress(
+        highestLevel: currentProgress.highestLevel > currentLevel ? currentProgress.highestLevel : currentLevel,
+        modeCompletions: {
+          ...currentProgress.modeCompletions,
+          'talk_with_tiles': (currentProgress.modeCompletions['talk_with_tiles'] ?? 0) + _levelsCompleted,
+        },
+        totalSessions: currentProgress.totalSessions + 1,
+        totalBubblesPopped: currentProgress.totalBubblesPopped, // Not applicable for this game
+        totalPlayTime: currentProgress.totalPlayTime + DateTime.now().difference(_sessionStart),
+        achievements: _checkNewAchievements(currentProgress),
+        lastPlayed: DateTime.now(),
+      );
+
+      await GameDataService.saveUserProgress(newProgress);
+    } catch (e) {
+      print('Error updating Talk with Tiles progress: $e');
+    }
+  }
+
+  /// Check for new achievements
+  List<String> _checkNewAchievements(UserProgress currentProgress) {
+    final achievements = List<String>.from(currentProgress.achievements);
+    
+    // First sentence achievement
+    if (_sentencesFormed >= 1 && !achievements.contains('first_sentence')) {
+      achievements.add('first_sentence');
+    }
+    
+    // Communication master
+    if (_sentencesFormed >= 10 && !achievements.contains('communication_master')) {
+      achievements.add('communication_master');
+    }
+    
+    // Category explorer
+    if (_categoryUsage.length >= 3 && !achievements.contains('category_explorer')) {
+      achievements.add('category_explorer');
+    }
+    
+    // Level completion
+    if (currentLevel >= 3 && !achievements.contains('talk_tiles_complete')) {
+      achievements.add('talk_tiles_complete');
+    }
+    
+    return achievements;
   }
 
   _initTts() async {
@@ -123,11 +231,25 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
     if (selectedTiles.length < (currentLevel <= 2 ? 2 : 3)) {
       setState(() {
         selectedTiles.add(tile);
+        _tilesUsed++;
+        
+        // Track category usage
+        String category = _getTileCategory(tile);
+        _categoryUsage[category] = (_categoryUsage[category] ?? 0) + 1;
       });
       _animationController.forward().then((_) {
         _animationController.reverse();
       });
     }
+  }
+
+  String _getTileCategory(TileData tile) {
+    for (String category in tileCategories.keys) {
+      if (tileCategories[category]!.any((t) => t.id == tile.id)) {
+        return category;
+      }
+    }
+    return 'unknown';
   }
 
   void speakSentence() async {
@@ -141,14 +263,19 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
       setState(() {
         showSuccess = true;
         gameScore += 10;
+        _sentencesFormed++;
       });
 
       Future.delayed(const Duration(seconds: 2), () {
         setState(() {
           showSuccess = false;
           if (currentLevel < 3) {
+            _levelsCompleted++;
             currentLevel++;
             selectedTiles.clear();
+          } else {
+            // Game completed, save session
+            _saveGameSession();
           }
         });
       });
