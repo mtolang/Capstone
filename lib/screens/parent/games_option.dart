@@ -246,7 +246,7 @@ class GamesOption extends StatelessWidget {
                       ],
                     ),
                     child: const Text(
-                      'Interactive games designed to help with speech and communication development',
+                      'Interactive games designed to help with speech, coordination, and communication development',
                       style: TextStyle(
                         fontSize: 14,
                         color: Color(0xFF006A5B),
