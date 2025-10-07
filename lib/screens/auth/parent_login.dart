@@ -1,7 +1,81 @@
 import 'package:flutter/material.dart';
+import 'package:capstone_2/helper/parent_auth.dart';
 
-class ParentLogin extends StatelessWidget {
+class ParentLogin extends StatefulWidget {
   const ParentLogin({super.key});
+
+  @override
+  State<ParentLogin> createState() => _ParentLoginState();
+}
+
+class _ParentLoginState extends State<ParentLogin> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _login() async {
+    if (_emailController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
+      _showErrorDialog('Please fill in all fields.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await ParentAuthService.signInParent(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (result != null && result['success'] == true) {
+        if (mounted) {
+          // Handle both ParentsAcc (Name) and ParentsReg (Full_Name) field names
+          final userName = result['userData']['Name'] ??
+              result['userData']['Full_Name'] ??
+              'User';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Welcome back! Logged in as $userName'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/parentdashboard', (route) => false);
+        }
+      }
+    } catch (e) {
+      _showErrorDialog(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Login Error'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +145,9 @@ class ParentLogin extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const TextField(
-                      decoration: InputDecoration(
+                    child: TextField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(
                         labelText: 'Email or username',
                         border: InputBorder.none,
                       ),
@@ -96,9 +171,10 @@ class ParentLogin extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const TextField(
+                    child: TextField(
+                      controller: _passwordController,
                       obscureText: true,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: 'Password',
                         border: InputBorder.none,
                       ),
@@ -114,10 +190,10 @@ class ParentLogin extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/parentdashboard');
-                    },
-                    child: const Text('Login'),
+                    onPressed: _isLoading ? null : _login,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Login'),
                   ),
                   const TextButton(
                     onPressed: null, // Disabled

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/clinic_schedule_service.dart';
+import '../../services/booking_request_service.dart';
 import 'clinic_request.dart';
 
 class ClinicBookingTabBar extends StatefulWidget {
@@ -14,6 +16,7 @@ class ClinicBookingTabBar extends StatefulWidget {
 class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  DateTime _currentMonth = DateTime.now(); // Add calendar month state
 
   final List<Map<String, dynamic>> bookings = [
     {
@@ -47,6 +50,19 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+  }
+
+  // Calendar navigation methods
+  void _navigateToPreviousMonth() {
+    setState(() {
+      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+    });
+  }
+
+  void _navigateToNextMonth() {
+    setState(() {
+      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+    });
   }
 
   @override
@@ -148,7 +164,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
           ),
           const SizedBox(height: 20),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: ClinicScheduleService.getTodayAppointments(),
+            future: AcceptedBookingService.getTodayAcceptedAppointments(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -328,14 +344,12 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        onPressed: () {
-                          // TODO: Navigate to previous month
-                        },
+                        onPressed: _navigateToPreviousMonth,
                         icon:
                             const Icon(Icons.chevron_left, color: Colors.white),
                       ),
                       Text(
-                        DateFormat('MMMM yyyy').format(DateTime.now()),
+                        DateFormat('MMMM yyyy').format(_currentMonth),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -344,9 +358,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
                         ),
                       ),
                       IconButton(
-                        onPressed: () {
-                          // TODO: Navigate to next month
-                        },
+                        onPressed: _navigateToNextMonth,
                         icon: const Icon(Icons.chevron_right,
                             color: Colors.white),
                       ),
@@ -1111,45 +1123,72 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
       final childName = childInfo['childName'] ?? 'Unknown Child';
 
       if (action == 'accept') {
-        // Update the status in Firebase
-        await FirebaseFirestore.instance
-            .collection('Request')
-            .doc(requestId)
-            .update({
-          'status': 'approved',
-          'processingInfo.approvedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        // Get current clinic ID for approval
+        final prefs = await SharedPreferences.getInstance();
+        final clinicId = prefs.getString('clinic_id') ??
+            prefs.getString('user_id') ??
+            'unknown';
+
+        // Use the new service to approve and move to AcceptedBooking database
+        final success = await BookingRequestService.approveBookingRequest(
+          requestId: requestId,
+          reviewerId: clinicId,
+          additionalNotes: 'Approved via clinic booking system',
+        );
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Booking request accepted for $childName'),
-              backgroundColor: const Color(0xFF006A5B),
-            ),
-          );
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    '✅ Booking request accepted for $childName and moved to schedule'),
+                backgroundColor: const Color(0xFF006A5B),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text('❌ Failed to process booking request for $childName'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       } else {
-        // Update the status to declined
-        await FirebaseFirestore.instance
-            .collection('Request')
-            .doc(requestId)
-            .update({
-          'status': 'declined',
-          'processingInfo.declinedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        // Use the new service to decline the request
+        final prefs = await SharedPreferences.getInstance();
+        final clinicId = prefs.getString('clinic_id') ??
+            prefs.getString('user_id') ??
+            'unknown';
+
+        final success = await BookingRequestService.declineBookingRequest(
+          requestId: requestId,
+          reviewerId: clinicId,
+          reason: 'Declined via clinic booking system',
+        );
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Booking request declined for $childName'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Booking request declined for $childName'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text('❌ Failed to decline booking request for $childName'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
+      print('Error in _handleFirebaseRequestAction: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1176,7 +1215,20 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
   }
 
   Widget _buildTodayAppointmentCard(Map<String, dynamic> appointment) {
+    // Parse color from hex string
+    Color appointmentColor = const Color(0xFF006A5B);
+    try {
+      final colorString = appointment['color'] as String?;
+      if (colorString != null) {
+        appointmentColor =
+            Color(int.parse(colorString.replaceFirst('#', '0xFF')));
+      }
+    } catch (e) {
+      // Use default color if parsing fails
+    }
+
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1197,7 +1249,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: const Color(0xFF006A5B),
+                color: appointmentColor,
                 borderRadius: BorderRadius.circular(25),
               ),
               child: Center(
@@ -1228,6 +1280,15 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
                     ),
                   ),
                   const SizedBox(height: 4),
+                  Text(
+                    'Parent: ${appointment['parentName'] ?? 'Unknown'}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       const Icon(
@@ -1237,7 +1298,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        appointment['time'] ?? 'Time TBD',
+                        appointment['appointmentTime'] ?? 'Time TBD',
                         style: const TextStyle(
                           fontSize: 14,
                           color: Color(0xFF67AFA5),
@@ -1255,34 +1316,80 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
                         color: Color(0xFF67AFA5),
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        appointment['appointmentType'] ?? 'Therapy Session',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF67AFA5),
-                          fontFamily: 'Poppins',
+                      Expanded(
+                        child: Text(
+                          appointment['appointmentType'] ?? 'Therapy Session',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF67AFA5),
+                            fontFamily: 'Poppins',
+                          ),
                         ),
                       ),
                     ],
                   ),
+                  if (appointment['additionalNotes']?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.note,
+                          size: 16,
+                          color: Color(0xFF67AFA5),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            appointment['additionalNotes'],
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF67AFA5),
+                              fontFamily: 'Poppins',
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF006A5B).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Today',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Poppins',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: appointmentColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Today',
+                    style: TextStyle(
+                      color: Color(0xFF006A5B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
                 ),
-              ),
+                if (appointment['childAge'] != null &&
+                    appointment['childAge'] > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Age: ${appointment['childAge']}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -1393,8 +1500,10 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
 
   Widget _buildCalendarGrid() {
     final now = DateTime.now();
-    final firstDayOfMonth = DateTime(now.year, now.month, 1);
-    final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
+    final firstDayOfMonth =
+        DateTime(_currentMonth.year, _currentMonth.month, 1);
+    final lastDayOfMonth =
+        DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
     final daysInMonth = lastDayOfMonth.day;
     final startingWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
 
@@ -1416,7 +1525,9 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
 
     // Add days of the month
     for (int day = 1; day <= daysInMonth; day++) {
-      final isToday = day == now.day;
+      final isToday = day == now.day &&
+          _currentMonth.year == now.year &&
+          _currentMonth.month == now.month;
       final hasAppointments = appointments.containsKey(day);
 
       calendarDays.add(
@@ -1489,8 +1600,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
   }
 
   void _showDaySchedule(int day, List<String> appointments) {
-    final now = DateTime.now();
-    final selectedDate = DateTime(now.year, now.month, day);
+    final selectedDate = DateTime(_currentMonth.year, _currentMonth.month, day);
     final formattedDate = DateFormat('MMMM dd, yyyy').format(selectedDate);
 
     showDialog(

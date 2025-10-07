@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:capstone_2/services/global_call_service.dart';
 import 'package:capstone_2/services/call_utility.dart';
 import 'package:capstone_2/services/dynamic_user_service.dart';
+import 'package:capstone_2/chat/caller_screen.dart';
 
 class CallButton extends StatelessWidget {
   final String targetUserId;
@@ -29,118 +29,87 @@ class CallButton extends StatelessWidget {
 
   Future<void> _initiateCall(BuildContext context) async {
     try {
-      // Debug: Check current SharedPreferences state
-      final prefs = await SharedPreferences.getInstance();
-      final userType = prefs.getString('user_type');
-      final clinicId = prefs.getString('clinic_id');
-      final userId = prefs.getString('user_id');
-      final isLoggedIn = prefs.getBool('is_logged_in');
+      CallUtility.log('CallButton', '🚀 Starting optimized call initiation...');
 
-      CallUtility.log('CallButton', '=== DEBUGGING CALL INITIATION ===');
-      CallUtility.log('CallButton', 'SharedPreferences state:');
-      CallUtility.log('CallButton', '  - user_type: $userType');
-      CallUtility.log('CallButton', '  - clinic_id: $clinicId');
-      CallUtility.log('CallButton', '  - user_id: $userId');
-      CallUtility.log('CallButton', '  - is_logged_in: $isLoggedIn');
+      // Get current user ID with timeout for faster failure
+      final currentUserId = await DynamicUserService.getCurrentUserId()
+          .timeout(Duration(seconds: 3), onTimeout: () {
+        throw Exception('User ID lookup timeout - please try again');
+      });
+
       CallUtility.log(
-          'CallButton', '  - constructor currentUserId: $currentUserId');
-      CallUtility.log(
-          'CallButton', '  - constructor targetUserId: $targetUserId');
+          'CallButton', '🔍 DynamicUserService returned: $currentUserId');
 
-      // Verify current user ID using DynamicUserService
-      final verifiedUserId = await DynamicUserService.getCurrentUserId();
-      final currentUserInfo = await DynamicUserService.getCurrentUserInfo();
-      final targetUserInfo =
-          await DynamicUserService.getTargetUserInfo(targetUserId);
-
-      CallUtility.log('CallButton', 'DynamicUserService results:');
-      CallUtility.log('CallButton', '  - verifiedUserId: $verifiedUserId');
-      CallUtility.log('CallButton', '  - currentUserInfo: $currentUserInfo');
-      CallUtility.log('CallButton', '  - targetUserInfo: $targetUserInfo');
-
-      if (verifiedUserId == null) {
-        throw Exception(
-            'Cannot verify current user identity - no user found in storage');
+      if (currentUserId == null) {
+        CallUtility.log('CallButton', '❌ Current user ID is null');
+        throw Exception('User not properly logged in - please restart app');
       }
 
       if (targetUserId.isEmpty) {
+        CallUtility.log('CallButton', '❌ Target user ID is empty');
         throw Exception('Target user ID is empty');
       }
 
-      // Validate target user exists
-      if (targetUserInfo == null) {
-        throw Exception('Target user $targetUserId not found in database');
+      // Prevent self-calling
+      if (currentUserId == targetUserId) {
+        CallUtility.log('CallButton', '❌ Self-calling attempt blocked');
+        throw Exception('Cannot call yourself');
       }
-
-      // Prevent self-calling with detailed comparison
-      if (verifiedUserId == targetUserId) {
-        CallUtility.log('CallButton',
-            'BLOCKING: Self-calling detected - verifiedUserId ($verifiedUserId) == targetUserId ($targetUserId)');
-        throw Exception('Cannot call yourself - self-calling not allowed');
-      } else {
-        CallUtility.log('CallButton',
-            'ALLOWING: Different users - verifiedUserId ($verifiedUserId) != targetUserId ($targetUserId)');
-      }
-
-      // Use GlobalCallService to initiate the call with multiple reliable STUN/TURN servers
-      final peerConnectionConfig = {
-        'iceServers': [
-          {'urls': 'stun:stun.l.google.com:19302'},
-          {'urls': 'stun:stun1.l.google.com:19302'},
-          {'urls': 'stun:stun2.l.google.com:19302'},
-          {'urls': 'stun:stun.cloudflare.com:3478'},
-          {'urls': 'stun:openrelay.metered.ca:80'},
-          {
-            'urls': 'turn:openrelay.metered.ca:80',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject'
-          },
-          {
-            'urls': 'turn:openrelay.metered.ca:443',
-            'username': 'openrelayproject',
-            'credential': 'openrelayproject'
-          },
-        ]
-      };
 
       CallUtility.log(
-          'CallButton', 'Creating call with config: $peerConnectionConfig');
+          'CallButton', '📞 Creating call: $currentUserId → $targetUserId');
 
-      final callId = await GlobalCallService().initiateCall(
-        targetUserId: targetUserId,
+      // Simplified config for faster processing - Agora doesn't need STUN servers
+      final peerConnectionConfig = <String, dynamic>{};
+
+      CallUtility.log('CallButton',
+          '🔧 Starting GlobalCallService.createCall() - optimized');
+
+      // Create call with timeout for faster failure detection
+      final callId = await GlobalCallService()
+          .createCall(
+        recipientId: targetUserId,
         peerConnectionConfig: peerConnectionConfig,
-        context: context, // Pass the current context directly
-      );
+      )
+          .timeout(Duration(seconds: 5), onTimeout: () {
+        throw Exception('Call creation timeout - network issue');
+      });
+
+      CallUtility.log(
+          'CallButton', '📋 GlobalCallService.createCall() returned: $callId');
 
       if (callId != null) {
-        CallUtility.log(
-            'CallButton', 'Call created successfully with ID: $callId');
+        CallUtility.log('CallButton', '✅ Call created with ID: $callId');
 
-        // The CallerScreen is now shown automatically by GlobalCallService.initiateCall()
-        // No need to navigate manually here
-
+        // Show caller screen
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Calling ${targetUserInfo['name']}...')),
+          CallUtility.log('CallButton', '📱 Showing CallerScreen');
+
+          CallerScreen.show(
+            context: context,
+            callDocId: callId,
+            targetUserId: targetUserId,
+            targetUserName: targetUserName,
+            currentUserId: currentUserId,
           );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Calling $targetUserName...')),
+          );
+
+          CallUtility.log('CallButton', '✅ CallerScreen shown successfully');
+        } else {
+          CallUtility.log(
+              'CallButton', '⚠️ Context not mounted, cannot show CallerScreen');
         }
       } else {
-        CallUtility.log('CallButton', 'Failed to create call - callId is null');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to start call - please try again'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        CallUtility.log(
+            'CallButton', '❌ createCall returned null - call creation failed');
+        throw Exception(
+            'Failed to create call - GlobalCallService.createCall() returned null');
       }
     } catch (e) {
-      CallUtility.log('CallButton', 'Error initiating call: $e');
-      // Close loading dialog if open
-      if (context.mounted && Navigator.canPop(context)) {
-        Navigator.of(context).pop();
-      }
+      CallUtility.log('CallButton', '❌ Error initiating call: $e');
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

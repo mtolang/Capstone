@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/schedule_database_service.dart';
+import '../../services/accepted_booking_service.dart';
 import '../../models/time_slot.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ClinicSchedulePage extends StatefulWidget {
   const ClinicSchedulePage({Key? key}) : super(key: key);
@@ -16,11 +18,12 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
   late TabController _tabController;
   Map<String, List<TimeSlot>> weeklySchedule = {};
   bool _isLoading = true;
+  final AcceptedBookingService acceptedBookingService = AcceptedBookingService();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadScheduleData();
   }
 
@@ -290,7 +293,8 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                   ),
                   tabs: const [
                     Tab(text: 'Weekly'),
-                    Tab(text: 'Availability'),
+                    Tab(text: 'Today'),
+                    Tab(text: 'Bookings'),
                     Tab(text: 'Patients'),
                   ],
                 ),
@@ -302,7 +306,8 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                   controller: _tabController,
                   children: [
                     _buildWeeklyTab(),
-                    _buildAvailabilityTab(),
+                    _buildTodaysBookingsTab(),
+                    _buildAcceptedBookingsTab(),
                     _buildPatientsTab(),
                   ],
                 ),
@@ -408,12 +413,205 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
             ),
           ),
           const SizedBox(height: 20),
-          ...bookedPatients.entries.map((entry) {
-            return _buildPatientCard(entry.key, entry.value);
-          }).toList(),
+          if (bookedPatients.isEmpty)
+            const Center(
+              child: Text(
+                'No patient appointments scheduled',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            )
+          else
+            ...bookedPatients.entries.map((entry) {
+              return _buildPatientCard(entry.key, entry.value);
+            }).toList(),
           const SizedBox(height: 100),
         ],
       ),
+    );
+  }
+
+  /// Build Today's Bookings Tab - Shows accepted bookings for today
+  Widget _buildTodaysBookingsTab() {
+    return FutureBuilder<String?>(
+      future: AcceptedBookingService.getCurrentClinicId(),
+      builder: (context, clinicSnapshot) {
+        if (!clinicSnapshot.hasData || clinicSnapshot.data == null) {
+          return const Center(
+            child: Text(
+              'Unable to load clinic information',
+              style: TextStyle(color: Colors.red),
+            ),
+          );
+        }
+
+        final clinicId = clinicSnapshot.data!;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: AcceptedBookingService.getTodaysBookingsForClinic(
+            clinicId: clinicId,
+          ),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Error loading today\'s bookings: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              );
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.event_available,
+                      size: 80,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No appointments for today',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final bookings = snapshot.data!.docs;
+            
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Today\'s Appointments (${bookings.length})',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ...bookings.map((doc) {
+                    final booking = doc.data() as Map<String, dynamic>;
+                    return _buildTodayBookingCard(booking);
+                  }).toList(),
+                  const SizedBox(height: 100),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Build Accepted Bookings Tab - Shows all accepted bookings
+  Widget _buildAcceptedBookingsTab() {
+    return FutureBuilder<String?>(
+      future: AcceptedBookingService.getCurrentClinicId(),
+      builder: (context, clinicSnapshot) {
+        if (!clinicSnapshot.hasData || clinicSnapshot.data == null) {
+          return const Center(
+            child: Text(
+              'Unable to load clinic information',
+              style: TextStyle(color: Colors.red),
+            ),
+          );
+        }
+
+        final clinicId = clinicSnapshot.data!;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: AcceptedBookingService.getAcceptedBookingsForClinic(
+            clinicId: clinicId,
+            startDate: DateTime.now().subtract(const Duration(days: 7)),
+            endDate: DateTime.now().add(const Duration(days: 30)),
+            status: 'confirmed',
+          ),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Text(
+                  'Error loading bookings: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              );
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: 80,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No accepted bookings',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final bookings = snapshot.data!.docs;
+            
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Accepted Bookings (${bookings.length})',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ...bookings.map((doc) {
+                    final booking = doc.data() as Map<String, dynamic>;
+                    return _buildAcceptedBookingCard(booking);
+                  }).toList(),
+                  const SizedBox(height: 100),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -861,5 +1059,250 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
           appointmentType: 'therapy',
           notes: ''),
     ];
+  }
+
+  Widget _buildTodayBookingCard(Map<String, dynamic> booking) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  booking['patientName'] ?? 'Unknown Patient',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Today',
+                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                SizedBox(width: 4),
+                Text(
+                  '${booking['startTime']} - ${booking['endTime']}',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                SizedBox(width: 4),
+                Text(
+                  booking['date'] ?? '',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            if (booking['notes'] != null && booking['notes'].isNotEmpty) ...[
+              SizedBox(height: 8),
+              Text(
+                'Notes: ${booking['notes']}',
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              ),
+            ],
+            SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Contact: ${booking['parentPhone'] ?? 'N/A'}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        // Handle view details
+                      },
+                      child: Text('Details'),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        // Handle cancel booking
+                        try {
+                          await AcceptedBookingService.cancelBooking(
+                            bookingId: booking['bookingId'],
+                            cancelledBy: 'clinic',
+                            cancellationReason: 'Cancelled by clinic',
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Booking cancelled successfully')),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error cancelling booking: $e')),
+                          );
+                        }
+                      },
+                      child: Text('Cancel', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcceptedBookingCard(Map<String, dynamic> booking) {
+    DateTime bookingDate = DateTime.parse(booking['date']);
+    bool isToday = DateTime.now().day == bookingDate.day &&
+        DateTime.now().month == bookingDate.month &&
+        DateTime.now().year == bookingDate.year;
+    bool isPast = bookingDate.isBefore(DateTime.now());
+
+    return Card(
+      margin: EdgeInsets.only(bottom: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  booking['patientName'] ?? 'Unknown Patient',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isToday 
+                        ? Colors.green.withOpacity(0.2)
+                        : isPast 
+                            ? Colors.grey.withOpacity(0.2)
+                            : Colors.blue.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isToday 
+                        ? 'Today' 
+                        : isPast 
+                            ? 'Completed' 
+                            : 'Upcoming',
+                    style: TextStyle(
+                      color: isToday 
+                          ? Colors.green 
+                          : isPast 
+                              ? Colors.grey[600] 
+                              : Colors.blue,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                SizedBox(width: 4),
+                Text(
+                  '${booking['startTime']} - ${booking['endTime']}',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                SizedBox(width: 4),
+                Text(
+                  booking['date'] ?? '',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            if (booking['therapistName'] != null) ...[
+              SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.person, size: 16, color: Colors.grey[600]),
+                  SizedBox(width: 4),
+                  Text(
+                    'Therapist: ${booking['therapistName']}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ],
+            if (booking['notes'] != null && booking['notes'].isNotEmpty) ...[
+              SizedBox(height: 8),
+              Text(
+                'Notes: ${booking['notes']}',
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              ),
+            ],
+            SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Contact: ${booking['parentPhone'] ?? 'N/A'}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        // Handle view details or edit
+                      },
+                      child: Text('Details'),
+                    ),
+                    if (!isPast)
+                      TextButton(
+                        onPressed: () async {
+                          // Handle cancel booking
+                          try {
+                            await AcceptedBookingService.cancelBooking(
+                              bookingId: booking['bookingId'],
+                              cancelledBy: 'clinic',
+                              cancellationReason: 'Cancelled by clinic',
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Booking cancelled successfully')),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error cancelling booking: $e')),
+                            );
+                          }
+                        },
+                        child: Text('Cancel', style: TextStyle(color: Colors.red)),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

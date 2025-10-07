@@ -209,6 +209,43 @@ class _LoginTestPageState extends State<LoginTestPage> {
               ),
               const SizedBox(height: 8),
 
+              // Test call creation button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (_storedClinicId == null) {
+                      _showMessage('Please login first to test calls');
+                      return;
+                    }
+
+                    // Test call creation with a dummy recipient
+                    final testResult = await GlobalCallService()
+                        .testCreateCall('test_recipient_123');
+
+                    String message = 'Call Test Results:\n';
+                    message += 'Success: ${testResult['success']}\n';
+                    message += 'Current User: ${testResult['currentUserId']}\n';
+                    message += 'Call ID: ${testResult['callId']}\n';
+                    if (testResult['error'] != null) {
+                      message += 'Error: ${testResult['error']}\n';
+                    }
+                    message += '\nSteps:\n';
+                    for (String step in testResult['steps']) {
+                      message += '• $step\n';
+                    }
+
+                    _showMessage(message);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Test Call Creation'),
+                ),
+              ),
+              const SizedBox(height: 8),
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

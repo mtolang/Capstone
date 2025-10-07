@@ -62,9 +62,7 @@ class ClinicNavBar extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               print('Profile tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profile selected')),
-              );
+              Navigator.pushNamed(context, '/clinicprofile');
             },
           ),
           ListTile(
@@ -123,9 +121,7 @@ class ClinicNavBar extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               print('Patient List tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Patient List selected')),
-              );
+              Navigator.pushNamed(context, '/clinicpatientlist');
             },
           ),
           ListTile(

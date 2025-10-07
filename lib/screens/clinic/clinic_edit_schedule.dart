@@ -23,6 +23,7 @@ class _ClinicEditSchedulePageState extends State<ClinicEditSchedulePage> {
   String? _therapistId;
   bool _isLoading = false;
   bool _isLoadingSchedule = true;
+  String _bookingProcessType = 'single'; // 'single' or 'contract'
 
   @override
   void initState() {
@@ -68,10 +69,21 @@ class _ClinicEditSchedulePageState extends State<ClinicEditSchedulePage> {
               };
             }
           });
+
+          // Load booking process type from recurringSettings
+          final recurringSettings =
+              existingSchedule['recurringSettings'] as Map<String, dynamic>?;
+          if (recurringSettings != null &&
+              recurringSettings['bookingProcessType'] != null) {
+            _bookingProcessType =
+                recurringSettings['bookingProcessType'] as String;
+          }
+
           _isLoadingSchedule = false;
         });
 
         print('Loaded existing schedule for therapist: $therapistId');
+        print('Booking process type: $_bookingProcessType');
       } else {
         setState(() {
           _isLoadingSchedule = false;
@@ -232,6 +244,22 @@ class _ClinicEditSchedulePageState extends State<ClinicEditSchedulePage> {
                       ...weeklySchedule.entries.map((entry) {
                         return _buildDayScheduleCard(entry.key, entry.value);
                       }).toList(),
+
+                      const SizedBox(height: 30),
+
+                      // Booking Process Configuration
+                      const Text(
+                        'Booking Process Configuration',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildBookingProcessCard(),
+
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -423,21 +451,27 @@ class _ClinicEditSchedulePageState extends State<ClinicEditSchedulePage> {
         },
         exceptions: [],
         recurringSettings: {
-          'allowRecurring': true,
-          'maxRecurringWeeks': 52,
-          'defaultRecurrenceType': 'weekly',
-          'maxRecurringAppointments': 50,
-          'requireContractApproval': true,
+          'allowRecurring': _bookingProcessType == 'contract',
+          'maxRecurringWeeks': _bookingProcessType == 'contract' ? 52 : 1,
+          'defaultRecurrenceType':
+              _bookingProcessType == 'contract' ? 'weekly' : 'none',
+          'maxRecurringAppointments':
+              _bookingProcessType == 'contract' ? 50 : 1,
+          'requireContractApproval': _bookingProcessType == 'contract',
+          'bookingProcessType': _bookingProcessType,
+          'contractDescription': _bookingProcessType == 'contract'
+              ? 'When you book a time slot, it becomes your regular weekly appointment until you choose to end it.'
+              : 'Book individual therapy sessions as needed.',
         },
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-                'Schedule saved successfully! Patients can now book appointments.'),
-            backgroundColor: Color(0xFF006A5B),
-            duration: Duration(seconds: 3),
+                'Schedule saved successfully! Booking type: ${_bookingProcessType == 'contract' ? 'Contract Design' : 'Single Session'}. Patients can now book appointments.'),
+            backgroundColor: const Color(0xFF006A5B),
+            duration: const Duration(seconds: 4),
           ),
         );
         Navigator.pop(context);
@@ -517,5 +551,193 @@ class _ClinicEditSchedulePageState extends State<ClinicEditSchedulePage> {
     }
 
     return slots;
+  }
+
+  Widget _buildBookingProcessCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 1,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select Booking Type',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Choose how patients can book appointments with your clinic:',
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF666666),
+                fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Single Session Button
+            _buildBookingTypeButton(
+              type: 'single',
+              title: 'Single Session Booking',
+              description:
+                  'Patients book individual sessions.\nEach appointment is separate.',
+              icon: Icons.event_note,
+              isSelected: _bookingProcessType == 'single',
+            ),
+
+            const SizedBox(height: 16),
+
+            // Contract Design Button
+            _buildBookingTypeButton(
+              type: 'contract',
+              title: 'Contract Design Booking',
+              description:
+                  'When a patient books a time slot, they get that same time every week until they end the contract.',
+              icon: Icons.repeat,
+              isSelected: _bookingProcessType == 'contract',
+            ),
+
+            const SizedBox(height: 16),
+
+            // Information box
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF67AFA5).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF67AFA5).withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF006A5B),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _bookingProcessType == 'contract'
+                          ? 'With contract booking, if a patient books Monday 8-9 AM, that slot is theirs every Monday until they cancel.'
+                          : 'With single session booking, patients book each appointment individually.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF006A5B),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookingTypeButton({
+    required String type,
+    required String title,
+    required String description,
+    required IconData icon,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _bookingProcessType = type;
+        });
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF006A5B).withOpacity(0.1)
+              : Colors.grey.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF006A5B)
+                : Colors.grey.withOpacity(0.3),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFF006A5B)
+                    : Colors.grey.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                color: isSelected ? Colors.white : Colors.grey[600],
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: isSelected
+                          ? const Color(0xFF006A5B)
+                          : Colors.grey[700],
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isSelected
+                          ? const Color(0xFF006A5B).withOpacity(0.8)
+                          : Colors.grey[600],
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF006A5B),
+                size: 24,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

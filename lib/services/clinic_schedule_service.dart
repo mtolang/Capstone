@@ -339,3 +339,84 @@ class TimeSlot {
     );
   }
 }
+
+// Extension to ClinicScheduleService for AcceptedBooking operations
+extension AcceptedBookingService on ClinicScheduleService {
+  /// Get today's accepted appointments from AcceptedBooking collection
+  static Future<List<Map<String, dynamic>>>
+      getTodayAcceptedAppointments() async {
+    try {
+      final clinicId = await ClinicScheduleService._getCurrentClinicId();
+      if (clinicId == null) {
+        print('No clinic ID found');
+        return [];
+      }
+
+      // Get today's date range
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+      print('Getting appointments for clinic: $clinicId');
+      print('Date range: $startOfDay to $endOfDay');
+
+      final querySnapshot = await ClinicScheduleService._firestore
+          .collection('AcceptedBooking')
+          .where('serviceProvider.clinicId', isEqualTo: clinicId)
+          .where('appointmentDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .where('appointmentDate',
+              isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+          .orderBy('appointmentDate')
+          .orderBy('appointmentTime')
+          .get();
+
+      print('Found ${querySnapshot.docs.length} appointments for today');
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'patientName': data['childInfo']?['childName'] ??
+              data['parentInfo']?['parentName'] ??
+              'Unknown',
+          'parentName': data['parentInfo']?['parentName'] ?? 'Unknown Parent',
+          'appointmentTime': data['appointmentTime'] ?? 'Time TBD',
+          'appointmentType': data['appointmentType'] ?? 'Therapy Session',
+          'appointmentDate': data['appointmentDate'],
+          'childAge': data['childInfo']?['childAge'] ?? 0,
+          'childGender': data['childInfo']?['childGender'] ?? 'Not specified',
+          'parentPhone': data['parentInfo']?['parentPhone'] ?? '',
+          'parentEmail': data['parentInfo']?['parentEmail'] ?? '',
+          'status': data['status'] ?? 'accepted',
+          'additionalNotes': data['additionalInfo']?['notes'] ?? '',
+          'color': _getAppointmentColor(
+              data['appointmentType'] ?? 'Therapy Session'),
+        };
+      }).toList();
+    } catch (e) {
+      print('Error getting today\'s accepted appointments: $e');
+      return [];
+    }
+  }
+
+  /// Get appointment color based on type
+  static String _getAppointmentColor(String appointmentType) {
+    switch (appointmentType.toLowerCase()) {
+      case 'speech therapy':
+        return '#006A5B'; // Teal
+      case 'occupational therapy':
+        return '#67AFA5'; // Light teal
+      case 'physical therapy':
+        return '#4CAF50'; // Green
+      case 'behavioral therapy':
+        return '#2196F3'; // Blue
+      case 'consultation':
+        return '#FF9800'; // Orange
+      case 'follow-up session':
+        return '#9C27B0'; // Purple
+      default:
+        return '#006A5B'; // Default teal
+    }
+  }
+}

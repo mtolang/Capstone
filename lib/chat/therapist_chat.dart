@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_2/widgets/call_button.dart';
 import 'package:capstone_2/helper/clinic_auth.dart';
+import 'package:capstone_2/services/global_call_service.dart';
+import 'package:capstone_2/services/call_utility.dart';
+import 'package:capstone_2/services/dynamic_user_service.dart';
+import 'package:capstone_2/chat/caller_screen.dart';
 
 class TherapistChatPage extends StatefulWidget {
   final String? patientId;
@@ -135,6 +138,113 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
     });
   }
 
+  // Method to initiate a call
+  Future<void> _initiateCall() async {
+    try {
+      CallUtility.log('TherapistChat', '🚀 Starting call initiation...');
+
+      // Verify current user ID using DynamicUserService
+      final currentUserId = await DynamicUserService.getCurrentUserId();
+      CallUtility.log(
+          'TherapistChat', '🔍 DynamicUserService returned: $currentUserId');
+
+      if (currentUserId == null) {
+        CallUtility.log('TherapistChat', '❌ Current user ID is null');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to verify user identity')),
+          );
+        }
+        return;
+      }
+
+      final targetUserId = widget.patientId ?? '';
+      if (targetUserId.isEmpty) {
+        CallUtility.log('TherapistChat', '❌ Target user ID is empty');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid patient ID')),
+          );
+        }
+        return;
+      }
+
+      // Prevent self-calling
+      if (currentUserId == targetUserId) {
+        CallUtility.log('TherapistChat', '❌ Attempted self-call');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cannot call yourself')),
+          );
+        }
+        return;
+      }
+
+      CallUtility.log(
+          'TherapistChat', '📞 Creating call: $currentUserId → $targetUserId');
+
+      // Create peer connection configuration
+      final peerConnectionConfig = {
+        'iceServers': [
+          {'urls': 'stun:stun.l.google.com:19302'},
+          {'urls': 'stun:stun1.l.google.com:19302'},
+          {'urls': 'stun:stun2.l.google.com:19302'},
+          {'urls': 'stun:stun.cloudflare.com:3478'},
+        ]
+      };
+
+      CallUtility.log('TherapistChat',
+          '🔧 Peer config created, calling GlobalCallService.createCall()');
+
+      // Create call using the new clean system (same as patient chat)
+      final callId = await GlobalCallService().createCall(
+        recipientId: targetUserId,
+        peerConnectionConfig: peerConnectionConfig,
+      );
+
+      CallUtility.log('TherapistChat',
+          '📋 GlobalCallService.createCall() returned: $callId');
+
+      if (callId != null && mounted) {
+        CallUtility.log('TherapistChat', '✅ Call created with ID: $callId');
+        CallUtility.log('TherapistChat', '📱 Showing CallerScreen');
+
+        // Show caller screen using the static method (same as patient chat)
+        CallerScreen.show(
+          context: context,
+          callDocId: callId,
+          targetUserId: targetUserId,
+          targetUserName: _patientName.isNotEmpty ? _patientName : 'Patient',
+          currentUserId: currentUserId,
+        );
+
+        // Show feedback message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Calling ${_patientName.isNotEmpty ? _patientName : 'Patient'}...')),
+        );
+
+        CallUtility.log('TherapistChat', '✅ CallerScreen shown successfully');
+      } else {
+        CallUtility.log(
+            'TherapistChat', '❌ Failed to create call - callId is null');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to create call')),
+          );
+        }
+      }
+    } catch (e) {
+      CallUtility.log('TherapistChat', '❌ Error initiating call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start call: $e')),
+        );
+      }
+    }
+  }
+
   String _formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
@@ -203,11 +313,14 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
           ],
         ),
         actions: [
-          CallButton(
-            targetUserId: widget.patientId ?? '',
-            targetUserName: _patientName.isNotEmpty ? _patientName : 'Patient',
-            currentUserId: _clinicId,
+          IconButton(
+            icon: const Icon(Icons.videocam, color: Colors.white),
+            onPressed: () {
+              print('🎥 Call button pressed in TherapistChat');
+              _initiateCall();
+            },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: LayoutBuilder(

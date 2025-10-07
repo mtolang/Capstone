@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../helper/clinic_auth.dart';
 
 class RegisterParentUser {
@@ -10,8 +11,9 @@ class RegisterParentUser {
     String contactNumber,
     String address,
     String password,
-    String passwordConfirm,
-  ) async {
+    String passwordConfirm, {
+    XFile? governmentIdFile,
+  }) async {
     try {
       // Validate inputs
       if (fullName.isEmpty ||
@@ -40,26 +42,59 @@ class RegisterParentUser {
         return;
       }
 
-      // Save parent registration data to ParentsReg collection
-      final result = await ClinicAuthService.saveParentRegistration(
+      // Show loading dialog
+      _showLoadingDialog(context, 'Saving registration data...');
+
+      // Save parent registration data with file upload
+      final result = await ClinicAuthService.saveParentRegistrationWithFile(
         fullName: fullName,
         userName: userName,
         email: email,
         contactNumber: contactNumber,
         address: address,
         password: password,
+        governmentIdFile: governmentIdFile,
       );
+
+      // Hide loading dialog
+      Navigator.of(context).pop();
 
       // Show success message and navigate
       if (result != null && result['success'] == true) {
-        _showSuccessDialog(context,
-            'Parent registration saved successfully! Document ID: ${result['documentId']}');
+        String message =
+            'Parent registration saved successfully! Document ID: ${result['documentId']}';
+        if (result['documentUrl'] != null) {
+          message += '\nGovernment ID document uploaded successfully.';
+        }
+        _showSuccessDialog(context, message);
       } else {
         _showErrorDialog(context, 'Failed to save parent registration data.');
       }
     } catch (e) {
+      // Hide loading dialog if it's showing
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
       _showErrorDialog(context, e.toString());
     }
+  }
+
+  void _showLoadingDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showErrorDialog(BuildContext context, String message) {
@@ -206,8 +241,9 @@ class RegisterClinicUser {
     String contactNumber,
     String address,
     String password,
-    String passwordConfirm,
-  ) async {
+    String passwordConfirm, {
+    XFile? documentFile,
+  }) async {
     try {
       // Validate inputs
       if (clinicName.isEmpty ||
@@ -236,26 +272,59 @@ class RegisterClinicUser {
         return;
       }
 
-      // Save clinic registration data to ClinicReg collection
-      final result = await ClinicAuthService.saveClinicRegistration(
+      // Show loading dialog
+      _showLoadingDialog(context, 'Saving registration data...');
+
+      // Save clinic registration data with file upload
+      final result = await ClinicAuthService.saveClinicRegistrationWithFile(
         clinicName: clinicName,
         userName: userName,
         email: email,
         contactNumber: contactNumber,
         address: address,
         password: password,
+        documentFile: documentFile,
       );
+
+      // Hide loading dialog
+      Navigator.of(context).pop();
 
       // Show success message and navigate
       if (result != null && result['success'] == true) {
-        _showSuccessDialog(context,
-            'Clinic registration saved successfully! Document ID: ${result['documentId']}');
+        String message =
+            'Clinic registration saved successfully! Document ID: ${result['documentId']}';
+        if (result['documentUrl'] != null) {
+          message += '\nRegistration document uploaded successfully.';
+        }
+        _showSuccessDialog(context, message);
       } else {
         _showErrorDialog(context, 'Failed to save clinic registration data.');
       }
     } catch (e) {
+      // Hide loading dialog if it's showing
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
       _showErrorDialog(context, e.toString());
     }
+  }
+
+  void _showLoadingDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showErrorDialog(BuildContext context, String message) {

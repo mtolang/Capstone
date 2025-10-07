@@ -322,6 +322,7 @@ class _ClinicRegisterState extends State<ClinicRegister> {
                               addressController.text,
                               passwordController.text,
                               confirmPasswordController.text,
+                              documentFile: _attachFile,
                             );
                           },
                           child: const Text(

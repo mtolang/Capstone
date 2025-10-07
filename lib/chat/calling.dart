@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:capstone_2/services/global_call_service.dart';
+import 'package:capstone_2/chat/agora_chat_call.dart';
 
 /// Recipient Screen - for the person receiving the call
 /// Shows incoming call UI with accept/decline options
@@ -54,25 +55,38 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   Future<void> _acceptCall() async {
     try {
-      // Close the dialog immediately for better UX
-      if (Navigator.of(context).canPop()) {
+      print('📞 Accepting call: ${widget.callDocId}');
+
+      // Close dialog first for immediate UI response
+      if (Navigator.of(context).canPop() && mounted) {
         Navigator.of(context).pop();
       }
 
-      // Accept the call in background for faster response
-      GlobalCallService().acceptCall(widget.callDocId).catchError((error) {
-        print('Error accepting call: $error');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to accept call')),
-          );
-        }
+      // Show connecting screen immediately
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => AgoraChatCallScreen(
+              callId: widget.callDocId,
+              currentUserId: widget.currentUserId,
+              initialParticipants: [widget.callerId],
+            ),
+          ),
+        );
+        print('📱 Navigated to AgoraChatCallScreen immediately');
+      }
+
+      // Accept the call in background (non-blocking)
+      GlobalCallService().acceptCall(widget.callDocId).then((_) {
+        print('✅ Call accepted successfully in background');
+      }).catchError((e) {
+        print('❌ Error accepting call in background: $e');
       });
     } catch (e) {
-      print('Error accepting call: $e');
+      print('❌ Error accepting call: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to accept call')),
+          SnackBar(content: Text('Failed to accept call: $e')),
         );
       }
     }
@@ -85,7 +99,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         Navigator.of(context).pop();
       }
 
-      // Decline the call in background
+      // Decline the call using new clean system
       GlobalCallService().declineCall(widget.callDocId).catchError((error) {
         print('Error declining call: $error');
       });

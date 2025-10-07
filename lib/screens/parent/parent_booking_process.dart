@@ -9,6 +9,7 @@ class ParentBookingProcessPage extends StatefulWidget {
   final DateTime selectedDate;
   final String selectedTimeSlot;
   final String selectedTime;
+  final String bookingProcessType; // Add booking process type
 
   const ParentBookingProcessPage({
     Key? key,
@@ -17,6 +18,7 @@ class ParentBookingProcessPage extends StatefulWidget {
     required this.selectedTime,
     this.clinicId,
     this.therapistId,
+    this.bookingProcessType = 'single', // Default to single session
   }) : super(key: key);
 
   @override
@@ -178,6 +180,69 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Booking Type Information
+              Container(
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: widget.bookingProcessType == 'contract'
+                      ? const Color(0xFF006A5B).withOpacity(0.1)
+                      : Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: widget.bookingProcessType == 'contract'
+                        ? const Color(0xFF006A5B)
+                        : Colors.blue,
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          widget.bookingProcessType == 'contract'
+                              ? Icons.repeat
+                              : Icons.event_note,
+                          color: widget.bookingProcessType == 'contract'
+                              ? const Color(0xFF006A5B)
+                              : Colors.blue,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.bookingProcessType == 'contract'
+                              ? 'Contract Booking'
+                              : 'Single Session Booking',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: widget.bookingProcessType == 'contract'
+                                ? const Color(0xFF006A5B)
+                                : Colors.blue,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.bookingProcessType == 'contract'
+                          ? 'This appointment will be reserved for you every ${DateFormat('EEEE').format(widget.selectedDate)} at ${widget.selectedTime} until you choose to end it.'
+                          : 'This is a one-time appointment booking.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: widget.bookingProcessType == 'contract'
+                            ? const Color(0xFF006A5B).withOpacity(0.8)
+                            : Colors.blue.withOpacity(0.8),
+                        fontFamily: 'Poppins',
+                      ),
                     ),
                   ],
                 ),
@@ -580,34 +645,74 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
     });
 
     try {
-      // Save comprehensive booking request to 'Request' collection
-      final requestId = await BookingRequestService.saveBookingRequest(
-        // Parent Information
-        parentName: _parentNameController.text.trim(),
-        parentPhone: _parentPhoneController.text.trim(),
-        parentEmail: _parentEmailController.text.trim(),
-        parentId: _parentId!,
+      String requestId;
 
-        // Child Information
-        childName: _childNameController.text.trim(),
-        childAge: int.tryParse(_childAgeController.text) ?? 0,
-        childGender: _selectedGender,
+      if (widget.bookingProcessType == 'contract') {
+        // Use contract booking service for recurring appointments
+        final dayOfWeek = DateFormat('EEEE').format(widget.selectedDate);
 
-        // Appointment Information
-        appointmentDate: widget.selectedDate,
-        appointmentTime: widget.selectedTime,
-        timeSlotId: widget.selectedTimeSlot,
-        appointmentType: _selectedAppointmentType,
+        requestId = await BookingRequestService.saveContractBookingRequest(
+          // Parent Information
+          parentName: _parentNameController.text.trim(),
+          parentPhone: _parentPhoneController.text.trim(),
+          parentEmail: _parentEmailController.text.trim(),
+          parentId: _parentId!,
 
-        // Additional Information
-        additionalNotes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
+          // Child Information
+          childName: _childNameController.text.trim(),
+          childAge: int.tryParse(_childAgeController.text) ?? 0,
+          childGender: _selectedGender,
 
-        // Clinic/Therapist Information
-        clinicId: widget.clinicId,
-        therapistId: widget.therapistId,
-      );
+          // Contract Appointment Information
+          startDate: widget.selectedDate,
+          appointmentTime: widget.selectedTime,
+          timeSlotId: widget.selectedTimeSlot,
+          appointmentType: _selectedAppointmentType,
+          dayOfWeek: dayOfWeek,
+
+          // Contract settings
+          contractDurationWeeks: 52, // Default to 1 year
+          contractType: 'weekly_recurring',
+
+          // Additional Information
+          additionalNotes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : null,
+
+          // Clinic/Therapist Information
+          clinicId: widget.clinicId,
+          therapistId: widget.therapistId,
+        );
+      } else {
+        // Use regular booking service for single sessions
+        requestId = await BookingRequestService.saveBookingRequest(
+          // Parent Information
+          parentName: _parentNameController.text.trim(),
+          parentPhone: _parentPhoneController.text.trim(),
+          parentEmail: _parentEmailController.text.trim(),
+          parentId: _parentId!,
+
+          // Child Information
+          childName: _childNameController.text.trim(),
+          childAge: int.tryParse(_childAgeController.text) ?? 0,
+          childGender: _selectedGender,
+
+          // Appointment Information
+          appointmentDate: widget.selectedDate,
+          appointmentTime: widget.selectedTime,
+          timeSlotId: widget.selectedTimeSlot,
+          appointmentType: _selectedAppointmentType,
+
+          // Additional Information
+          additionalNotes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : null,
+
+          // Clinic/Therapist Information
+          clinicId: widget.clinicId,
+          therapistId: widget.therapistId,
+        );
+      }
 
       if (mounted) {
         // Show success dialog
@@ -649,9 +754,11 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                 size: 60,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Booking Request Sent!',
-                style: TextStyle(
+              Text(
+                widget.bookingProcessType == 'contract'
+                    ? 'Contract Booking Request Sent!'
+                    : 'Booking Request Sent!',
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF006A5B),
@@ -659,10 +766,12 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Your appointment request has been sent to the therapy clinic. You will receive a confirmation once it\'s approved.',
+              Text(
+                widget.bookingProcessType == 'contract'
+                    ? 'Your contract appointment request has been sent to the therapy clinic. Once approved, this time slot will be reserved for you every ${DateFormat('EEEE').format(widget.selectedDate)} at ${widget.selectedTime}.'
+                    : 'Your appointment request has been sent to the therapy clinic. You will receive a confirmation once it\'s approved.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
                   color: Colors.black87,
                   fontFamily: 'Poppins',

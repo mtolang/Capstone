@@ -23,7 +23,7 @@ class _PatientChatPageState extends State<PatientChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String _contactName = '';
-  String _patientId = 'PARAcc01'; // Default fallback
+  String? _patientId; // Remove static fallback - must be properly authenticated
 
   @override
   void initState() {
@@ -79,10 +79,24 @@ class _PatientChatPageState extends State<PatientChatPage> {
 
     final messageText = _messageController.text.trim();
     final timestamp = DateTime.now();
-    final fromId =
-        widget.isPatientSide ? _patientId : (widget.therapistId ?? 'therapist');
-    final toId =
-        widget.isPatientSide ? (widget.therapistId ?? 'therapist') : _patientId;
+
+    // Check if patient ID is available
+    if (_patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to send message. Please login again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final fromId = widget.isPatientSide
+        ? _patientId!
+        : (widget.therapistId ?? 'therapist');
+    final toId = widget.isPatientSide
+        ? (widget.therapistId ?? 'therapist')
+        : _patientId!;
 
     // Save to Firestore
     FirebaseFirestore.instance.collection('Message').add({
@@ -177,7 +191,7 @@ class _PatientChatPageState extends State<PatientChatPage> {
           CallButton(
             targetUserId: widget.therapistId ?? '',
             targetUserName: widget.therapistName ?? 'Therapist',
-            currentUserId: _patientId,
+            currentUserId: _patientId ?? '', // Handle null case
           ),
         ],
       ),
@@ -201,6 +215,14 @@ class _PatientChatPageState extends State<PatientChatPage> {
                         return const Center(child: Text('No messages yet.'));
                       }
                       final docs = snapshot.data!.docs;
+
+                      // Return early if no patient ID
+                      if (_patientId == null) {
+                        return const Center(
+                          child: Text('Please login to view messages.'),
+                        );
+                      }
+
                       // Filter messages between this patient and clinic
                       final filteredDocs = docs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
@@ -209,8 +231,8 @@ class _PatientChatPageState extends State<PatientChatPage> {
                         final therapistId = widget.therapistId ?? 'therapist';
 
                         // Check if message is between patient and this clinic
-                        return (fromId == _patientId && toId == therapistId) ||
-                            (fromId == therapistId && toId == _patientId);
+                        return (fromId == _patientId! && toId == therapistId) ||
+                            (fromId == therapistId && toId == _patientId!);
                       }).toList();
 
                       final messages = filteredDocs.map((doc) {
