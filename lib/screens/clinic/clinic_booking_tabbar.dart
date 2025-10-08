@@ -17,6 +17,8 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   DateTime _currentMonth = DateTime.now(); // Add calendar month state
+  Map<int, List<Map<String, dynamic>>> _monthlyAppointments =
+      {}; // Add monthly appointments storage
 
   final List<Map<String, dynamic>> bookings = [
     {
@@ -50,19 +52,98 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadMonthlyAppointments(); // Load appointments when the widget initializes
   }
 
   // Calendar navigation methods
   void _navigateToPreviousMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+      _loadMonthlyAppointments(); // Reload appointments when month changes
     });
   }
 
   void _navigateToNextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+      _loadMonthlyAppointments(); // Reload appointments when month changes
     });
+  }
+
+  // Load monthly appointments from AcceptedBooking collection
+  Future<void> _loadMonthlyAppointments() async {
+    try {
+      final clinicId = await _getCurrentClinicId();
+      if (clinicId == null) {
+        print('No clinic ID found');
+        return;
+      }
+
+      // Get the first and last day of the current month
+      final firstDayOfMonth =
+          DateTime(_currentMonth.year, _currentMonth.month, 1);
+      final lastDayOfMonth =
+          DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
+
+      print(
+          'Loading appointments for clinic: $clinicId for month: ${DateFormat('MMMM yyyy').format(_currentMonth)}');
+
+      // Query AcceptedBooking collection for this clinic
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('clinicId', isEqualTo: clinicId)
+          .where('status', isEqualTo: 'confirmed')
+          .get();
+
+      // Filter results by date range in memory to avoid complex index requirements
+      final filteredDocs = querySnapshot.docs.where((doc) {
+        final data = doc.data();
+        final appointmentDate = (data['appointmentDate'] as Timestamp).toDate();
+        return appointmentDate
+                .isAfter(firstDayOfMonth.subtract(const Duration(days: 1))) &&
+            appointmentDate
+                .isBefore(lastDayOfMonth.add(const Duration(days: 1)));
+      }).toList();
+
+      // Group appointments by day
+      final Map<int, List<Map<String, dynamic>>> groupedAppointments = {};
+
+      for (var doc in filteredDocs) {
+        final data = doc.data();
+        final appointmentDate = (data['appointmentDate'] as Timestamp).toDate();
+        final dayOfMonth = appointmentDate.day;
+
+        final appointmentInfo = {
+          'patientName': data['childName'] ?? data['parentName'] ?? 'Unknown',
+          'appointmentTime': data['appointmentTime'] ?? 'Time TBD',
+          'appointmentType': data['appointmentType'] ?? 'Therapy Session',
+        };
+
+        if (groupedAppointments[dayOfMonth] == null) {
+          groupedAppointments[dayOfMonth] = [];
+        }
+        groupedAppointments[dayOfMonth]!.add(appointmentInfo);
+      }
+
+      setState(() {
+        _monthlyAppointments = groupedAppointments;
+      });
+
+      print('Loaded ${filteredDocs.length} appointments for the month');
+    } catch (e) {
+      print('Error loading monthly appointments: $e');
+    }
+  }
+
+  // Helper method to get current clinic ID
+  Future<String?> _getCurrentClinicId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('clinic_id');
+    } catch (e) {
+      print('Error getting clinic ID: $e');
+      return null;
+    }
   }
 
   @override
@@ -1507,15 +1588,6 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
     final daysInMonth = lastDayOfMonth.day;
     final startingWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
 
-    // Sample appointments data for demonstration
-    final Map<int, List<String>> appointments = {
-      15: ['10:00 AM - John Doe'],
-      18: ['2:00 PM - Sarah Wilson', '3:00 PM - Mike Johnson'],
-      22: ['9:00 AM - Emma Davis'],
-      25: ['11:00 AM - Tom Brown', '1:00 PM - Lisa Garcia'],
-      28: ['10:00 AM - Rachel Green'],
-    };
-
     List<Widget> calendarDays = [];
 
     // Add empty cells for days before the first day of the month
@@ -1528,12 +1600,13 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
       final isToday = day == now.day &&
           _currentMonth.year == now.year &&
           _currentMonth.month == now.month;
-      final hasAppointments = appointments.containsKey(day);
+      final hasAppointments = _monthlyAppointments.containsKey(day);
+      final dayAppointments = _monthlyAppointments[day] ?? [];
 
       calendarDays.add(
         GestureDetector(
           onTap: () {
-            _showDaySchedule(day, appointments[day] ?? []);
+            _showDaySchedule(day, dayAppointments);
           },
           child: Container(
             width: 35,
@@ -1599,7 +1672,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
     );
   }
 
-  void _showDaySchedule(int day, List<String> appointments) {
+  void _showDaySchedule(int day, List<Map<String, dynamic>> appointments) {
     final selectedDate = DateTime(_currentMonth.year, _currentMonth.month, day);
     final formattedDate = DateFormat('MMMM dd, yyyy').format(selectedDate);
 
@@ -1647,25 +1720,84 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
                   ),
                   const SizedBox(height: 12),
                   ...appointments.map((appointment) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.schedule,
-                              size: 16,
-                              color: Color(0xFF67AFA5),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF67AFA5).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF67AFA5).withOpacity(0.3),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                appointment,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Color(0xFF006A5B),
-                                ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.person,
+                                    size: 16,
+                                    color: Color(0xFF006A5B),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      appointment['patientName'] ??
+                                          'Unknown Patient',
+                                      style: const TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF006A5B),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.schedule,
+                                    size: 16,
+                                    color: Color(0xFF67AFA5),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    appointment['appointmentTime'] ??
+                                        'Time TBD',
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: Color(0xFF006A5B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (appointment['appointmentType'] != null) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.medical_services,
+                                      size: 16,
+                                      color: Color(0xFF67AFA5),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        appointment['appointmentType'],
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 12,
+                                          color: Color(0xFF67AFA5),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       )),
                 ],

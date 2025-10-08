@@ -8,14 +8,15 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
+class _AdminDashboardState extends State<AdminDashboard>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _selectedUserType = 0; // 0: Carer, 1: Clinic, 2: Therapist
   int _selectedTab = 0; // 0: Accounts, 1: Pending
 
   // Firebase collections
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   // Collection references for different user types
   String get _pendingCollection {
     switch (_selectedUserType) {
@@ -29,7 +30,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         return 'ParentsReg';
     }
   }
-  
+
   String get _acceptedCollection {
     switch (_selectedUserType) {
       case 0: // Carer
@@ -63,21 +64,44 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   Future<void> _acceptUser(DocumentSnapshot userDoc) async {
     try {
       final userData = userDoc.data() as Map<String, dynamic>;
-      
-      // Add to accepted collection
-      await _firestore.collection(_acceptedCollection).add({
+
+      // Get the count of existing users in the accepted collection to generate sequential ID
+      final querySnapshot =
+          await _firestore.collection(_acceptedCollection).get();
+      final userCount = querySnapshot.docs.length;
+
+      // Generate sequential document ID based on user type
+      String newDocumentId;
+      switch (_selectedUserType) {
+        case 0: // Parent/Carer
+          newDocumentId = 'ParAcc${(userCount + 1).toString().padLeft(2, '0')}';
+          break;
+        case 1: // Clinic
+          newDocumentId = 'CLI${(userCount + 1).toString().padLeft(2, '0')}';
+          break;
+        case 2: // Therapist
+          newDocumentId =
+              'TherAcc${(userCount + 1).toString().padLeft(2, '0')}';
+          break;
+        default:
+          newDocumentId = 'ParAcc${(userCount + 1).toString().padLeft(2, '0')}';
+      }
+
+      // Add to accepted collection with custom document ID
+      await _firestore.collection(_acceptedCollection).doc(newDocumentId).set({
         ...userData,
         'acceptedAt': FieldValue.serverTimestamp(),
         'acceptedBy': 'Admin', // You can replace with actual admin info
       });
-      
+
       // Remove from pending collection
       await userDoc.reference.delete();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_getUserDisplayName(userData)} has been accepted!'),
+            content: Text(
+                '${_getUserDisplayName(userData)} has been accepted with ID: $newDocumentId'),
             backgroundColor: const Color(0xFF006A5B),
           ),
         );
@@ -97,14 +121,15 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   Future<void> _rejectUser(DocumentSnapshot userDoc) async {
     try {
       final userData = userDoc.data() as Map<String, dynamic>;
-      
+
       // Remove from pending collection
       await userDoc.reference.delete();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_getUserDisplayName(userData)} has been rejected!'),
+            content:
+                Text('${_getUserDisplayName(userData)} has been rejected!'),
             backgroundColor: Colors.red,
           ),
         );
@@ -124,10 +149,10 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   Future<void> _removeUser(DocumentSnapshot userDoc) async {
     try {
       final userData = userDoc.data() as Map<String, dynamic>;
-      
+
       // Remove from accepted collection
       await userDoc.reference.delete();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -156,9 +181,13 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       case 1: // Clinic
         return userData['Clinic_Name'] ?? 'Unknown Clinic';
       case 2: // Therapist
-        return userData['Full_Name'] ?? userData['Therapist_Name'] ?? 'Unknown Therapist';
+        return userData['Full_Name'] ??
+            userData['Therapist_Name'] ??
+            'Unknown Therapist';
       default:
-        return userData['Full_Name'] ?? userData['Clinic_Name'] ?? 'Unknown User';
+        return userData['Full_Name'] ??
+            userData['Clinic_Name'] ??
+            'Unknown User';
     }
   }
 
@@ -175,18 +204,20 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         ];
       case 2: // Therapist
         return [
-          _buildProfileField('Full Name', userData['Full_Name'] ?? userData['Therapist_Name']),
+          _buildProfileField(
+              'Full Name', userData['Full_Name'] ?? userData['Therapist_Name']),
         ];
       default:
         return [
-          _buildProfileField('Name', userData['Full_Name'] ?? userData['Clinic_Name']),
+          _buildProfileField(
+              'Name', userData['Full_Name'] ?? userData['Clinic_Name']),
         ];
     }
   }
 
   void _viewUserProfile(DocumentSnapshot userDoc) {
     final userData = userDoc.data() as Map<String, dynamic>;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -205,20 +236,17 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   ..._buildUserSpecificFields(userData),
                   _buildProfileField('Username', userData['User_Name']),
                   _buildProfileField('Email', userData['Email']),
-                  _buildProfileField('Contact Number', userData['Contact_Number']),
+                  _buildProfileField(
+                      'Contact Number', userData['Contact_Number']),
                   _buildProfileField('Address', userData['Address']),
                   _buildProfileField('Password', userData['Password']),
                   const SizedBox(height: 16),
                   if (userData['createdAt'] != null)
-                    _buildProfileField(
-                      'Registration Date', 
-                      _formatTimestamp(userData['createdAt'])
-                    ),
+                    _buildProfileField('Registration Date',
+                        _formatTimestamp(userData['createdAt'])),
                   if (userData['updatedAt'] != null)
-                    _buildProfileField(
-                      'Last Updated', 
-                      _formatTimestamp(userData['updatedAt'])
-                    ),
+                    _buildProfileField('Last Updated',
+                        _formatTimestamp(userData['updatedAt'])),
                 ],
               ),
             ),
@@ -233,7 +261,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       },
     );
   }
-  
+
   Widget _buildProfileField(String label, dynamic value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -269,7 +297,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       ),
     );
   }
-  
+
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return 'Unknown';
     try {
@@ -323,7 +351,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               ],
             ),
           ),
-          
+
           // Content area
           Expanded(
             child: Column(
@@ -343,14 +371,14 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // User list with Firebase integration
                 Expanded(
-                  child: _selectedTab == 0 
-                    ? _buildAcceptedUsersList()
-                    : _buildPendingUsersList(),
+                  child: _selectedTab == 0
+                      ? _buildAcceptedUsersList()
+                      : _buildPendingUsersList(),
                 ),
               ],
             ),
@@ -513,7 +541,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     );
   }
 
-  Widget _buildUserCard(DocumentSnapshot userDoc, Map<String, dynamic> userData, bool isPending) {
+  Widget _buildUserCard(
+      DocumentSnapshot userDoc, Map<String, dynamic> userData, bool isPending) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -544,9 +573,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               size: 20,
             ),
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           // User name
           Expanded(
             child: Column(
@@ -570,14 +599,15 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               ],
             ),
           ),
-          
+
           // Action buttons
           if (isPending) ...[
             // Accept button
             GestureDetector(
               onTap: () => _acceptUser(userDoc),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFF006A5B),
                   borderRadius: BorderRadius.circular(15),
@@ -597,7 +627,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             GestureDetector(
               onTap: () => _rejectUser(userDoc),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(15),
@@ -617,7 +648,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             GestureDetector(
               onTap: () => _removeUser(userDoc),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(15),
@@ -633,9 +665,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               ),
             ),
           ],
-          
+
           const SizedBox(width: 8),
-          
+
           // View button
           GestureDetector(
             onTap: () => _viewUserProfile(userDoc),

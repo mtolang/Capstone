@@ -36,7 +36,8 @@ class _ScreenShareTestPageState extends State<ScreenShareTestPage> {
       // Initialize Agora engine with proper configuration
       _engine = createAgoraRtcEngine();
       await _engine!.initialize(const RtcEngineContext(
-        appId: 'a8d7e9e4f1234567890abcdef1234567', // Replace with your actual App ID
+        appId:
+            'a8d7e9e4f1234567890abcdef1234567', // Replace with your actual App ID
         channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
 
@@ -89,7 +90,7 @@ class _ScreenShareTestPageState extends State<ScreenShareTestPage> {
       } else {
         // Test screen sharing stop
         await _engine!.stopScreenCapture();
-        
+
         await _engine!.updateChannelMediaOptions(const ChannelMediaOptions(
           publishScreenTrack: false,
           publishCameraTrack: true,
@@ -142,7 +143,8 @@ class _ScreenShareTestPageState extends State<ScreenShareTestPage> {
               onPressed: _testScreenShare,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isScreenSharing ? Colors.red : Colors.blue,
-                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
               ),
               child: Text(
                 _isScreenSharing ? 'Stop Screen Share' : 'Start Screen Share',

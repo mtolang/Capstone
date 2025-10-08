@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../controller/therapist_controller.dart';
 
 class TherapistRegister extends StatefulWidget {
   const TherapistRegister({super.key});
@@ -18,6 +19,9 @@ class _TherapistRegisterState extends State<TherapistRegister> {
   final TextEditingController confirmPasswordController =
       TextEditingController();
   XFile? _attachFile;
+  
+  // Add therapist controller instance
+  final RegisterTherapistUser _therapistController = RegisterTherapistUser();
 
   // Add image picker functionality
   Future<XFile?> pickImageFromGallery() async {
@@ -140,13 +144,19 @@ class _TherapistRegisterState extends State<TherapistRegister> {
                                 borderRadius: BorderRadius.circular(25),
                               ),
                             ),
-                            onPressed: () {
-                              // Add your registration logic here
-                              print('Therapist Register button pressed');
-                              if (_attachFile != null) {
-                                print(
-                                    'Professional ID attached: ${_attachFile!.name}');
-                              }
+                            onPressed: () async {
+                              // Use the therapist controller for registration
+                              await _therapistController.registerTherapistUser(
+                                context,
+                                fullNameController.text,
+                                userNameController.text,
+                                emailController.text,
+                                contactNumberController.text,
+                                addressController.text,
+                                passwordController.text,
+                                confirmPasswordController.text,
+                                professionalIdFile: _attachFile,
+                              );
                             },
                             child: const Text('Register'),
                           ),

@@ -18,7 +18,8 @@ class AcceptedBookingService {
       final batch = _firestore.batch();
 
       // Create accepted booking document
-      final acceptedBookingRef = _firestore.collection(ACCEPTED_COLLECTION).doc();
+      final acceptedBookingRef =
+          _firestore.collection(ACCEPTED_COLLECTION).doc();
       final bookingId = acceptedBookingRef.id;
 
       // Prepare accepted booking data
@@ -46,16 +47,19 @@ class AcceptedBookingService {
         'appointmentDetails': {
           'appointmentDate': requestData['appointmentDetails']['requestedDate'],
           'appointmentTime': requestData['appointmentDetails']['requestedTime'],
-          'appointmentType': requestData['appointmentDetails']['appointmentType'],
+          'appointmentType': requestData['appointmentDetails']
+              ['appointmentType'],
           'duration': requestData['appointmentDetails']['duration'] ?? 60,
-          'sessionType': requestData['appointmentDetails']['sessionType'] ?? 'individual',
+          'sessionType':
+              requestData['appointmentDetails']['sessionType'] ?? 'individual',
           'timeSlotId': requestData['appointmentDetails']['timeSlotId'],
         },
 
         // === CLINIC/THERAPIST ASSIGNMENT ===
         'assignmentInfo': {
           'clinicId': requestData['clinicInfo']['clinicId'],
-          'therapistId': assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
+          'therapistId':
+              assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
           'assignedBy': approvedById,
           'assignedAt': FieldValue.serverTimestamp(),
           'roomNumber': null, // To be assigned by clinic
@@ -78,15 +82,16 @@ class AcceptedBookingService {
         'appointmentTime': requestData['appointmentDetails']['requestedTime'],
         'appointmentType': requestData['appointmentDetails']['appointmentType'],
         'clinicId': requestData['clinicInfo']['clinicId'],
-        'therapistId': assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
-        
+        'therapistId':
+            assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
+
         // Date strings for easy filtering
         'dateString': _formatDateForQuery(
-            (requestData['appointmentDetails']['requestedDate'] as Timestamp).toDate()
-        ),
+            (requestData['appointmentDetails']['requestedDate'] as Timestamp)
+                .toDate()),
         'dayOfWeek': _getDayOfWeek(
-            (requestData['appointmentDetails']['requestedDate'] as Timestamp).toDate()
-        ),
+            (requestData['appointmentDetails']['requestedDate'] as Timestamp)
+                .toDate()),
       };
 
       // Add to AcceptedBooking collection
@@ -96,8 +101,10 @@ class AcceptedBookingService {
       await _reserveTimeSlot(
         batch: batch,
         clinicId: requestData['clinicInfo']['clinicId'],
-        therapistId: assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
-        date: (requestData['appointmentDetails']['requestedDate'] as Timestamp).toDate(),
+        therapistId:
+            assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
+        date: (requestData['appointmentDetails']['requestedDate'] as Timestamp)
+            .toDate(),
         timeSlot: requestData['appointmentDetails']['requestedTime'],
         timeSlotId: requestData['appointmentDetails']['timeSlotId'],
         bookingId: bookingId,
@@ -136,8 +143,9 @@ class AcceptedBookingService {
     required String bookingId,
     required Map<String, dynamic> patientInfo,
   }) async {
-    final reservedSlotRef = _firestore.collection(RESERVED_SLOTS_COLLECTION).doc();
-    
+    final reservedSlotRef =
+        _firestore.collection(RESERVED_SLOTS_COLLECTION).doc();
+
     final reservationData = {
       'reservationId': reservedSlotRef.id,
       'clinicId': clinicId,
@@ -164,7 +172,8 @@ class AcceptedBookingService {
     required String timeSlot,
   }) async {
     try {
-      Query query = _firestore.collection(RESERVED_SLOTS_COLLECTION)
+      Query query = _firestore
+          .collection(RESERVED_SLOTS_COLLECTION)
           .where('clinicId', isEqualTo: clinicId)
           .where('date', isEqualTo: Timestamp.fromDate(date))
           .where('timeSlot', isEqualTo: timeSlot)
@@ -189,7 +198,8 @@ class AcceptedBookingService {
     DateTime? endDate,
     String? status,
   }) {
-    Query query = _firestore.collection(ACCEPTED_COLLECTION)
+    Query query = _firestore
+        .collection(ACCEPTED_COLLECTION)
         .where('clinicId', isEqualTo: clinicId);
 
     if (status != null) {
@@ -217,10 +227,13 @@ class AcceptedBookingService {
     final startOfDay = DateTime(today.year, today.month, today.day);
     final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
 
-    return _firestore.collection(ACCEPTED_COLLECTION)
+    return _firestore
+        .collection(ACCEPTED_COLLECTION)
         .where('clinicId', isEqualTo: clinicId)
-        .where('appointmentDate', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-        .where('appointmentDate', isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
+        .where('appointmentDate',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('appointmentDate',
+            isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
         .where('status', whereIn: ['confirmed', 'in_progress'])
         .orderBy('appointmentDate')
         .orderBy('appointmentTime')
@@ -233,7 +246,8 @@ class AcceptedBookingService {
     DateTime? startDate,
     DateTime? endDate,
   }) {
-    Query query = _firestore.collection(ACCEPTED_COLLECTION)
+    Query query = _firestore
+        .collection(ACCEPTED_COLLECTION)
         .where('therapistId', isEqualTo: therapistId);
 
     if (startDate != null) {
@@ -259,7 +273,8 @@ class AcceptedBookingService {
       final batch = _firestore.batch();
 
       // Update booking status
-      final bookingRef = _firestore.collection(ACCEPTED_COLLECTION).doc(bookingId);
+      final bookingRef =
+          _firestore.collection(ACCEPTED_COLLECTION).doc(bookingId);
       batch.update(bookingRef, {
         'status': 'cancelled',
         'updatedAt': FieldValue.serverTimestamp(),
@@ -271,7 +286,8 @@ class AcceptedBookingService {
       });
 
       // Free up the reserved time slot
-      final reservedSlotsQuery = await _firestore.collection(RESERVED_SLOTS_COLLECTION)
+      final reservedSlotsQuery = await _firestore
+          .collection(RESERVED_SLOTS_COLLECTION)
           .where('bookingId', isEqualTo: bookingId)
           .get();
 
@@ -297,7 +313,15 @@ class AcceptedBookingService {
 
   /// Helper method to get day of week
   static String _getDayOfWeek(DateTime date) {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const days = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday'
+    ];
     return days[date.weekday % 7];
   }
 

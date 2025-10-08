@@ -18,26 +18,49 @@ class FirebaseStorageService {
     String? fileName,
   }) async {
     try {
+      print('=== FIREBASE STORAGE UPLOAD DEBUG ===');
+      print('File path: ${file.path}');
+      print('File name: ${file.name}');
+      print('Folder path: $folderPath');
+      print('File exists: ${await File(file.path).exists()}');
+      print('File size: ${await File(file.path).length()} bytes');
+
       // Generate file name if not provided
       final String uploadFileName =
           fileName ?? '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      print('Upload file name: $uploadFileName');
 
       // Create reference to storage location
       final Reference ref = _storage.ref().child('$folderPath/$uploadFileName');
+      print('Storage reference: ${ref.fullPath}');
 
       // Upload file
+      print('Starting file upload...');
       final UploadTask uploadTask = ref.putFile(File(file.path));
+
+      // Monitor upload progress
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        double progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        print('Upload progress: ${progress.toStringAsFixed(2)}%');
+        print('State: ${snapshot.state}');
+      });
 
       // Wait for upload to complete
       final TaskSnapshot snapshot = await uploadTask;
+      print('Upload completed. State: ${snapshot.state}');
 
       // Get download URL
       final String downloadUrl = await snapshot.ref.getDownloadURL();
+      print('Download URL obtained: $downloadUrl');
 
-      print('File uploaded successfully: $downloadUrl');
+      print('=== UPLOAD SUCCESS ===');
       return downloadUrl;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('=== UPLOAD ERROR ===');
       print('Error uploading file: $e');
+      print('Stack trace: $stackTrace');
+      print('File path attempted: ${file.path}');
+      print('Folder path attempted: $folderPath');
       return null;
     }
   }
@@ -158,5 +181,25 @@ class FirebaseStorageService {
       print('Error getting file metadata: $e');
       return null;
     }
+  }
+
+  /// Upload therapist professional documents
+  ///
+  /// [file] - The therapist professional document file to upload
+  /// [therapistId] - The therapist's user ID for organizing files
+  /// [documentType] - Type of document (e.g., 'professional_id', 'license', 'certificate')
+  ///
+  /// Returns the download URL of the uploaded document
+  static Future<String?> uploadTherapistDocument({
+    required XFile file,
+    required String therapistId,
+    String documentType = 'professional_id',
+  }) async {
+    return await uploadFile(
+      file: file,
+      folderPath: 'TherapistReg/$therapistId/documents',
+      fileName:
+          '${documentType}_${DateTime.now().millisecondsSinceEpoch}.${file.name.split('.').last}',
+    );
   }
 }

@@ -490,10 +490,24 @@ class ClinicAuthService {
       // Upload government ID file if provided
       String? documentUrl;
       if (governmentIdFile != null) {
-        documentUrl = await FirebaseStorageService.uploadParentDocument(
-          file: governmentIdFile,
-          parentId: nextDocId,
-        );
+        print('📤 Attempting to upload government ID file: ${governmentIdFile.name}');
+        try {
+          documentUrl = await FirebaseStorageService.uploadParentDocument(
+            file: governmentIdFile,
+            parentId: nextDocId,
+          );
+          if (documentUrl != null) {
+            print('✅ File upload successful: $documentUrl');
+          } else {
+            print('❌ File upload failed: FirebaseStorageService returned null');
+          }
+        } catch (uploadError) {
+          print('❌ Exception during file upload: $uploadError');
+          // Continue with registration even if file upload fails
+          // The file upload failure will be indicated by documentUrl being null
+        }
+      } else {
+        print('ℹ️ No government ID file provided');
       }
 
       // Save parent registration data to ParentsReg collection with generated document ID
@@ -609,6 +623,87 @@ class ClinicAuthService {
       };
     } catch (e) {
       throw 'Error saving clinic registration: $e';
+    }
+  }
+
+  // Enhanced method to save therapist registration with file upload
+  static Future<Map<String, dynamic>?> saveTherapistRegistrationWithFile({
+    required String fullName,
+    required String userName,
+    required String email,
+    required String contactNumber,
+    required String address,
+    required String password,
+    XFile? professionalIdFile,
+  }) async {
+    try {
+      // Get all existing documents in TherapistReg collection to find the next available ID
+      final QuerySnapshot existingDocs = await _firestore
+          .collection('TherapistReg')
+          .orderBy(FieldPath.documentId)
+          .get();
+
+      // Generate the next document ID
+      String nextDocId = 'TherReg01'; // Default first ID
+      if (existingDocs.docs.isNotEmpty) {
+        // Extract numbers from existing document IDs and find the highest
+        int maxNumber = 0;
+        for (var doc in existingDocs.docs) {
+          String docId = doc.id;
+          if (docId.startsWith('TherReg')) {
+            String numberPart = docId.substring(7); // Remove 'TherReg' prefix
+            int? number = int.tryParse(numberPart);
+            if (number != null && number > maxNumber) {
+              maxNumber = number;
+            }
+          }
+        }
+
+        // Generate next ID with proper zero padding
+        int nextNumber = maxNumber + 1;
+        nextDocId = 'TherReg${nextNumber.toString().padLeft(2, '0')}';
+      }
+
+      // Upload professional ID file if provided
+      String? professionalIdUrl;
+      if (professionalIdFile != null) {
+        professionalIdUrl = await FirebaseStorageService.uploadTherapistDocument(
+          file: professionalIdFile,
+          therapistId: nextDocId,
+          documentType: 'professional_id',
+        );
+      }
+
+      // Save therapist registration data to TherapistReg collection with generated document ID
+      Map<String, dynamic> registrationData = {
+        'Full_Name': fullName,
+        'User_Name': userName,
+        'Email': email.trim(),
+        'Contact_Number': contactNumber,
+        'Address': address,
+        'Password': password, // Note: Consider encrypting passwords in production
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Add professional ID URL if file was uploaded
+      if (professionalIdUrl != null) {
+        registrationData['Professional_ID_Document'] = professionalIdUrl;
+      }
+
+      await _firestore
+          .collection('TherapistReg')
+          .doc(nextDocId)
+          .set(registrationData);
+
+      return {
+        'success': true,
+        'documentId': nextDocId,
+        'message': 'Therapist registration data saved successfully!',
+        'documentUrl': professionalIdUrl,
+      };
+    } catch (e) {
+      throw 'Error saving therapist registration: $e';
     }
   }
 }

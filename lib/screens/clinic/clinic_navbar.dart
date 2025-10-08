@@ -125,6 +125,24 @@ class ClinicNavBar extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.assignment),
+            iconColor: const Color(0xFF006A5B),
+            title: const Text(
+              'Progress Reports',
+              style: TextStyle(
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              print('Progress Reports tapped');
+              Navigator.pushNamed(context, '/clinicprogress');
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.groups_2),
             iconColor: const Color(0xFF006A5B),
             title: const Text(

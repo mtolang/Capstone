@@ -6,7 +6,7 @@ import 'package:capstone_2/services/global_call_service.dart'; // Add GlobalCall
 import 'package:shared_preferences/shared_preferences.dart'; // Add for lifecycle ID cleanup
 import 'package:flutter/foundation.dart';
 import 'package:capstone_2/app_routes_demo.dart'
-  if (dart.library.io) 'package:capstone_2/app_routes_full.dart' as routes;
+    if (dart.library.io) 'package:capstone_2/app_routes_full.dart' as routes;
 //logins imports
 import 'package:capstone_2/screens/auth/login_page.dart';
 import 'package:capstone_2/screens/auth/parent_login.dart';
@@ -39,11 +39,14 @@ import 'package:capstone_2/screens/clinic/clinic_booking.dart';
 import 'package:capstone_2/screens/clinic/clinic_schedule.dart';
 import 'package:capstone_2/screens/clinic/clinic_edit_schedule.dart';
 import 'package:capstone_2/screens/clinic/clinic_patientlist.dart';
+import 'package:capstone_2/screens/clinic/clinic_progress.dart';
 //chat page imports
 import 'package:capstone_2/chat/patient_selection.dart';
 import 'package:capstone_2/chat/therapist_chat.dart';
 import 'package:capstone_2/chat/patienside_select.dart';
 import 'package:capstone_2/chat/patient_chat.dart';
+//debug imports
+import 'package:capstone_2/debug/storage_test.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -139,9 +142,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/parentlogin': (context) => const ParentLogin(), // <-- Add this
           '/therlogin': (context) => const TherapistLogin(), // <-- Add this
           '/loginas': (context) => const LoginAs(),
-          '/adminlogin': (context) => const AdminLogin(), // <-- Admin login route
-          '/admindashboard': (context) => const AdminDashboard(), // <-- Admin dashboard route
+          '/adminlogin': (context) =>
+              const AdminLogin(), // <-- Admin login route
+          '/admindashboard': (context) =>
+              const AdminDashboard(), // <-- Admin dashboard route
           '/logintest': (context) => const LoginTestPage(), // Test route
+          '/storagetest': (context) => const StorageTestScreen(), // Storage debug route
 
           //Registration Routes
           '/clinicreg': (context) => const ClinicRegister(),
@@ -187,7 +193,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/clinicschedule': (context) => const ClinicSchedulePage(),
           '/cliniceditschedule': (context) => const ClinicEditSchedulePage(),
           '/clinicpatientlist': (context) => const ClinicPatientListPage(),
-          
+          '/clinicprogress': (context) => const ClinicProgress(),
+
           // Add routes from the routes module
           ...routes.routes,
         } // Show splash screen first
@@ -229,13 +236,15 @@ class _DemoHome extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).pushNamed('/therapistprogress2'),
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/therapistprogress2'),
               icon: const Icon(Icons.insights_outlined),
               label: const Text('Open Therapist Progress Demo'),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).pushNamed('/traceandpoppro'),
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/traceandpoppro'),
               icon: const Icon(Icons.gesture),
               label: const Text('Open Trace & Pop Pro (Motor Skills)'),
             ),

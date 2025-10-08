@@ -65,10 +65,19 @@ class RegisterParentUser {
             'Parent registration saved successfully! Document ID: ${result['documentId']}';
         if (result['documentUrl'] != null) {
           message += '\nGovernment ID document uploaded successfully.';
+          print('✅ File upload successful: ${result['documentUrl']}');
+        } else if (governmentIdFile != null) {
+          message += '\n⚠️ Warning: Registration saved but file upload failed.';
+          print('❌ File upload failed despite file being selected');
         }
         _showSuccessDialog(context, message);
       } else {
-        _showErrorDialog(context, 'Failed to save parent registration data.');
+        String errorMessage = 'Failed to save parent registration data.';
+        if (result != null && result['error'] != null) {
+          errorMessage += '\nError: ${result['error']}';
+        }
+        print('❌ Registration failed: $errorMessage');
+        _showErrorDialog(context, errorMessage);
       }
     } catch (e) {
       // Hide loading dialog if it's showing
@@ -127,7 +136,7 @@ class RegisterParentUser {
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.pushNamedAndRemoveUntil(
-                    context, '/login', (route) => false);
+                    context, '/loginas', (route) => false);
               },
               child: const Text('OK'),
             ),
@@ -357,7 +366,7 @@ class RegisterClinicUser {
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.pushNamedAndRemoveUntil(
-                    context, '/login', (route) => false);
+                    context, '/loginas', (route) => false);
               },
               child: const Text('OK'),
             ),

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:capstone_2/services/global_call_service.dart';
 import 'package:capstone_2/services/agora_call_service.dart';
 import 'package:capstone_2/services/agora_config.dart';
+import 'package:capstone_2/services/call_state_manager.dart';
 
 class AgoraChatCallScreen extends StatefulWidget {
   final String callId;
@@ -21,6 +22,15 @@ class AgoraChatCallScreen extends StatefulWidget {
 
   @override
   State<AgoraChatCallScreen> createState() => _AgoraChatCallScreenState();
+  
+  // Static variable to track if any call is active globally
+  static bool _globalCallActive = false;
+  
+  // Static method to check if any call is currently active
+  static bool isCallActive() => _globalCallActive;
+  
+  // Static method to set call state globally
+  static void setCallActive(bool active) => _globalCallActive = active;
 }
 
 class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
@@ -43,6 +53,9 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
   String _callDuration = '00:00';
   bool _isCallActive = false;
   StreamSubscription<DocumentSnapshot>? _callStatusListener;
+  
+  // Enhanced screen sharing features
+  bool _isCallMinimized = false;
 
   @override
   void initState() {
@@ -52,6 +65,10 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     _agoraService = AgoraCallService();
     _initializeCall();
     _loadContacts();
+    
+    // Set active call state to prevent auto-logout
+    CallStateManager.setCallActive(true);
+    AgoraChatCallScreen.setCallActive(true);
 
     // Join existing call using the provided callId
     if (widget.callId.isNotEmpty) {
@@ -214,8 +231,10 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
           );
         }
       },
-      onLocalVideoStateChanged: (VideoSourceType source, LocalVideoStreamState state, LocalVideoStreamReason reason) {
-        print('📹 Local video state changed: source=$source, state=$state, reason=$reason');
+      onLocalVideoStateChanged: (VideoSourceType source,
+          LocalVideoStreamState state, LocalVideoStreamReason reason) {
+        print(
+            '📹 Local video state changed: source=$source, state=$state, reason=$reason');
         if (source == VideoSourceType.videoSourceScreen) {
           if (state == LocalVideoStreamState.localVideoStreamStateStopped) {
             print('📱 Screen sharing stopped');
@@ -224,7 +243,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                 _isScreenSharing = false;
               });
             }
-          } else if (state == LocalVideoStreamState.localVideoStreamStateCapturing) {
+          } else if (state ==
+              LocalVideoStreamState.localVideoStreamStateCapturing) {
             print('📱 Screen sharing started');
             if (mounted) {
               setState(() {
@@ -234,12 +254,15 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
           }
         }
       },
-      onRemoteVideoStateChanged: (RtcConnection connection, int remoteUid, RemoteVideoState state, RemoteVideoStateReason reason, int elapsed) {
-        print('📹 Remote video state changed: uid=$remoteUid, state=$state, reason=$reason');
+      onRemoteVideoStateChanged: (RtcConnection connection, int remoteUid,
+          RemoteVideoState state, RemoteVideoStateReason reason, int elapsed) {
+        print(
+            '📹 Remote video state changed: uid=$remoteUid, state=$state, reason=$reason');
         if (mounted) {
           setState(() {
             // Track screen sharing based on video state
-            if (state == RemoteVideoState.remoteVideoStateStarting || state == RemoteVideoState.remoteVideoStateDecoding) {
+            if (state == RemoteVideoState.remoteVideoStateStarting ||
+                state == RemoteVideoState.remoteVideoStateDecoding) {
               // Check if this is screen sharing (you might need to use other indicators)
               // For now, we'll track it based on stream type in the future
             } else if (state == RemoteVideoState.remoteVideoStateStopped) {
@@ -415,10 +438,10 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     try {
       // Request screen recording permission on Android
       await Permission.systemAlertWindow.request();
-      
+
       // Stop camera capture first
       await _engine?.stopCameraCapture(VideoSourceType.videoSourceCamera);
-      
+
       // Configure screen capture parameters
       const screenCaptureParams = ScreenCaptureParameters2(
         captureAudio: true,
@@ -436,7 +459,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
 
       // Start screen capture
       await _engine?.startScreenCapture(screenCaptureParams);
-      
+
       // Update channel media options to publish screen share
       const options = ChannelMediaOptions(
         publishCameraTrack: false,
@@ -447,17 +470,26 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
         autoSubscribeAudio: true,
         autoSubscribeVideo: true,
       );
-      
+
       await _engine?.updateChannelMediaOptions(options);
 
       setState(() {
         _isScreenSharing = true;
       });
+      // Ensure call state is active during screen sharing
+      CallStateManager.setCallActive(true);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Screen sharing started'),
+          content: Row(
+            children: [
+              Icon(Icons.screen_share, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Screen sharing started - Tap minimize to continue in background'),
+            ],
+          ),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
         ),
       );
 
@@ -472,7 +504,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     try {
       // Stop screen capture
       await _engine?.stopScreenCapture();
-      
+
       // Restart camera capture
       await _engine?.startCameraCapture(
         sourceType: VideoSourceType.videoSourceCamera,
@@ -480,7 +512,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
           cameraDirection: CameraDirection.cameraFront,
         ),
       );
-      
+
       // Update channel media options to publish camera
       const options = ChannelMediaOptions(
         publishCameraTrack: true,
@@ -491,7 +523,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
         autoSubscribeAudio: true,
         autoSubscribeVideo: true,
       );
-      
+
       await _engine?.updateChannelMediaOptions(options);
 
       setState(() {
@@ -674,6 +706,54 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     });
   }
 
+  void _minimizeCall() {
+    setState(() {
+      _isCallMinimized = true;
+    });
+    
+    // Minimize the app to background while keeping call active
+    // This allows screen sharing to continue while user can access other apps
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.minimize, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Call minimized - Screen sharing continues in background'),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 2),
+      ),
+    );
+    
+    // Optionally minimize the Flutter app (move to background)
+    // This requires platform-specific implementation
+    print('📱 Call minimized - Screen sharing continues');
+  }
+
+  void _restoreCall() {
+    setState(() {
+      _isCallMinimized = false;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.fullscreen, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Call restored'),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 1),
+      ),
+    );
+    
+    print('📱 Call restored from minimized state');
+  }
+
   void _endCall() async {
     print('📞 Ending call...');
 
@@ -682,6 +762,13 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
 
     // Cancel the status listener
     _callStatusListener?.cancel();
+
+    // Reset call state to allow auto-logout
+    CallStateManager.setCallActive(false);
+    setState(() {
+      _isCallMinimized = false;
+    });
+    AgoraChatCallScreen.setCallActive(false);
 
     // Use GlobalCallService to end the call properly
     try {
@@ -762,7 +849,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
               top: 100,
               right: 20,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.8),
                   borderRadius: BorderRadius.circular(20),
@@ -812,7 +900,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                     top: 4,
                     right: 4,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.blue.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(10),
@@ -820,7 +909,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.screen_share, color: Colors.white, size: 12),
+                          Icon(Icons.screen_share,
+                              color: Colors.white, size: 12),
                           SizedBox(width: 2),
                           Text(
                             'Screen',
@@ -862,8 +952,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
               rtcEngine: _engine!,
               canvas: VideoCanvas(
                 uid: 0,
-                sourceType: _isScreenSharing 
-                    ? VideoSourceType.videoSourceScreen 
+                sourceType: _isScreenSharing
+                    ? VideoSourceType.videoSourceScreen
                     : VideoSourceType.videoSourceCamera,
               ),
             ),
@@ -927,8 +1017,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                 rtcEngine: _engine!,
                 canvas: VideoCanvas(
                   uid: 0,
-                  sourceType: _isScreenSharing 
-                      ? VideoSourceType.videoSourceScreen 
+                  sourceType: _isScreenSharing
+                      ? VideoSourceType.videoSourceScreen
                       : VideoSourceType.videoSourceCamera,
                 ),
               ),
@@ -940,7 +1030,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                 left: 4,
                 right: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.red.withOpacity(0.8),
                     borderRadius: BorderRadius.circular(8),
@@ -1043,46 +1134,115 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
           colors: [Colors.black.withOpacity(0.8), Colors.transparent],
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Mute button
-          _buildControlButton(
-            icon: _isMuted ? Icons.mic_off : Icons.mic,
-            onPressed: _toggleMute,
-            backgroundColor:
-                _isMuted ? Colors.red : Colors.white.withOpacity(0.3),
-          ),
+          // Screen sharing controls when active
+          if (_isScreenSharing) ...[
+            Container(
+              margin: EdgeInsets.only(bottom: 15),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.screen_share, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Screen Sharing Active',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: _isCallMinimized ? _restoreCall : _minimizeCall,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isCallMinimized ? Icons.fullscreen : Icons.minimize,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            _isCallMinimized ? 'Restore' : 'Minimize',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
+          // Main control buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Mute button
+              _buildControlButton(
+                icon: _isMuted ? Icons.mic_off : Icons.mic,
+                onPressed: _toggleMute,
+                backgroundColor:
+                    _isMuted ? Colors.red : Colors.white.withOpacity(0.3),
+              ),
 
-          // Video toggle button
-          _buildControlButton(
-            icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
-            onPressed: _toggleVideo,
-            backgroundColor:
-                _isVideoOff ? Colors.red : Colors.white.withOpacity(0.3),
-          ),
+              // Video toggle button
+              _buildControlButton(
+                icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
+                onPressed: _toggleVideo,
+                backgroundColor:
+                    _isVideoOff ? Colors.red : Colors.white.withOpacity(0.3),
+              ),
 
-          // Screen share button
-          _buildControlButton(
-            icon:
-                _isScreenSharing ? Icons.stop_screen_share : Icons.screen_share,
-            onPressed: _toggleScreenShare,
-            backgroundColor:
-                _isScreenSharing ? Colors.blue : Colors.white.withOpacity(0.3),
-          ),
+              // Screen share button
+              _buildControlButton(
+                icon: _isScreenSharing ? Icons.stop_screen_share : Icons.screen_share,
+                onPressed: _toggleScreenShare,
+                backgroundColor:
+                    _isScreenSharing ? Colors.blue : Colors.white.withOpacity(0.3),
+              ),
 
-          // Invite people button
-          _buildControlButton(
-            icon: Icons.person_add,
-            onPressed: _showInviteBottomSheet,
-            backgroundColor: Colors.green,
-          ),
+              // Minimize button (only show during screen sharing)
+              if (_isScreenSharing)
+                _buildControlButton(
+                  icon: _isCallMinimized ? Icons.fullscreen : Icons.minimize,
+                  onPressed: _isCallMinimized ? _restoreCall : _minimizeCall,
+                  backgroundColor: Colors.orange,
+                ),
 
-          // End call button
-          _buildControlButton(
-            icon: Icons.call_end,
-            onPressed: _endCall,
-            backgroundColor: Colors.red,
+              // Invite people button
+              _buildControlButton(
+                icon: Icons.person_add,
+                onPressed: _showInviteBottomSheet,
+                backgroundColor: Colors.green,
+              ),
+
+              // End call button
+              _buildControlButton(
+                icon: Icons.call_end,
+                onPressed: _endCall,
+                backgroundColor: Colors.red,
+              ),
+            ],
           ),
         ],
       ),
@@ -1117,6 +1277,12 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     print('🗑️ Disposing AgoraChatCallScreen');
     _callTimer?.cancel();
     _callStatusListener?.cancel();
+    
+    // Reset call state to allow auto-logout after call ends
+    CallStateManager.setCallActive(false);
+    _isCallMinimized = false;
+    AgoraChatCallScreen.setCallActive(false);
+    
     _agoraService.leaveChannel();
     _searchController.dispose();
     super.dispose();

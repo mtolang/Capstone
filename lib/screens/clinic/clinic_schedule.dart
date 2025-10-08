@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../services/schedule_database_service.dart';
 import '../../services/accepted_booking_service.dart';
 import '../../models/time_slot.dart';
@@ -18,13 +19,31 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
   late TabController _tabController;
   Map<String, List<TimeSlot>> weeklySchedule = {};
   bool _isLoading = true;
-  final AcceptedBookingService acceptedBookingService = AcceptedBookingService();
+  final AcceptedBookingService acceptedBookingService =
+      AcceptedBookingService();
+
+  // Calendar state variables
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  Map<DateTime, List<Map<String, dynamic>>> _bookingEvents = {};
+  List<Map<String, dynamic>> _selectedDayBookings = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController =
+        TabController(length: 5, vsync: this); // Changed from 4 to 5
+    _selectedDay = DateTime.now();
     _loadScheduleData();
+    _loadCalendarBookings();
+
+    // Listen for tab changes to refresh calendar data
+    _tabController.addListener(() {
+      if (_tabController.index == 1) {
+        // Calendar tab is at index 1
+        _loadCalendarBookings();
+      }
+    });
   }
 
   Future<void> _loadScheduleData() async {
@@ -74,6 +93,84 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
         );
       }
     }
+  }
+
+  /// Load calendar bookings for the calendar view
+  Future<void> _loadCalendarBookings() async {
+    try {
+      final clinicId = await AcceptedBookingService.getCurrentClinicId();
+      if (clinicId == null) return;
+
+      final now = DateTime.now();
+      final startDate = DateTime(now.year, now.month - 1, 1); // Previous month
+      final endDate = DateTime(now.year, now.month + 2, 0); // Next month
+
+      final snapshot =
+          await AcceptedBookingService.getAcceptedBookingsForClinic(
+        clinicId: clinicId,
+        startDate: startDate,
+        endDate: endDate,
+        status: 'confirmed',
+      ).first;
+
+      final Map<DateTime, List<Map<String, dynamic>>> events = {};
+
+      for (var doc in snapshot.docs) {
+        final booking = doc.data() as Map<String, dynamic>;
+
+        // Extract appointment date
+        dynamic appointmentDate = booking['appointmentDate'];
+        DateTime? bookingDate;
+
+        if (appointmentDate is Timestamp) {
+          bookingDate = appointmentDate.toDate();
+        } else if (appointmentDate is String) {
+          try {
+            bookingDate = DateTime.parse(appointmentDate);
+          } catch (e) {
+            print('Error parsing date string: $appointmentDate');
+            continue;
+          }
+        }
+
+        if (bookingDate != null) {
+          // Normalize to date only (remove time)
+          final dateKey =
+              DateTime(bookingDate.year, bookingDate.month, bookingDate.day);
+
+          if (events[dateKey] == null) {
+            events[dateKey] = [];
+          }
+
+          events[dateKey]!.add({
+            'id': doc.id,
+            'patientName':
+                booking['patientInfo']?['childName'] ?? 'Unknown Patient',
+            'parentName':
+                booking['patientInfo']?['parentName'] ?? 'Unknown Parent',
+            'time': booking['appointmentTime'] ?? 'No time',
+            'type': booking['appointmentType'] ?? 'Consultation',
+            'status': booking['status'] ?? 'confirmed',
+            'date': DateFormat('yyyy-MM-dd').format(bookingDate),
+            'appointmentDetails': booking['appointmentDetails'],
+            'patientInfo': booking['patientInfo'],
+          });
+        }
+      }
+
+      setState(() {
+        _bookingEvents = events;
+        _selectedDayBookings = _getEventsForDay(_selectedDay ?? DateTime.now());
+      });
+    } catch (e) {
+      print('Error loading calendar bookings: $e');
+    }
+  }
+
+  /// Get events for a specific day
+  List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
+    final dateKey = DateTime(day.year, day.month, day.day);
+    return _bookingEvents[dateKey] ?? [];
   }
 
   Future<void> _saveSchedule() async {
@@ -293,6 +390,7 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                   ),
                   tabs: const [
                     Tab(text: 'Weekly'),
+                    Tab(text: 'Calendar'),
                     Tab(text: 'Today'),
                     Tab(text: 'Bookings'),
                     Tab(text: 'Patients'),
@@ -306,6 +404,7 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                   controller: _tabController,
                   children: [
                     _buildWeeklyTab(),
+                    _buildCalendarTab(),
                     _buildTodaysBookingsTab(),
                     _buildAcceptedBookingsTab(),
                     _buildPatientsTab(),
@@ -434,6 +533,390 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
     );
   }
 
+  /// Build Calendar Tab - Shows dynamic calendar with highlighted bookings
+  Widget _buildCalendarTab() {
+    return Column(
+      children: [
+        // Calendar widget
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          margin: const EdgeInsets.all(16),
+          child: TableCalendar<Map<String, dynamic>>(
+            firstDay: DateTime.utc(2020, 1, 1),
+            lastDay: DateTime.utc(2030, 12, 31),
+            focusedDay: _focusedDay,
+            calendarFormat: CalendarFormat.month,
+            eventLoader: _getEventsForDay,
+            selectedDayPredicate: (day) {
+              return isSameDay(_selectedDay, day);
+            },
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+                _selectedDayBookings = _getEventsForDay(selectedDay);
+              });
+            },
+            onPageChanged: (focusedDay) {
+              _focusedDay = focusedDay;
+            },
+            calendarStyle: const CalendarStyle(
+              outsideDaysVisible: false,
+              weekendTextStyle: TextStyle(color: Colors.red),
+              holidayTextStyle: TextStyle(color: Colors.red),
+              selectedDecoration: BoxDecoration(
+                color: Color(0xFF006A5B),
+                shape: BoxShape.circle,
+              ),
+              todayDecoration: BoxDecoration(
+                color: Color(0xFF4CAF50),
+                shape: BoxShape.circle,
+              ),
+              markerDecoration: BoxDecoration(
+                color: Color(0xFFFF6B35),
+                shape: BoxShape.circle,
+              ),
+              markerSize: 6.0,
+              markerMargin: EdgeInsets.symmetric(horizontal: 1.0),
+            ),
+            headerStyle: const HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              leftChevronIcon:
+                  Icon(Icons.chevron_left, color: Color(0xFF006A5B)),
+              rightChevronIcon:
+                  Icon(Icons.chevron_right, color: Color(0xFF006A5B)),
+              titleTextStyle: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+              ),
+            ),
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, day, events) {
+                if (events.isNotEmpty) {
+                  return Positioned(
+                    bottom: 1,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: events.length > 2
+                                ? Colors.red
+                                : events.length > 1
+                                    ? Colors.orange
+                                    : Color(0xFF006A5B),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        if (events.length > 1) const SizedBox(width: 2),
+                        if (events.length > 1)
+                          Text(
+                            '${events.length}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF006A5B),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }
+                return null;
+              },
+            ),
+          ),
+        ),
+
+        // Selected day bookings
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selectedDay != null
+                      ? 'Appointments for ${DateFormat('MMMM dd, yyyy').format(_selectedDay!)}'
+                      : 'Select a date to view appointments',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _selectedDayBookings.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.event_busy,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'No appointments scheduled',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _selectedDayBookings.length,
+                          itemBuilder: (context, index) {
+                            final booking = _selectedDayBookings[index];
+                            return _buildCalendarBookingCard(booking);
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Build booking card for calendar view
+  Widget _buildCalendarBookingCard(Map<String, dynamic> booking) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF006A5B).withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Time indicator
+            Container(
+              width: 4,
+              height: 60,
+              decoration: BoxDecoration(
+                color: const Color(0xFF006A5B),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Booking details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        booking['time'] ?? 'No time',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(booking['status'])
+                              .withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          (booking['status'] ?? 'confirmed').toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: _getStatusColor(booking['status']),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    booking['patientName'] ?? 'Unknown Patient',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Parent: ${booking['parentName'] ?? 'Unknown'}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.medical_services,
+                        size: 14,
+                        color: Colors.grey[500],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        booking['type'] ?? 'Consultation',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Action button
+            IconButton(
+              onPressed: () => _showBookingDetails(booking),
+              icon: const Icon(
+                Icons.more_vert,
+                color: Color(0xFF006A5B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Get status color
+  Color _getStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'confirmed':
+        return const Color(0xFF4CAF50);
+      case 'completed':
+        return const Color(0xFF2196F3);
+      case 'cancelled':
+        return const Color(0xFFF44336);
+      case 'rescheduled':
+        return const Color(0xFFFF9800);
+      default:
+        return const Color(0xFF006A5B);
+    }
+  }
+
+  /// Show booking details dialog
+  void _showBookingDetails(Map<String, dynamic> booking) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Appointment Details',
+            style: const TextStyle(
+              color: Color(0xFF006A5B),
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Patient', booking['patientName']),
+              _buildDetailRow('Parent', booking['parentName']),
+              _buildDetailRow('Date', booking['date']),
+              _buildDetailRow('Time', booking['time']),
+              _buildDetailRow('Type', booking['type']),
+              _buildDetailRow('Status', booking['status']),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Color(0xFF006A5B)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 60,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value ?? 'N/A',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Build Today's Bookings Tab - Shows accepted bookings for today
   Widget _buildTodaysBookingsTab() {
     return FutureBuilder<String?>(
@@ -493,7 +976,7 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
             }
 
             final bookings = snapshot.data!.docs;
-            
+
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -585,7 +1068,7 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
             }
 
             final bookings = snapshot.data!.docs;
-            
+
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -1146,15 +1629,19 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                             cancellationReason: 'Cancelled by clinic',
                           );
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Booking cancelled successfully')),
+                            SnackBar(
+                                content:
+                                    Text('Booking cancelled successfully')),
                           );
                         } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error cancelling booking: $e')),
+                            SnackBar(
+                                content: Text('Error cancelling booking: $e')),
                           );
                         }
                       },
-                      child: Text('Cancel', style: TextStyle(color: Colors.red)),
+                      child:
+                          Text('Cancel', style: TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
@@ -1192,24 +1679,24 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isToday 
+                    color: isToday
                         ? Colors.green.withOpacity(0.2)
-                        : isPast 
+                        : isPast
                             ? Colors.grey.withOpacity(0.2)
                             : Colors.blue.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    isToday 
-                        ? 'Today' 
-                        : isPast 
-                            ? 'Completed' 
+                    isToday
+                        ? 'Today'
+                        : isPast
+                            ? 'Completed'
                             : 'Upcoming',
                     style: TextStyle(
-                      color: isToday 
-                          ? Colors.green 
-                          : isPast 
-                              ? Colors.grey[600] 
+                      color: isToday
+                          ? Colors.green
+                          : isPast
+                              ? Colors.grey[600]
                               : Colors.blue,
                       fontSize: 12,
                     ),
@@ -1286,15 +1773,20 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                               cancellationReason: 'Cancelled by clinic',
                             );
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Booking cancelled successfully')),
+                              SnackBar(
+                                  content:
+                                      Text('Booking cancelled successfully')),
                             );
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error cancelling booking: $e')),
+                              SnackBar(
+                                  content:
+                                      Text('Error cancelling booking: $e')),
                             );
                           }
                         },
-                        child: Text('Cancel', style: TextStyle(color: Colors.red)),
+                        child:
+                            Text('Cancel', style: TextStyle(color: Colors.red)),
                       ),
                   ],
                 ),
