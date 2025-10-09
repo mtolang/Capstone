@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/parent/games_option.dart';
-import 'package:capstone_2/screens/parent/materials.dart';
-import 'package:capstone_2/screens/parent/parent_schedule.dart';
-import 'package:capstone_2/screens/auth/login_as.dart';
-import 'package:capstone_2/helper/parent_auth.dart'; // Add ParentAuthService import
-import 'package:capstone_2/helper/clinic_auth.dart'; // Add ClinicAuthService import for therapists
+import 'package:kindora/screens/parent/games_option.dart';
+import 'package:kindora/screens/parent/materials.dart';
+import 'package:kindora/screens/parent/parent_schedule.dart';
+import 'package:kindora/screens/auth/login_as.dart';
+import 'package:kindora/helper/parent_auth.dart'; // Add ParentAuthService import
+import 'package:kindora/helper/clinic_auth.dart'; // Add ClinicAuthService import for therapists
 
 class ParentNavbar extends StatelessWidget {
   const ParentNavbar({super.key});

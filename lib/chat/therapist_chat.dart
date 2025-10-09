@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_2/helper/clinic_auth.dart';
-import 'package:capstone_2/services/global_call_service.dart';
-import 'package:capstone_2/services/call_utility.dart';
-import 'package:capstone_2/services/dynamic_user_service.dart';
-import 'package:capstone_2/chat/caller_screen.dart';
+import 'package:kindora/helper/clinic_auth.dart';
+import 'package:kindora/services/global_call_service.dart';
+import 'package:kindora/services/call_utility.dart';
+import 'package:kindora/services/dynamic_user_service.dart';
+import 'package:kindora/chat/caller_screen.dart';
 
 class TherapistChatPage extends StatefulWidget {
   final String? patientId;

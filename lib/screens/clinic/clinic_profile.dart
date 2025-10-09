@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/clinic/custom_tabbar.dart';
-import 'package:capstone_2/screens/clinic/clinic_navbar.dart';
+import 'package:kindora/screens/clinic/custom_tabbar.dart';
+import 'package:kindora/screens/clinic/clinic_navbar.dart';
 
 class ClinicProfile extends StatelessWidget {
   const ClinicProfile({super.key});

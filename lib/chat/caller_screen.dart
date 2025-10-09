@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/services/global_call_service.dart';
+import 'package:kindora/services/global_call_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_2/chat/agora_chat_call.dart';
+import 'package:kindora/chat/agora_chat_call.dart';
 import 'dart:async';
 
 /// Caller Screen - for the person initiating the call

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
-import 'package:capstone_2/screens/parent/parent_navbar.dart';
-import 'package:capstone_2/widgets/map.dart';
+import 'package:kindora/screens/parent/dashboard_tabbar.dart';
+import 'package:kindora/screens/parent/parent_navbar.dart';
+import 'package:kindora/widgets/map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_2/screens/parent/parent_clinic_profile.dart';
+import 'package:kindora/screens/parent/parent_clinic_profile.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});

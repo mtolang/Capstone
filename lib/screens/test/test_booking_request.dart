@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/services/clinic_schedule_service.dart';
+import 'package:kindora/services/clinic_schedule_service.dart';
 
 class TestBookingRequestPage extends StatefulWidget {
   const TestBookingRequestPage({Key? key}) : super(key: key);

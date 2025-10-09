@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/auth/login_as.dart';
-import 'package:capstone_2/screens/therapist/ther_tab.dart';
-import 'package:capstone_2/helper/therapist_auth.dart';
-// import 'package:capstone_2/calendar.dart';
+import 'package:kindora/screens/auth/login_as.dart';
+import 'package:kindora/screens/therapist/ther_tab.dart';
+import 'package:kindora/helper/therapist_auth.dart';
+// import 'package:kindora/calendar.dart';
 
 class TherapistProfile extends StatelessWidget {
   const TherapistProfile({Key? key}) : super(key: key);

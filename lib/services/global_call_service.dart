@@ -20,11 +20,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:capstone_2/chat/calling.dart'; // IncomingCallScreen
-import 'package:capstone_2/chat/caller_screen.dart'; // CallerScreen
-import 'package:capstone_2/chat/agora_chat_call.dart'; // New Agora-based call screen
-import 'package:capstone_2/services/call_utility.dart';
-import 'package:capstone_2/services/dynamic_user_service.dart';
+import 'package:kindora/chat/calling.dart'; // IncomingCallScreen
+import 'package:kindora/chat/caller_screen.dart'; // CallerScreen
+import 'package:kindora/chat/agora_chat_call.dart'; // New Agora-based call screen
+import 'package:kindora/services/call_utility.dart';
+import 'package:kindora/services/dynamic_user_service.dart';
 
 /// Global Call Service - Clean Implementation
 ///

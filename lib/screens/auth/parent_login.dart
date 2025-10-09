@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/helper/parent_auth.dart';
+import 'package:kindora/helper/parent_auth.dart';
 
 class ParentLogin extends StatefulWidget {
   const ParentLogin({super.key});

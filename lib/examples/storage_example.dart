@@ -1,4 +1,4 @@
-import 'package:capstone_2/services/firebase_storage_service.dart';
+import 'package:kindora/services/firebase_storage_service.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Example usage of Firebase Storage Service

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/widgets/mini_trend_line.dart';
-import 'package:capstone_2/widgets/status_chip.dart';
+import 'package:kindora/widgets/mini_trend_line.dart';
+import 'package:kindora/widgets/status_chip.dart';
 
 class TherapistProgressTrackingPage extends StatelessWidget {
   const TherapistProgressTrackingPage({super.key});

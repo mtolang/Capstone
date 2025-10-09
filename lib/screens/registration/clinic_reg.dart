@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/controller/pick_image.dart';
-import 'package:capstone_2/controller/register_controller.dart';
+import 'package:kindora/controller/pick_image.dart';
+import 'package:kindora/controller/register_controller.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ClinicRegister extends StatefulWidget {

@@ -263,28 +263,6 @@ class _AdminLoginState extends State<AdminLogin> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    
-                    // Debug: Storage Test Button
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/storagetest');
-                      },
-                      child: const Text(
-                        'DEBUG: Test Firebase Storage',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),

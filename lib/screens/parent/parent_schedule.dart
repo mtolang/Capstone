@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_2/screens/parent/parent_navbar.dart';
+import 'package:kindora/screens/parent/parent_navbar.dart';
 
 class ParentSchedulePage extends StatefulWidget {
   const ParentSchedulePage({Key? key}) : super(key: key);

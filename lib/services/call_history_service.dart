@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_2/services/call_utility.dart';
+import 'package:kindora/services/call_utility.dart';
 
 /// Call History Service
 ///

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/clinic/custom_tabbar.dart';
+import 'package:kindora/screens/clinic/custom_tabbar.dart';
 
 class ClinicGallery extends StatefulWidget {
   const ClinicGallery({super.key});

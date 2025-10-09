@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/therapist/ther_tab.dart';
+import 'package:kindora/screens/therapist/ther_tab.dart';
 
 class TherapistReview extends StatelessWidget {
   const TherapistReview({Key? key}) : super(key: key);

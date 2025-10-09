@@ -1,52 +1,52 @@
-import 'package:capstone_2/firebase_options.dart';
+import 'package:kindora/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:capstone_2/splash_page.dart';
-import 'package:capstone_2/services/global_call_service.dart'; // Add GlobalCallService import
+import 'package:kindora/splash_page.dart';
+import 'package:kindora/services/global_call_service.dart'; // Add GlobalCallService import
 import 'package:shared_preferences/shared_preferences.dart'; // Add for lifecycle ID cleanup
 import 'package:flutter/foundation.dart';
-import 'package:capstone_2/app_routes_demo.dart'
-    if (dart.library.io) 'package:capstone_2/app_routes_full.dart' as routes;
+import 'package:kindora/app_routes_demo.dart'
+    if (dart.library.io) 'package:kindora/app_routes_full.dart' as routes;
 //logins imports
-import 'package:capstone_2/screens/auth/login_page.dart';
-import 'package:capstone_2/screens/auth/parent_login.dart';
-import 'package:capstone_2/screens/auth/therapist_login.dart';
-import 'package:capstone_2/screens/auth/login_as.dart';
-import 'package:capstone_2/screens/auth/admin_login.dart';
-import 'package:capstone_2/screens/admin/admin_dashboard.dart';
-import 'package:capstone_2/screens/login_test_page.dart';
+import 'package:kindora/screens/auth/login_page.dart';
+import 'package:kindora/screens/auth/parent_login.dart';
+import 'package:kindora/screens/auth/therapist_login.dart';
+import 'package:kindora/screens/auth/login_as.dart';
+import 'package:kindora/screens/auth/admin_login.dart';
+import 'package:kindora/screens/admin/admin_dashboard.dart';
+import 'package:kindora/screens/login_test_page.dart';
 //registration imports
-import 'package:capstone_2/screens/registration/clinic_reg.dart';
-import 'package:capstone_2/screens/registration/parent_reg.dart';
-import 'package:capstone_2/screens/registration/therapist_reg.dart';
+import 'package:kindora/screens/registration/clinic_reg.dart';
+import 'package:kindora/screens/registration/parent_reg.dart';
+import 'package:kindora/screens/registration/therapist_reg.dart';
 //parent page imports
-import 'package:capstone_2/screens/parent/dashboard.dart';
-import 'package:capstone_2/screens/parent/ther_dash.dart';
-import 'package:capstone_2/screens/parent/materials.dart';
-import 'package:capstone_2/screens/parent/games_option.dart';
-import 'package:capstone_2/screens/parent/games/talk_with_tiles.dart';
-import 'package:capstone_2/screens/parent/games/shape_shifters.dart';
-import 'package:capstone_2/screens/parent/parent_schedule.dart';
+import 'package:kindora/screens/parent/dashboard.dart';
+import 'package:kindora/screens/parent/ther_dash.dart';
+import 'package:kindora/screens/parent/materials.dart';
+import 'package:kindora/screens/parent/games_option.dart';
+import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
+import 'package:kindora/screens/parent/games/shape_shifters.dart';
+import 'package:kindora/screens/parent/parent_schedule.dart';
 //therapist page imports
-import 'package:capstone_2/screens/therapist/ther_profile.dart';
-import 'package:capstone_2/screens/therapist/ther_gallery.dart';
-import 'package:capstone_2/screens/therapist/ther_review.dart';
-import 'package:capstone_2/screens/therapist/ther_progress.dart';
+import 'package:kindora/screens/therapist/ther_profile.dart';
+import 'package:kindora/screens/therapist/ther_gallery.dart';
+import 'package:kindora/screens/therapist/ther_review.dart';
+import 'package:kindora/screens/therapist/ther_progress.dart';
 //clinic page imports
-import 'package:capstone_2/screens/clinic/clinic_gallery.dart';
-import 'package:capstone_2/screens/clinic/clinic_profile.dart';
-import 'package:capstone_2/screens/clinic/clinic_booking.dart';
-import 'package:capstone_2/screens/clinic/clinic_schedule.dart';
-import 'package:capstone_2/screens/clinic/clinic_edit_schedule.dart';
-import 'package:capstone_2/screens/clinic/clinic_patientlist.dart';
-import 'package:capstone_2/screens/clinic/clinic_progress.dart';
+import 'package:kindora/screens/clinic/clinic_gallery.dart';
+import 'package:kindora/screens/clinic/clinic_profile.dart';
+import 'package:kindora/screens/clinic/clinic_booking.dart';
+import 'package:kindora/screens/clinic/clinic_schedule.dart';
+import 'package:kindora/screens/clinic/clinic_edit_schedule.dart';
+import 'package:kindora/screens/clinic/clinic_patientlist.dart';
+import 'package:kindora/screens/clinic/clinic_progress.dart';
 //chat page imports
-import 'package:capstone_2/chat/patient_selection.dart';
-import 'package:capstone_2/chat/therapist_chat.dart';
-import 'package:capstone_2/chat/patienside_select.dart';
-import 'package:capstone_2/chat/patient_chat.dart';
+import 'package:kindora/chat/patient_selection.dart';
+import 'package:kindora/chat/therapist_chat.dart';
+import 'package:kindora/chat/patienside_select.dart';
+import 'package:kindora/chat/patient_chat.dart';
 //debug imports
-import 'package:capstone_2/debug/storage_test.dart';
+import 'package:kindora/debug/storage_test.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

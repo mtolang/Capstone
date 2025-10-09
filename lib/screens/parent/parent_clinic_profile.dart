@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_2/screens/parent/parent_booking.dart';
+import 'package:kindora/screens/parent/parent_booking.dart';
 
 class ParentClinicProfilePage extends StatefulWidget {
   final String? clinicId; // Add clinicId parameter

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_2/helper/clinic_auth.dart';
+import 'package:kindora/helper/clinic_auth.dart';
 
 class PatientSelectionPage extends StatefulWidget {
   const PatientSelectionPage({super.key});

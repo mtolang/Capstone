@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:capstone_2/services/schedule_database_service.dart';
-import 'package:capstone_2/screens/parent/parent_booking_process.dart';
+import 'package:kindora/services/schedule_database_service.dart';
+import 'package:kindora/screens/parent/parent_booking_process.dart';
 
 class ParentBookingPage extends StatefulWidget {
   final String? clinicId;

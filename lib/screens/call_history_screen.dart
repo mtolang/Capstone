@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/services/call_history_service.dart';
-import 'package:capstone_2/services/dynamic_user_service.dart';
+import 'package:kindora/services/call_history_service.dart';
+import 'package:kindora/services/dynamic_user_service.dart';
 import 'package:intl/intl.dart';
 
 /// Call History Screen

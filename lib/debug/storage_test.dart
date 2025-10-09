@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:capstone_2/services/firebase_storage_service.dart';
+import 'package:kindora/services/firebase_storage_service.dart';
 
 /// Debug utility to test Firebase Storage uploads
 /// Use this to isolate and test file upload functionality

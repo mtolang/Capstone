@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:delayed_display/delayed_display.dart';
-import 'package:capstone_2/screens/auth/login_as.dart';
+import 'package:kindora/screens/auth/login_as.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});

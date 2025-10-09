@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/services/global_call_service.dart';
+import 'package:kindora/services/global_call_service.dart';
 
 class CallAwareWrapper extends StatefulWidget {
   final Widget child;

@@ -1,4 +1,4 @@
-import 'package:capstone_2/services/dynamic_user_service.dart';
+import 'package:kindora/services/dynamic_user_service.dart';
 
 /// User ID Validation Service
 /// Ensures all user IDs are valid before operations

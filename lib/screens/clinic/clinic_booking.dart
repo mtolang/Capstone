@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/clinic/clinic_booking_tabbar.dart';
-import 'package:capstone_2/screens/clinic/clinic_navbar.dart';
+import 'package:kindora/screens/clinic/clinic_booking_tabbar.dart';
+import 'package:kindora/screens/clinic/clinic_navbar.dart';
 
 class ClinicBookingPage extends StatefulWidget {
   const ClinicBookingPage({Key? key}) : super(key: key);

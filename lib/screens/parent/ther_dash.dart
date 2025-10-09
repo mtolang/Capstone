@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/parent/dashboard_tabbar.dart';
-import 'package:capstone_2/screens/parent/parent_navbar.dart';
-import 'package:capstone_2/widgets/map.dart';
+import 'package:kindora/screens/parent/dashboard_tabbar.dart';
+import 'package:kindora/screens/parent/parent_navbar.dart';
+import 'package:kindora/widgets/map.dart';
 
 class TherapistsDashboard extends StatelessWidget {
   const TherapistsDashboard({super.key});

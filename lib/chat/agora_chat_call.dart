@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_2/services/global_call_service.dart';
-import 'package:capstone_2/services/agora_call_service.dart';
-import 'package:capstone_2/services/agora_config.dart';
-import 'package:capstone_2/services/call_state_manager.dart';
+import 'package:kindora/services/global_call_service.dart';
+import 'package:kindora/services/agora_call_service.dart';
+import 'package:kindora/services/agora_config.dart';
+import 'package:kindora/services/call_state_manager.dart';
 
 class AgoraChatCallScreen extends StatefulWidget {
   final String callId;
