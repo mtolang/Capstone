@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../admin/database_optimization_tool.dart';
 
 class GamesOption extends StatelessWidget {
   const GamesOption({super.key});
@@ -230,6 +231,29 @@ class GamesOption extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 30.0),
+
+                  // Debug/Admin Section (Hidden by default)
+                  GestureDetector(
+                    onLongPress: () {
+                      // Long press to access admin tools
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const DatabaseOptimizationTool(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      child: const Icon(
+                        Icons.settings,
+                        color: Colors
+                            .transparent, // Hidden unless you know to long press
+                        size: 20,
+                      ),
+                    ),
+                  ),
 
                   // Info text
                   Container(

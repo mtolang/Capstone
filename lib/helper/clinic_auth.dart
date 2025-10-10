@@ -490,7 +490,8 @@ class ClinicAuthService {
       // Upload government ID file if provided
       String? documentUrl;
       if (governmentIdFile != null) {
-        print('📤 Attempting to upload government ID file: ${governmentIdFile.name}');
+        print(
+            '📤 Attempting to upload government ID file: ${governmentIdFile.name}');
         try {
           documentUrl = await FirebaseStorageService.uploadParentDocument(
             file: governmentIdFile,
@@ -667,7 +668,8 @@ class ClinicAuthService {
       // Upload professional ID file if provided
       String? professionalIdUrl;
       if (professionalIdFile != null) {
-        professionalIdUrl = await FirebaseStorageService.uploadTherapistDocument(
+        professionalIdUrl =
+            await FirebaseStorageService.uploadTherapistDocument(
           file: professionalIdFile,
           therapistId: nextDocId,
           documentType: 'professional_id',
@@ -681,7 +683,8 @@ class ClinicAuthService {
         'Email': email.trim(),
         'Contact_Number': contactNumber,
         'Address': address,
-        'Password': password, // Note: Consider encrypting passwords in production
+        'Password':
+            password, // Note: Consider encrypting passwords in production
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };

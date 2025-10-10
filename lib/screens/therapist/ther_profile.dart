@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kindora/screens/auth/login_as.dart';
 import 'package:kindora/screens/therapist/ther_tab.dart';
+import 'package:kindora/screens/therapist/ther_navbar.dart';
 import 'package:kindora/helper/therapist_auth.dart';
 // import 'package:kindora/calendar.dart';
 
@@ -32,160 +33,7 @@ class TherapistProfile extends StatelessWidget {
       ),
 
       // drawer or sidebar of hamburger menu
-      drawer: Drawer(
-        child: ListView(
-          children: [
-            SizedBox(
-              height: 90,
-              child: DrawerHeader(
-                decoration: const BoxDecoration(
-                  color: Colors.white, // background color of the head title
-                ),
-                child: Row(
-                  children: [
-                    Image.asset("asset/logo1.png",
-                        width: 40.0, height: 40.0), // logo
-
-                    // Add spacing between logo and text
-                    const SizedBox(width: 8.0),
-
-                    // app name
-                    const Text(
-                      "Kindora",
-                      style: TextStyle(
-                        color: Color(0xFF006A5B),
-                        fontFamily: 'Poppins',
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Add your other side bar items
-            ListTile(
-              leading: const Icon(Icons.person),
-              iconColor: const Color(0xFF006A5B),
-              title: const Text(
-                'Profile',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              onTap: () {
-                // Handle profile action here
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_calendar_rounded),
-              iconColor: const Color(0xFF006A5B),
-              title: const Text(
-                'Booking',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              onTap: () {
-                // Handle booking action here
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.sticky_note_2_rounded),
-              iconColor: const Color(0xFF006A5B),
-              title: const Text(
-                'Materials',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              onTap: () {
-                // Handle materials action here
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_note_rounded),
-              iconColor: const Color(0xFF006A5B),
-              title: const Text(
-                'Patient List',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              onTap: () {
-                // Handle patient list action here
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.groups_2),
-              iconColor: const Color(0xFF006A5B),
-              title: const Text(
-                'Clinic Staff',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              onTap: () {
-                // Handle dashboard action here
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.message),
-              iconColor: const Color(0xFF006A5B),
-              title: const Text(
-                'Chat',
-                style: TextStyle(
-                  color: Color(0xFF006A5B),
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              onTap: () {
-                // Handle chat action here
-              },
-            ),
-            // Add more items as needed
-
-            // Add a divider for visual separation for logout
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout), // Icon for logout
-              title: const Text('Logout'), // Text for logout
-              onTap: () async {
-                try {
-                  await TherapistAuthService.signOut();
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const LoginAs()),
-                    (route) => false,
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error signing out: $e')),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const TherapistNavbar(currentPage: 'profile'),
 
       // body
       body: Builder(
@@ -231,7 +79,8 @@ class TherapistProfile extends StatelessWidget {
 
                   // - Custom Tab bar -
                   const Center(
-                    child: TherDashTab(initialTabIndex: 0), // Profile tab active
+                    child:
+                        TherDashTab(initialTabIndex: 0), // Profile tab active
                   ),
 
                   // Padding added before the CustomTabBar to avoid overlap

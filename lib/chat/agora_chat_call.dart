@@ -22,13 +22,13 @@ class AgoraChatCallScreen extends StatefulWidget {
 
   @override
   State<AgoraChatCallScreen> createState() => _AgoraChatCallScreenState();
-  
+
   // Static variable to track if any call is active globally
   static bool _globalCallActive = false;
-  
+
   // Static method to check if any call is currently active
   static bool isCallActive() => _globalCallActive;
-  
+
   // Static method to set call state globally
   static void setCallActive(bool active) => _globalCallActive = active;
 }
@@ -53,7 +53,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
   String _callDuration = '00:00';
   bool _isCallActive = false;
   StreamSubscription<DocumentSnapshot>? _callStatusListener;
-  
+
   // Enhanced screen sharing features
   bool _isCallMinimized = false;
 
@@ -65,7 +65,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     _agoraService = AgoraCallService();
     _initializeCall();
     _loadContacts();
-    
+
     // Set active call state to prevent auto-logout
     CallStateManager.setCallActive(true);
     AgoraChatCallScreen.setCallActive(true);
@@ -485,7 +485,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
             children: [
               Icon(Icons.screen_share, color: Colors.white),
               SizedBox(width: 8),
-              Text('Screen sharing started - Tap minimize to continue in background'),
+              Text(
+                  'Screen sharing started - Tap minimize to continue in background'),
             ],
           ),
           backgroundColor: Colors.green,
@@ -710,7 +711,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     setState(() {
       _isCallMinimized = true;
     });
-    
+
     // Minimize the app to background while keeping call active
     // This allows screen sharing to continue while user can access other apps
     ScaffoldMessenger.of(context).showSnackBar(
@@ -726,7 +727,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
         duration: Duration(seconds: 2),
       ),
     );
-    
+
     // Optionally minimize the Flutter app (move to background)
     // This requires platform-specific implementation
     print('📱 Call minimized - Screen sharing continues');
@@ -736,7 +737,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     setState(() {
       _isCallMinimized = false;
     });
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -750,7 +751,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
         duration: Duration(seconds: 1),
       ),
     );
-    
+
     print('📱 Call restored from minimized state');
   }
 
@@ -1162,7 +1163,8 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                   GestureDetector(
                     onTap: _isCallMinimized ? _restoreCall : _minimizeCall,
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(15),
@@ -1171,7 +1173,9 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _isCallMinimized ? Icons.fullscreen : Icons.minimize,
+                            _isCallMinimized
+                                ? Icons.fullscreen
+                                : Icons.minimize,
                             color: Colors.white,
                             size: 16,
                           ),
@@ -1192,7 +1196,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
               ),
             ),
           ],
-          
+
           // Main control buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1215,10 +1219,13 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
 
               // Screen share button
               _buildControlButton(
-                icon: _isScreenSharing ? Icons.stop_screen_share : Icons.screen_share,
+                icon: _isScreenSharing
+                    ? Icons.stop_screen_share
+                    : Icons.screen_share,
                 onPressed: _toggleScreenShare,
-                backgroundColor:
-                    _isScreenSharing ? Colors.blue : Colors.white.withOpacity(0.3),
+                backgroundColor: _isScreenSharing
+                    ? Colors.blue
+                    : Colors.white.withOpacity(0.3),
               ),
 
               // Minimize button (only show during screen sharing)
@@ -1277,12 +1284,12 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
     print('🗑️ Disposing AgoraChatCallScreen');
     _callTimer?.cancel();
     _callStatusListener?.cancel();
-    
+
     // Reset call state to allow auto-logout after call ends
     CallStateManager.setCallActive(false);
     _isCallMinimized = false;
     AgoraChatCallScreen.setCallActive(false);
-    
+
     _agoraService.leaveChannel();
     _searchController.dispose();
     super.dispose();

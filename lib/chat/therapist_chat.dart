@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindora/helper/clinic_auth.dart';
+import 'package:kindora/helper/field_helper.dart';
 import 'package:kindora/services/global_call_service.dart';
 import 'package:kindora/services/call_utility.dart';
 import 'package:kindora/services/dynamic_user_service.dart';
@@ -83,8 +84,12 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
         if (parentDoc.exists) {
           final parentData = parentDoc.data() as Map<String, dynamic>;
           setState(() {
-            _patientName = parentData['Name'] ?? 'Unknown Patient';
+            // Use FieldHelper for consistent field name handling
+            _patientName = FieldHelper.getName(parentData) ?? 'Unknown Patient';
           });
+
+          // Debug print to see what fields are available
+          FieldHelper.debugPrintFields(parentData, 'ParentsAcc');
         } else {
           setState(() {
             _patientName = 'Unknown Patient';

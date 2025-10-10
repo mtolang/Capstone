@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:kindora/helper/field_helper.dart';
 import 'package:kindora/widgets/call_button.dart';
 
 class PatientChatPage extends StatefulWidget {
@@ -48,21 +49,13 @@ class _PatientChatPageState extends State<PatientChatPage> {
     }
   }
 
-  void _loadContactInfo() {
+  void _loadContactInfo() async {
     // Load contact information based on the ID
-    if (widget.isPatientSide) {
-      // Patient side - showing therapist info
-      Map<String, String> therapistNames = {
-        '1': 'Dr. Maria Santos',
-        '2': 'Dr. Juan Cruz',
-        '3': 'Dr. Sarah Wilson',
-        '4': 'The Tiny House Therapy Center',
-      };
-      _contactName = widget.therapistName ??
-          therapistNames[widget.therapistId] ??
-          'Unknown Therapist';
+    if (widget.isPatientSide && widget.therapistId != null) {
+      // Patient side - load real therapist/clinic info from Firestore
+      await _loadTherapistInfoFromFirestore();
     } else {
-      // Therapist side - showing patient info
+      // Therapist side - showing patient info (fallback to hardcoded for now)
       Map<String, String> patientNames = {
         '1': 'Tiny House Therapy Clinic',
         '2': 'Taylor Swift',
@@ -71,6 +64,61 @@ class _PatientChatPageState extends State<PatientChatPage> {
         '5': 'Sarah Wilson',
       };
       _contactName = patientNames[widget.therapistId] ?? 'Unknown Patient';
+    }
+  }
+
+  // Load therapist/clinic information from Firestore
+  Future<void> _loadTherapistInfoFromFirestore() async {
+    try {
+      if (widget.therapistId == null) return;
+
+      // Try ClinicAcc collection first
+      final clinicDoc = await FirebaseFirestore.instance
+          .collection('ClinicAcc')
+          .doc(widget.therapistId!)
+          .get();
+
+      if (clinicDoc.exists) {
+        final clinicData = clinicDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _contactName = FieldHelper.getClinicName(clinicData) ??
+              widget.therapistName ??
+              'Unknown Clinic';
+        });
+
+        // Debug print to see what fields are available
+        FieldHelper.debugPrintFields(clinicData, 'ClinicAcc');
+        return;
+      }
+
+      // If not found in ClinicAcc, try TherapistAcc collection
+      final therapistDoc = await FirebaseFirestore.instance
+          .collection('TherapistAcc')
+          .doc(widget.therapistId!)
+          .get();
+
+      if (therapistDoc.exists) {
+        final therapistData = therapistDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _contactName = FieldHelper.getTherapistName(therapistData) ??
+              widget.therapistName ??
+              'Unknown Therapist';
+        });
+
+        // Debug print to see what fields are available
+        FieldHelper.debugPrintFields(therapistData, 'TherapistAcc');
+        return;
+      }
+
+      // Fallback to provided name or default
+      setState(() {
+        _contactName = widget.therapistName ?? 'Unknown Therapist';
+      });
+    } catch (e) {
+      print('Error loading therapist info: $e');
+      setState(() {
+        _contactName = widget.therapistName ?? 'Unknown Therapist';
+      });
     }
   }
 

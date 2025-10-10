@@ -21,7 +21,7 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      
+
       if (image != null) {
         setState(() {
           _selectedFile = image;
@@ -52,12 +52,13 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
       print('Starting upload test...');
       print('File path: ${_selectedFile!.path}');
       print('File name: ${_selectedFile!.name}');
-      
+
       // Test basic file upload
       final String? downloadUrl = await FirebaseStorageService.uploadFile(
         file: _selectedFile!,
         folderPath: 'test_uploads',
-        fileName: 'test_${DateTime.now().millisecondsSinceEpoch}.${_selectedFile!.name.split('.').last}',
+        fileName:
+            'test_${DateTime.now().millisecondsSinceEpoch}.${_selectedFile!.name.split('.').last}',
       );
 
       if (downloadUrl != null) {
@@ -98,8 +99,9 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
 
     try {
       print('Starting parent document upload test...');
-      
-      final String? downloadUrl = await FirebaseStorageService.uploadParentDocument(
+
+      final String? downloadUrl =
+          await FirebaseStorageService.uploadParentDocument(
         file: _selectedFile!,
         parentId: 'TEST_PARENT_01',
       );
@@ -145,14 +147,14 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
-            
+
             // File picker
             ElevatedButton(
               onPressed: _isUploading ? null : _pickImage,
               child: const Text('Pick Image from Gallery'),
             ),
             const SizedBox(height: 10),
-            
+
             // Show selected file
             if (_selectedFile != null) ...[
               Container(
@@ -168,10 +170,11 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
               ),
               const SizedBox(height: 10),
             ],
-            
+
             // Test buttons
             ElevatedButton(
-              onPressed: (_selectedFile != null && !_isUploading) ? _testUpload : null,
+              onPressed:
+                  (_selectedFile != null && !_isUploading) ? _testUpload : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
@@ -179,9 +182,11 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
               child: const Text('Test Basic Upload'),
             ),
             const SizedBox(height: 10),
-            
+
             ElevatedButton(
-              onPressed: (_selectedFile != null && !_isUploading) ? _testParentDocumentUpload : null,
+              onPressed: (_selectedFile != null && !_isUploading)
+                  ? _testParentDocumentUpload
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
@@ -189,7 +194,7 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
               child: const Text('Test Parent Document Upload'),
             ),
             const SizedBox(height: 20),
-            
+
             // Status display
             Container(
               padding: const EdgeInsets.all(16),
@@ -203,7 +208,7 @@ class _StorageTestScreenState extends State<StorageTestScreen> {
                 style: const TextStyle(fontFamily: 'monospace'),
               ),
             ),
-            
+
             if (_isUploading) ...[
               const SizedBox(height: 20),
               const Center(child: CircularProgressIndicator()),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:capstone_2/helper/field_helper.dart';
 
 class ClinicPatientListPage extends StatefulWidget {
   const ClinicPatientListPage({Key? key}) : super(key: key);
@@ -29,21 +30,21 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
   Future<void> _loadClinicId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Debug: Print all stored keys
       final allKeys = prefs.getKeys();
       print('🔑 All stored SharedPreferences keys: $allKeys');
-      
+
       // Try multiple possible keys in order of preference
       String? clinicId;
-      
+
       // First, try the most likely keys
       clinicId = prefs.getString('clinic_id');
       if (clinicId != null) {
         print('✅ Found clinic ID with key "clinic_id": $clinicId');
       } else {
         print('❌ No clinic_id found, trying other keys...');
-        
+
         // Try alternative keys
         final possibleKeys = ['user_id', 'clinicId', 'userId', 'id'];
         for (final key in possibleKeys) {
@@ -56,9 +57,9 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
           }
         }
       }
-      
+
       print('🏥 Final clinic ID: $clinicId');
-      
+
       if (mounted) {
         setState(() {
           _clinicId = clinicId;
@@ -160,18 +161,20 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                           // Debug button to check SharedPreferences
                           IconButton(
                             onPressed: () async {
-                              final prefs = await SharedPreferences.getInstance();
+                              final prefs =
+                                  await SharedPreferences.getInstance();
                               final allKeys = prefs.getKeys();
                               final allData = <String, dynamic>{};
                               for (final key in allKeys) {
                                 allData[key] = prefs.get(key);
                               }
-                              
+
                               if (mounted) {
                                 showDialog(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: const Text('SharedPreferences Debug'),
+                                    title:
+                                        const Text('SharedPreferences Debug'),
                                     content: SingleChildScrollView(
                                       child: Text(
                                         allData.entries
@@ -190,7 +193,8 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                                 );
                               }
                             },
-                            icon: const Icon(Icons.bug_report, color: Colors.white),
+                            icon: const Icon(Icons.bug_report,
+                                color: Colors.white),
                             tooltip: 'Debug SharedPreferences',
                           ),
                         ],
@@ -322,33 +326,37 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                               }
 
                               // Debug: Print total documents found
-                              print('📊 DEBUG: Found ${snapshot.data!.docs.length} AcceptedBooking documents');
-                              
+                              print(
+                                  '📊 DEBUG: Found ${snapshot.data!.docs.length} AcceptedBooking documents');
+
                               // Process all patients without grouping (show each booking separately)
                               var patientsList = <Map<String, dynamic>>[];
-                              
+
                               for (var doc in snapshot.data!.docs) {
                                 final data = doc.data() as Map<String, dynamic>;
                                 print('📝 Document ${doc.id}: $data');
-                                
+
                                 // Extract patient name from different possible fields
-                                final childName = data['patientName'] ?? 
-                                                data['childName'] ?? 
-                                                data['patientInfo']?['childName'] ?? 
-                                                'Unknown Patient';
-                                
-                                final parentName = data['parentName'] ?? 
-                                                 data['patientInfo']?['parentName'] ?? 
-                                                 'Unknown Parent';
-                                
+                                final childName = data['patientName'] ??
+                                    data['childName'] ??
+                                    data['patientInfo']?['childName'] ??
+                                    'Unknown Patient';
+
+                                final parentName = data['parentName'] ??
+                                    data['patientInfo']?['parentName'] ??
+                                    'Unknown Parent';
+
                                 patientsList.add({
                                   ...data,
                                   'documentId': doc.id,
-                                  'childName': childName, // Standardize field name
-                                  'parentName': parentName, // Standardize field name
+                                  'childName':
+                                      childName, // Standardize field name
+                                  'parentName':
+                                      parentName, // Standardize field name
                                 });
-                                
-                                print('✅ Added patient: $childName (Parent: $parentName)');
+
+                                print(
+                                    '✅ Added patient: $childName (Parent: $parentName)');
                               }
                               patientsList.sort((a, b) {
                                 final aDate = a['appointmentDate'] != null
@@ -363,7 +371,8 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                                     aDate); // Descending order (most recent first)
                               });
 
-                              print('📋 Final patient list count: ${patientsList.length}');
+                              print(
+                                  '📋 Final patient list count: ${patientsList.length}');
 
                               // Filter based on search query
                               final filteredPatients =
@@ -408,17 +417,17 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
     final childName = patient['childName'] ?? 'Unknown Patient';
     final parentName = patient['parentName'] ?? 'Unknown Parent';
     final appointmentType = patient['appointmentType'] ?? 'Therapy';
-    
+
     // Try different possible field names for age and gender
-    final childAge = patient['patientInfo']?['childAge']?.toString() ?? 
-                    patient['patientInfo']?['age']?.toString() ?? 
-                    patient['age']?.toString() ?? 
-                    'N/A';
-    final childGender = patient['patientInfo']?['childGender'] ?? 
-                       patient['patientInfo']?['gender'] ?? 
-                       patient['gender'] ?? 
-                       'Not specified';
-    
+    final childAge = patient['patientInfo']?['childAge']?.toString() ??
+        patient['patientInfo']?['age']?.toString() ??
+        patient['age']?.toString() ??
+        'N/A';
+    final childGender = patient['patientInfo']?['childGender'] ??
+        patient['patientInfo']?['gender'] ??
+        patient['gender'] ??
+        'Not specified';
+
     final lastAppointment = patient['appointmentDate'] != null
         ? (patient['appointmentDate'] as Timestamp).toDate()
         : DateTime.now();
@@ -1512,7 +1521,7 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
     try {
       // Get current clinic/therapist ID
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Use the same clinic ID lookup logic
       String? clinicId = prefs.getString('clinic_id');
       if (clinicId == null) {
@@ -1520,14 +1529,16 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
         for (final key in possibleKeys) {
           clinicId = prefs.getString(key);
           if (clinicId != null) {
-            print('✅ Found clinic ID for simple progress save with key "$key": $clinicId');
+            print(
+                '✅ Found clinic ID for simple progress save with key "$key": $clinicId');
             break;
           }
         }
       }
-      
-      final therapistName =
-          prefs.getString('clinic_name') ?? prefs.getString('user_name') ?? 'Unknown Therapist';
+
+      final therapistName = prefs.getString('clinic_name') ??
+          prefs.getString('user_name') ??
+          'Unknown Therapist';
 
       if (clinicId == null) {
         throw Exception('Clinic ID not found in SharedPreferences');
@@ -1900,7 +1911,7 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
   ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Use the same clinic ID lookup logic
       String? clinicId = prefs.getString('clinic_id');
       if (clinicId == null) {
@@ -1908,7 +1919,8 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
         for (final key in possibleKeys) {
           clinicId = prefs.getString(key);
           if (clinicId != null) {
-            print('✅ Found clinic ID for progress save with key "$key": $clinicId');
+            print(
+                '✅ Found clinic ID for progress save with key "$key": $clinicId');
             break;
           }
         }

@@ -40,7 +40,8 @@ class FirebaseStorageService {
 
       // Monitor upload progress
       uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        double progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        double progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
         print('Upload progress: ${progress.toStringAsFixed(2)}%');
         print('State: ${snapshot.state}');
       });

@@ -6,6 +6,14 @@ class TherapistAuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class TherapistAuthService {
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   // Keys for local storage
   static const String _therapistIdKey = 'therapist_id';
   static const String _therapistEmailKey = 'therapist_email';
@@ -46,7 +54,7 @@ class TherapistAuthService {
   }) async {
     try {
       print('🔍 Attempting to sign in therapist with email: $email');
-
+      
       // First, check TherapistAcc collection with Email field
       QuerySnapshot therapistQuery = await _firestore
           .collection('TherapistAcc')
@@ -54,8 +62,7 @@ class TherapistAuthService {
           .limit(1)
           .get();
 
-      print(
-          '📋 TherapistAcc collection check: Found ${therapistQuery.docs.length} documents');
+      print('📋 TherapistAcc collection check: Found ${therapistQuery.docs.length} documents');
 
       // If not found in TherapistAcc, check TherAcc collection
       if (therapistQuery.docs.isEmpty) {
@@ -65,8 +72,7 @@ class TherapistAuthService {
             .where('Email', isEqualTo: email.trim())
             .limit(1)
             .get();
-        print(
-            '📋 TherAcc collection check: Found ${therapistQuery.docs.length} documents');
+        print('📋 TherAcc collection check: Found ${therapistQuery.docs.length} documents');
       }
 
       if (therapistQuery.docs.isEmpty) {
@@ -78,14 +84,14 @@ class TherapistAuthService {
       final documentId = therapistDoc.id;
 
       // Debug: Print the data to verify field names
-      print('👤 Therapist data from Firebase: $therapistData');
+      print('� Therapist data from Firebase: $therapistData');
       print('📋 Document ID: $documentId');
 
       // Check if the password matches exactly
       final storedPassword = therapistData['Password']?.toString() ?? '';
-      print('🔐 Stored password: $storedPassword');
+      print('� Stored password: $storedPassword');
       print('🔐 Entered password: $password');
-
+      
       if (storedPassword != password) {
         throw Exception('Invalid email or password.');
       }
@@ -103,10 +109,9 @@ class TherapistAuthService {
       } else if (therapistData['Name'] != null) {
         await prefs.setString('therapist_name', therapistData['Name']);
       }
-
+      
       if (therapistData['Contact_Number'] != null) {
-        await prefs.setString(
-            'therapist_contact', therapistData['Contact_Number']);
+        await prefs.setString('therapist_contact', therapistData['Contact_Number']);
       }
 
       // Try to sign in with Firebase Auth (optional, for session management)
@@ -141,9 +146,111 @@ class TherapistAuthService {
         'therapistId': documentId,
         'user': _auth.currentUser, // May be null if Firebase Auth failed
       };
+
     } catch (e) {
       print('❌ Therapist login failed: $e');
       throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  // Get therapist data from Firestore
+  static Future<Map<String, dynamic>?> getTherapistData(String uid) async {
+    try {
+      print('🔍 Looking for therapist data with UID: $uid');
+      
+      // Check TherapistAcc collection first
+      DocumentSnapshot therapistDoc = await _firestore
+          .collection('TherapistAcc')
+          .doc(uid)
+          .get();
+
+      print('📋 TherapistAcc collection check: ${therapistDoc.exists ? 'Found' : 'Not found'}');
+      
+      if (therapistDoc.exists) {
+        print('✅ Found in TherapistAcc collection');
+        return therapistDoc.data() as Map<String, dynamic>?;
+      }
+
+      // If not found in TherapistAcc, check TherAcc collection
+      therapistDoc = await _firestore
+          .collection('TherAcc')
+          .doc(uid)
+          .get();
+
+      print('📋 TherAcc collection check: ${therapistDoc.exists ? 'Found' : 'Not found'}');
+
+      if (therapistDoc.exists) {
+        print('✅ Found in TherAcc collection');
+        return therapistDoc.data() as Map<String, dynamic>?;
+      }
+
+      // If not found by UID, try to find by email
+      print('🔍 Searching by email in both collections...');
+      
+      // Get all docs and check if any match the current user's email
+      final currentUser = _auth.currentUser;
+      if (currentUser?.email != null) {
+        print('📧 Searching for email: ${currentUser!.email}');
+        
+        // Search TherapistAcc by email
+        QuerySnapshot emailQuery = await _firestore
+            .collection('TherapistAcc')
+            .where('Email', isEqualTo: currentUser.email)
+            .get();
+            
+        if (emailQuery.docs.isNotEmpty) {
+          print('✅ Found therapist by email in TherapistAcc');
+          print('🔄 Document ID mismatch - Auth UID: $uid, Firestore Doc ID: ${emailQuery.docs.first.id}');
+          return emailQuery.docs.first.data() as Map<String, dynamic>?;
+        }
+        
+        // Search TherAcc by email
+        emailQuery = await _firestore
+            .collection('TherAcc')
+            .where('Email', isEqualTo: currentUser.email)
+            .get();
+            
+        if (emailQuery.docs.isNotEmpty) {
+          print('✅ Found therapist by email in TherAcc');
+          print('🔄 Document ID mismatch - Auth UID: $uid, Firestore Doc ID: ${emailQuery.docs.first.id}');
+          return emailQuery.docs.first.data() as Map<String, dynamic>?;
+        }
+      }
+
+      print('❌ No therapist data found in any collection');
+      return null;
+    } catch (e) {
+      print('❌ Error getting therapist data: $e');
+      return null;
+    }
+  }
+
+  // Store therapist info in SharedPreferences
+  static Future<void> _storeTherapistInfo(String uid, Map<String, dynamic> therapistData) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('therapist_id', uid);
+      await prefs.setString('user_id', uid);
+      await prefs.setString('user_type', 'therapist');
+      
+      // Store therapist details
+      if (therapistData['Full_Name'] != null) {
+        await prefs.setString('therapist_name', therapistData['Full_Name']);
+      } else if (therapistData['Name'] != null) {
+        await prefs.setString('therapist_name', therapistData['Name']);
+      }
+      
+      if (therapistData['Email'] != null) {
+        await prefs.setString('therapist_email', therapistData['Email']);
+      }
+      
+      if (therapistData['Contact_Number'] != null) {
+        await prefs.setString('therapist_contact', therapistData['Contact_Number']);
+      }
+      
+      print('Therapist info stored successfully');
+    } catch (e) {
+      print('Error storing therapist info: $e');
     }
   }
 
@@ -170,13 +277,13 @@ class TherapistAuthService {
     try {
       // Clear stored data
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_therapistIdKey);
-      await prefs.remove(_therapistEmailKey);
-      await prefs.remove(_isLoggedInKey);
+      await prefs.remove('therapist_id');
+      await prefs.remove('user_id');
       await prefs.remove('user_type');
       await prefs.remove('therapist_name');
+      await prefs.remove('therapist_email');
       await prefs.remove('therapist_contact');
-
+      
       // Sign out from Firebase
       await _auth.signOut();
     } catch (e) {
@@ -199,9 +306,9 @@ class TherapistAuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return {
-        'therapist_id': prefs.getString(_therapistIdKey),
+        'therapist_id': prefs.getString('therapist_id'),
         'therapist_name': prefs.getString('therapist_name'),
-        'therapist_email': prefs.getString(_therapistEmailKey),
+        'therapist_email': prefs.getString('therapist_email'),
         'therapist_contact': prefs.getString('therapist_contact'),
         'user_type': prefs.getString('user_type'),
       };

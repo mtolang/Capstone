@@ -16,7 +16,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
   List<Map<String, dynamic>> patientsWithProgress = [];
   List<Map<String, dynamic>> progressReports = [];
   bool isLoading = true;
-  
+
   // Analytics data
   Map<String, int> monthlyReports = {};
   Map<String, int> progressTypeStats = {};
@@ -47,7 +47,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
         }
       }
     }
-    
+
     setState(() {
       this.clinicId = clinicId;
     });
@@ -81,7 +81,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
       final patientsSnapshot = futures[0];
       final progressSnapshot = futures[1];
 
-      print('📊 Loaded ${patientsSnapshot.docs.length} bookings and ${progressSnapshot.docs.length} reports');
+      print(
+          '📊 Loaded ${patientsSnapshot.docs.length} bookings and ${progressSnapshot.docs.length} reports');
 
       // Process analytics data
       _processAnalyticsData(progressSnapshot.docs);
@@ -108,21 +109,22 @@ class _ClinicProgressState extends State<ClinicProgress> {
         final patientData = doc.data();
         final bookingId = doc.id;
         final patientId = patientData['patientId']?.toString() ?? bookingId;
-        
+
         // Extract child name from different possible fields
-        final childName = patientData['patientName'] ?? 
-                         patientData['childName'] ?? 
-                         patientData['patientInfo']?['childName'] ?? 
-                         'Unknown';
+        final childName = patientData['patientName'] ??
+            patientData['childName'] ??
+            patientData['patientInfo']?['childName'] ??
+            'Unknown';
 
         final patientReports = progressByPatient[patientId] ?? [];
-        
+
         patientsList.add({
           'bookingId': bookingId,
           'patientId': patientId,
           'childName': childName,
-          'parentName': patientData['parentName'] ?? 
-                       patientData['patientInfo']?['parentName'] ?? 'Unknown',
+          'parentName': patientData['parentName'] ??
+              patientData['patientInfo']?['parentName'] ??
+              'Unknown',
           'age': patientData['patientInfo']?['age']?.toString() ?? 'N/A',
           'diagnosis': patientData['patientInfo']?['diagnosis'] ?? 'N/A',
           'appointmentType': patientData['appointmentType'] ?? 'N/A',
@@ -131,7 +133,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
           'appointmentTime': patientData['appointmentTime'] ?? 'N/A',
           'progressReports': patientReports,
           'totalReports': patientReports.length,
-          'lastReportDate': patientReports.isNotEmpty ? patientReports.first['date'] : null,
+          'lastReportDate':
+              patientReports.isNotEmpty ? patientReports.first['date'] : null,
         });
       }
 
@@ -144,7 +147,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
         isLoading = false;
       });
 
-      print('✅ Final: ${patientsList.length} patients, ${allProgressReports.length} reports');
+      print(
+          '✅ Final: ${patientsList.length} patients, ${allProgressReports.length} reports');
     } catch (e) {
       print('❌ Error loading data: $e');
       setState(() {
@@ -159,29 +163,32 @@ class _ClinicProgressState extends State<ClinicProgress> {
     weeklyProgressScores.clear();
 
     final now = DateTime.now();
-    
+
     for (var doc in progressDocs) {
       final data = doc.data() as Map<String, dynamic>;
-      
+
       // Process monthly reports
       try {
-        final reportDate = data['date'] != null 
-            ? DateTime.parse(data['date']) 
+        final reportDate = data['date'] != null
+            ? DateTime.parse(data['date'])
             : DateTime.now();
-        final monthKey = '${reportDate.year}-${reportDate.month.toString().padLeft(2, '0')}';
+        final monthKey =
+            '${reportDate.year}-${reportDate.month.toString().padLeft(2, '0')}';
         monthlyReports[monthKey] = (monthlyReports[monthKey] ?? 0) + 1;
       } catch (e) {
         print('Error parsing date: $e');
       }
 
       // Process progress types
-      final progressType = data['progressType'] ?? data['category'] ?? 'General';
-      progressTypeStats[progressType] = (progressTypeStats[progressType] ?? 0) + 1;
+      final progressType =
+          data['progressType'] ?? data['category'] ?? 'General';
+      progressTypeStats[progressType] =
+          (progressTypeStats[progressType] ?? 0) + 1;
 
       // Generate mock progress scores for demonstration
       // In real app, you'd extract actual scores from progress data
-      final score = (data['progressScore'] as num?)?.toDouble() ?? 
-                   (50 + (DateTime.now().millisecond % 50)).toDouble();
+      final score = (data['progressScore'] as num?)?.toDouble() ??
+          (50 + (DateTime.now().millisecond % 50)).toDouble();
       if (weeklyProgressScores.length < 7) {
         weeklyProgressScores.add(score);
       }
@@ -670,7 +677,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
                     fontFamily: 'Poppins',
                   ),
                 ),
-                if (patient['appointmentDate'] != null && patient['appointmentDate'] != 'N/A')
+                if (patient['appointmentDate'] != null &&
+                    patient['appointmentDate'] != 'N/A')
                   Text(
                     'Booking: ${patient['appointmentDate']} ${patient['appointmentTime'] ?? ''}',
                     style: const TextStyle(
@@ -782,11 +790,12 @@ class _ClinicProgressState extends State<ClinicProgress> {
       const Color(0xFFDBE9E7),
     ];
 
-    final sections = progressTypeStats.entries.toList().asMap().entries.map((entry) {
+    final sections =
+        progressTypeStats.entries.toList().asMap().entries.map((entry) {
       final index = entry.key;
       final data = entry.value;
       final percentage = (data.value / progressReports.length * 100);
-      
+
       return PieChartSectionData(
         color: colors[index % colors.length],
         value: data.value.toDouble(),
@@ -817,7 +826,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
         // Legend
         Wrap(
           spacing: 8,
-          children: progressTypeStats.entries.toList().asMap().entries.map((entry) {
+          children:
+              progressTypeStats.entries.toList().asMap().entries.map((entry) {
             final index = entry.key;
             final data = entry.value;
             return Row(
@@ -912,8 +922,10 @@ class _ClinicProgressState extends State<ClinicProgress> {
               },
             ),
           ),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         borderData: FlBorderData(
           show: true,

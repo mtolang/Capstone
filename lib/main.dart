@@ -11,6 +11,12 @@ import 'package:kindora/app_routes_demo.dart'
 import 'package:kindora/screens/auth/login_page.dart';
 import 'package:kindora/screens/auth/parent_login.dart';
 import 'package:kindora/screens/auth/therapist_login.dart';
+import 'package:kindora/screens/admin/fix_therapist_account.dart';
+import 'package:kindora/screens/therapist/ther_booking_page.dart'
+    as ther_booking_full;
+import 'package:kindora/screens/therapist/ther_booking.dart'
+    as ther_booking_main;
+import 'package:kindora/screens/therapist/ther_materials_page.dart';
 import 'package:kindora/screens/auth/login_as.dart';
 import 'package:kindora/screens/auth/admin_login.dart';
 import 'package:kindora/screens/admin/admin_dashboard.dart';
@@ -146,8 +152,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               const AdminLogin(), // <-- Admin login route
           '/admindashboard': (context) =>
               const AdminDashboard(), // <-- Admin dashboard route
+          '/fixtherapist': (context) =>
+              const FixTherapistAccountPage(), // Fix therapist accounts
           '/logintest': (context) => const LoginTestPage(), // Test route
-          '/storagetest': (context) => const StorageTestScreen(), // Storage debug route
+          '/storagetest': (context) =>
+              const StorageTestScreen(), // Storage debug route
 
           //Registration Routes
           '/clinicreg': (context) => const ClinicRegister(),
@@ -165,6 +174,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
           //Therapist Page Routes
           '/therapistprofile': (context) => const TherapistProfile(),
+          '/therapistbooking': (context) =>
+              const ther_booking_full.TherapistBookingPage(),
+          '/therapistbookingmain': (context) =>
+              const ther_booking_main.TherapistBookingPage(),
+          '/therapistmaterials': (context) => const TherapistMaterialsPage(),
           '/therapistgallery': (context) => const TherapistGallery(),
           '/therapistreview': (context) => const TherapistReview(),
           '/therapistprogress': (context) => const TherProgress(),

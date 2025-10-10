@@ -71,7 +71,7 @@ class _DragToShapeGameState extends State<DragToShapeGame>
 
   List<GameShape> shapes = [];
   List<GameDragObject> objects = [];
-  
+
   // Firebase tracking variables
   DateTime _sessionStart = DateTime.now();
   int _shapesPlaced = 0;
@@ -91,6 +91,25 @@ class _DragToShapeGameState extends State<DragToShapeGame>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
     );
+    _initializeGame();
+  }
+
+  /// Initialize game by loading saved progress
+  Future<void> _initializeGame() async {
+    try {
+      // Load saved progress from unified user progress
+      final userProgress = await GameDataService.getUserGameProgress();
+      final savedLevel = userProgress.getCurrentLevel('shape_shifters');
+      setState(() {
+        currentLevel = savedLevel - 1; // Convert from 1-based to 0-based
+      });
+      print('Shape Shifters: Starting at level $savedLevel');
+    } catch (e) {
+      print('Error loading saved level: $e');
+      setState(() {
+        currentLevel = 0; // Default to level 1 (0-based)
+      });
+    }
     _loadLevel();
   }
 
@@ -116,91 +135,30 @@ class _DragToShapeGameState extends State<DragToShapeGame>
   /// Save current game session to Firebase
   Future<void> _saveGameSession() async {
     try {
-      final sessionData = GameSessionData(
-        timestamp: DateTime.now(),
+      // Save using the new unified progress system
+      await GameDataService.saveGameSessionAndProgress(
         gameType: 'shape_shifters',
-        gameMode: 'spatial_coordination',
-        level: currentLevel + 1, // currentLevel is 0-based, display as 1-based
-        sessionDuration: DateTime.now().difference(_sessionStart),
-        progress: currentLevel / 5.0, // 5 levels total (0-4)
+        level: currentLevel + 1, // currentLevel is 0-based, save as 1-based
         score: _correctPlacements * 10 + _levelsCompleted * 50,
         completed: currentLevel >= 4, // All 5 levels completed
+        sessionDuration: DateTime.now().difference(_sessionStart),
         gameSpecificData: {
           'shapesPlaced': _shapesPlaced,
           'levelsCompleted': _levelsCompleted,
           'totalAttempts': _totalAttempts,
           'correctPlacements': _correctPlacements,
-          'accuracy': _totalAttempts > 0 ? _correctPlacements / _totalAttempts : 0.0,
+          'accuracy':
+              _totalAttempts > 0 ? _correctPlacements / _totalAttempts : 0.0,
           'shapeTypeUsage': _shapeTypeUsage,
           'finalLevel': currentLevel + 1,
-        },
-        metadata: {
-          'gameVersion': '1.0',
-          'dragAndDrop': true,
+          'sessionStart': _sessionStart.toIso8601String(),
         },
       );
 
-      await GameDataService.saveGameSession(sessionData);
-      
-      // Update user progress
-      await _updateUserProgress();
-      
       print('Shape Shifters session saved successfully');
     } catch (e) {
       print('Error saving Shape Shifters session: $e');
     }
-  }
-
-  /// Update user progress
-  Future<void> _updateUserProgress() async {
-    try {
-      final currentProgress = await GameDataService.getUserProgress();
-      
-      final newProgress = UserProgress(
-        highestLevel: currentProgress.highestLevel > (currentLevel + 1) ? currentProgress.highestLevel : (currentLevel + 1),
-        modeCompletions: {
-          ...currentProgress.modeCompletions,
-          'shape_shifters': (currentProgress.modeCompletions['shape_shifters'] ?? 0) + _levelsCompleted,
-        },
-        totalSessions: currentProgress.totalSessions + 1,
-        totalBubblesPopped: currentProgress.totalBubblesPopped, // Not applicable for this game
-        totalPlayTime: currentProgress.totalPlayTime + DateTime.now().difference(_sessionStart),
-        achievements: _checkNewAchievements(currentProgress),
-        lastPlayed: DateTime.now(),
-      );
-
-      await GameDataService.saveUserProgress(newProgress);
-    } catch (e) {
-      print('Error updating Shape Shifters progress: $e');
-    }
-  }
-
-  /// Check for new achievements
-  List<String> _checkNewAchievements(UserProgress currentProgress) {
-    final achievements = List<String>.from(currentProgress.achievements);
-    
-    // First shape placement
-    if (_shapesPlaced >= 1 && !achievements.contains('first_shape_placed')) {
-      achievements.add('first_shape_placed');
-    }
-    
-    // Shape master
-    if (_shapesPlaced >= 20 && !achievements.contains('shape_master')) {
-      achievements.add('shape_master');
-    }
-    
-    // Accuracy achievement
-    final accuracy = _totalAttempts > 0 ? _correctPlacements / _totalAttempts : 0.0;
-    if (accuracy >= 0.8 && _totalAttempts >= 10 && !achievements.contains('accurate_placer')) {
-      achievements.add('accurate_placer');
-    }
-    
-    // All levels completed
-    if (currentLevel >= 4 && !achievements.contains('shape_shifters_complete')) {
-      achievements.add('shape_shifters_complete');
-    }
-    
-    return achievements;
   }
 
   void _loadLevel() {
@@ -414,9 +372,10 @@ class _DragToShapeGameState extends State<DragToShapeGame>
           wasPlaced = true;
           _correctPlacements++; // Track successful placement
           _shapesPlaced++;
-          
+
           // Track shape type usage
-          _shapeTypeUsage[object.type] = (_shapeTypeUsage[object.type] ?? 0) + 1;
+          _shapeTypeUsage[object.type] =
+              (_shapeTypeUsage[object.type] ?? 0) + 1;
           break;
         }
       }
@@ -483,13 +442,60 @@ class _DragToShapeGameState extends State<DragToShapeGame>
         setState(() {
           currentLevel++;
         });
+        // Save current level progress
+        _saveCurrentLevel();
         _loadLevel();
       } else {
-        // Game fully completed, save session
+        // Game fully completed, save session and reset progress
         _saveGameSession();
+        _resetGameProgress();
         _showGameComplete();
       }
     });
+  }
+
+  /// Save current level to database
+  Future<void> _saveCurrentLevel() async {
+    try {
+      // Save progress using unified system
+      await GameDataService.saveGameSessionAndProgress(
+        gameType: 'shape_shifters',
+        level: currentLevel + 1, // Convert to 1-based for storage
+        score: _correctPlacements * 10 + _levelsCompleted * 50,
+        completed: false, // Level advancement, not completion
+        sessionDuration: DateTime.now().difference(_sessionStart),
+        gameSpecificData: {
+          'totalAttempts': _totalAttempts,
+          'correctPlacements': _correctPlacements,
+          'shapeTypeUsage': _shapeTypeUsage,
+          'levelAdvancement': true,
+        },
+      );
+    } catch (e) {
+      print('Error saving current level: $e');
+    }
+  }
+
+  /// Reset game progress after completion
+  Future<void> _resetGameProgress() async {
+    try {
+      // Save completion and reset to level 1
+      await GameDataService.saveGameSessionAndProgress(
+        gameType: 'shape_shifters',
+        level: 1, // Reset to level 1
+        score: _correctPlacements * 10 + _levelsCompleted * 50,
+        completed: true, // Game completed
+        sessionDuration: DateTime.now().difference(_sessionStart),
+        gameSpecificData: {
+          'gameCompleted': true,
+          'completedAt': DateTime.now().toIso8601String(),
+          'totalAttempts': _totalAttempts,
+          'correctPlacements': _correctPlacements,
+        },
+      );
+    } catch (e) {
+      print('Error resetting game progress: $e');
+    }
   }
 
   void _showGameComplete() {
@@ -579,14 +585,15 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                   children: [
                     GestureDetector(
                       onTap: () {
-                        Navigator.of(context).pop();
+                        Navigator.of(context)
+                            .pushReplacementNamed('/gamesoption');
                       },
-                      child:
-                          const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                      child: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 28),
                     ),
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -604,7 +611,8 @@ class _DragToShapeGameState extends State<DragToShapeGame>
                     ),
                     GestureDetector(
                       onTap: _loadLevel,
-                      child: const Icon(Icons.refresh, color: Colors.white, size: 28),
+                      child: const Icon(Icons.refresh,
+                          color: Colors.white, size: 28),
                     ),
                   ],
                 ),

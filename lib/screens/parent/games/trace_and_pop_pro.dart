@@ -21,7 +21,8 @@ class TraceAndPopProGame extends StatefulWidget {
 
 enum _Mode { trace, drawMatch, connectPath, shapeSculptor, rhythmTracer }
 
-class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTickerProviderStateMixin {
+class _TraceAndPopProGameState extends State<TraceAndPopProGame>
+    with SingleTickerProviderStateMixin {
   int _level = 1; // 1..5 increases complexity
   bool _twoHandMode = false; // bilateral mode
   bool _showGuideDots = true;
@@ -69,6 +70,25 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   @override
   void initState() {
     super.initState();
+    _initializeGame();
+  }
+
+  /// Initialize game by loading saved progress
+  Future<void> _initializeGame() async {
+    try {
+      // Load saved progress from unified user progress
+      final userProgress = await GameDataService.getUserGameProgress();
+      final savedLevel = userProgress.getCurrentLevel('trace_and_pop_pro');
+      setState(() {
+        _level = savedLevel;
+      });
+      print('Trace and Pop Pro: Starting at level $savedLevel');
+    } catch (e) {
+      print('Error loading saved level: $e');
+      setState(() {
+        _level = 1; // Default to level 1
+      });
+    }
     _generateLevel();
     _newSession();
   }
@@ -76,7 +96,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   @override
   void dispose() {
     // Save session data even if not completed when exiting
-    if (!_completed && DateTime.now().difference(_sessionStart).inSeconds > 10) {
+    if (!_completed &&
+        DateTime.now().difference(_sessionStart).inSeconds > 10) {
       _saveGameSession();
     }
     _beatTimer?.cancel();
@@ -96,15 +117,13 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   /// Save current game session to Firebase
   Future<void> _saveGameSession() async {
     try {
-      final sessionData = GameSessionData(
-        timestamp: DateTime.now(),
-        gameType: 'trace_pop_pro',
-        gameMode: _mode.name,
+      // Save using the new unified progress system
+      await GameDataService.saveGameSessionAndProgress(
+        gameType: 'trace_and_pop_pro',
         level: _level,
-        sessionDuration: DateTime.now().difference(_sessionStart),
-        progress: _progress,
         score: _bubblesPoppedCount * 10 + (_completed ? 50 : 0),
         completed: _completed,
+        sessionDuration: DateTime.now().difference(_sessionStart),
         gameSpecificData: {
           'bubblesPopped': _bubblesPoppedCount,
           'averageSpeed': _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
@@ -113,21 +132,15 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
           'targetSpeed': _targetSpeed,
           'showGuideDots': _showGuideDots,
           'bpm': _bpm,
-        },
-        metadata: {
-          'gameVersion': '1.0',
-          'deviceType': 'mobile',
+          'sessionStart': _sessionStart.toIso8601String(),
+          'progress': _progress,
+          'mode': _mode.name,
         },
       );
 
-      await GameDataService.saveGameSession(sessionData);
-      
-      // Update user progress
-      await _updateUserProgress();
-      
-      print('Game session saved successfully');
+      print('Trace and Pop Pro session saved successfully');
     } catch (e) {
-      print('Error saving game session: $e');
+      print('Error saving Trace and Pop Pro session: $e');
     }
   }
 
@@ -135,17 +148,20 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   Future<void> _updateUserProgress() async {
     try {
       final currentProgress = await GameDataService.getUserProgress();
-      
+
       // Calculate new progress
       final newProgress = UserProgress(
         highestLevel: max(currentProgress.highestLevel, _level),
         modeCompletions: {
           ...currentProgress.modeCompletions,
-          _mode.name: (currentProgress.modeCompletions[_mode.name] ?? 0) + (_completed ? 1 : 0),
+          _mode.name: (currentProgress.modeCompletions[_mode.name] ?? 0) +
+              (_completed ? 1 : 0),
         },
         totalSessions: currentProgress.totalSessions + 1,
-        totalBubblesPopped: currentProgress.totalBubblesPopped + _bubblesPoppedCount,
-        totalPlayTime: currentProgress.totalPlayTime + DateTime.now().difference(_sessionStart),
+        totalBubblesPopped:
+            currentProgress.totalBubblesPopped + _bubblesPoppedCount,
+        totalPlayTime: currentProgress.totalPlayTime +
+            DateTime.now().difference(_sessionStart),
         achievements: _checkNewAchievements(currentProgress),
         lastPlayed: DateTime.now(),
       );
@@ -159,12 +175,12 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   /// Check for new achievements based on current session
   List<String> _checkNewAchievements(UserProgress currentProgress) {
     final achievements = List<String>.from(currentProgress.achievements);
-    
+
     // First completion achievement
     if (_completed && currentProgress.totalSessions == 0) {
       achievements.add('first_completion');
     }
-    
+
     // Level achievements
     if (_level >= 3 && !achievements.contains('level_3_master')) {
       achievements.add('level_3_master');
@@ -172,32 +188,33 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     if (_level >= 5 && !achievements.contains('level_5_master')) {
       achievements.add('level_5_master');
     }
-    
+
     // Bubble popping achievements
     if (_bubblesPoppedCount >= 10 && !achievements.contains('bubble_buster')) {
       achievements.add('bubble_buster');
     }
-    if (currentProgress.totalBubblesPopped + _bubblesPoppedCount >= 100 && !achievements.contains('bubble_master')) {
+    if (currentProgress.totalBubblesPopped + _bubblesPoppedCount >= 100 &&
+        !achievements.contains('bubble_master')) {
       achievements.add('bubble_master');
     }
-    
+
     // Speed achievements
     final avgSpeed = _speedSamples > 0 ? _sumSpeed / _speedSamples : 0;
     if (avgSpeed >= 400 && !achievements.contains('speed_demon')) {
       achievements.add('speed_demon');
     }
-    
+
     // Accuracy achievements
     final accuracy = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
     if (accuracy >= 0.9 && !achievements.contains('precision_master')) {
       achievements.add('precision_master');
     }
-    
+
     // Two-hand mode achievement
     if (_twoHandMode && _completed && !achievements.contains('ambidextrous')) {
       achievements.add('ambidextrous');
     }
-    
+
     return achievements;
   }
 
@@ -206,9 +223,9 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     try {
       final statistics = await GameDataService.getUserStatistics();
       final progress = await GameDataService.getUserProgress();
-      
+
       if (!mounted) return;
-      
+
       showDialog(
         context: context,
         builder: (context) => StatisticsDialog(
@@ -229,7 +246,12 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     if (DateTime.now().difference(_sessionStart).inSeconds > 10) {
       _saveGameSession();
     }
-    
+
+    // Save current level progress when advancing
+    if (_level > 1) {
+      _saveCurrentLevel();
+    }
+
     // Generate a path based on level: straight -> curve -> complex -> zigzag -> letters
     _pathPoints = _buildPathForLevel(_level, const Size(360, 600));
     _bubbles = _spawnBubbles(_level);
@@ -243,6 +265,51 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     _setupRhythm();
     _newSession();
     setState(() {});
+  }
+
+  /// Save current level to database
+  Future<void> _saveCurrentLevel() async {
+    try {
+      // Save progress using unified system
+      await GameDataService.saveGameSessionAndProgress(
+        gameType: 'trace_and_pop_pro',
+        level: _level,
+        score: _bubblesPoppedCount * 10,
+        completed: false, // Level advancement, not completion
+        sessionDuration: DateTime.now().difference(_sessionStart),
+        gameSpecificData: {
+          'mode': _mode.name,
+          'bubblesPopped': _bubblesPoppedCount,
+          'accuracy': _totalSamples > 0 ? _onPathSamples / _totalSamples : 0,
+          'averageSpeed': _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
+          'twoHandMode': _twoHandMode,
+          'levelAdvancement': true,
+        },
+      );
+    } catch (e) {
+      print('Error saving current level: $e');
+    }
+  }
+
+  /// Reset game progress after completion
+  Future<void> _resetGameProgress() async {
+    try {
+      // Save completion and reset to level 1
+      await GameDataService.saveGameSessionAndProgress(
+        gameType: 'trace_and_pop_pro',
+        level: 1, // Reset to level 1
+        score: _bubblesPoppedCount * 10 + 50, // Completion bonus
+        completed: true, // Game completed
+        sessionDuration: DateTime.now().difference(_sessionStart),
+        gameSpecificData: {
+          'gameCompleted': true,
+          'completedAt': DateTime.now().toIso8601String(),
+          'finalBubblesPopped': _bubblesPoppedCount,
+        },
+      );
+    } catch (e) {
+      print('Error resetting game progress: $e');
+    }
   }
 
   List<Offset> _buildPathForLevel(int level, Size canvas) {
@@ -305,7 +372,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     final List<_Bubble> bubbles = [];
     for (int i = 0; i < count; i++) {
       bubbles.add(_Bubble(
-        center: Offset(60 + rnd.nextDouble() * 240, 380 + rnd.nextDouble() * 160),
+        center:
+            Offset(60 + rnd.nextDouble() * 240, 380 + rnd.nextDouble() * 160),
         radius: 16 + rnd.nextDouble() * 16,
       ));
     }
@@ -317,7 +385,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     final count = 6 + level * 2;
     final List<Offset> pts = [];
     for (int i = 0; i < count; i++) {
-      pts.add(Offset(50 + rnd.nextDouble() * 260, 200 + rnd.nextDouble() * 260));
+      pts.add(
+          Offset(50 + rnd.nextDouble() * 260, 200 + rnd.nextDouble() * 260));
     }
     return pts;
   }
@@ -327,7 +396,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
       case 1:
         return _circlePoints(const Offset(180, 260), 60, 72);
       case 2:
-  return _rectanglePoints(Rect.fromCenter(center: const Offset(180, 260), width: 140, height: 80));
+        return _rectanglePoints(Rect.fromCenter(
+            center: const Offset(180, 260), width: 140, height: 80));
       case 3:
         return _trianglePoints(const Offset(180, 260), 100);
       case 4:
@@ -338,15 +408,30 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   }
 
   List<Offset> _circlePoints(Offset c, double r, int n) =>
-      List.generate(n, (i) { final a = 2 * pi * i / n; return Offset(c.dx + cos(a) * r, c.dy + sin(a) * r); });
+      List.generate(n, (i) {
+        final a = 2 * pi * i / n;
+        return Offset(c.dx + cos(a) * r, c.dy + sin(a) * r);
+      });
 
   List<Offset> _rectanglePoints(Rect rect) {
     final List<Offset> pts = [];
     const seg = 30;
-    for (int i = 0; i <= seg; i++) { final t = i / seg; pts.add(Offset(lerpDouble(rect.left, rect.right, t)!, rect.top)); }
-    for (int i = 0; i <= seg; i++) { final t = i / seg; pts.add(Offset(rect.right, lerpDouble(rect.top, rect.bottom, t)!)); }
-    for (int i = 0; i <= seg; i++) { final t = i / seg; pts.add(Offset(lerpDouble(rect.right, rect.left, t)!, rect.bottom)); }
-    for (int i = 0; i <= seg; i++) { final t = i / seg; pts.add(Offset(rect.left, lerpDouble(rect.bottom, rect.top, t)!)); }
+    for (int i = 0; i <= seg; i++) {
+      final t = i / seg;
+      pts.add(Offset(lerpDouble(rect.left, rect.right, t)!, rect.top));
+    }
+    for (int i = 0; i <= seg; i++) {
+      final t = i / seg;
+      pts.add(Offset(rect.right, lerpDouble(rect.top, rect.bottom, t)!));
+    }
+    for (int i = 0; i <= seg; i++) {
+      final t = i / seg;
+      pts.add(Offset(lerpDouble(rect.right, rect.left, t)!, rect.bottom));
+    }
+    for (int i = 0; i <= seg; i++) {
+      final t = i / seg;
+      pts.add(Offset(rect.left, lerpDouble(rect.bottom, rect.top, t)!));
+    }
     return pts;
   }
 
@@ -361,7 +446,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     return pts;
   }
 
-  List<Offset> _zigZagPoints(Offset start, double width, double height, int zigs) {
+  List<Offset> _zigZagPoints(
+      Offset start, double width, double height, int zigs) {
     final List<Offset> pts = [];
     for (int i = 0; i <= zigs; i++) {
       final t = i / zigs;
@@ -375,19 +461,22 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   void _initSculptTargets() {
     _sculptBase = _trianglePoints(const Offset(0, 0), 100);
     _sculptPos = const Offset(120, 420);
-    _sculptScale = 1.0; _sculptRotation = 0.0;
+    _sculptScale = 1.0;
+    _sculptRotation = 0.0;
     _sculptTargetPos = const Offset(240, 420);
-    _sculptTargetScale = 1.2; _sculptTargetRotation = pi / 8;
+    _sculptTargetScale = 1.2;
+    _sculptTargetRotation = pi / 8;
     _sculptTarget
       ..clear()
-      ..addAll(_trianglePoints(const Offset(0,0), 100));
+      ..addAll(_trianglePoints(const Offset(0, 0), 100));
   }
 
   void _setupRhythm() {
     _beatTimer?.cancel();
     if (_mode == _Mode.rhythmTracer) {
       final beatDurMs = (60000 / _bpm).round();
-      _beatTimer = Timer.periodic(Duration(milliseconds: (beatDurMs / 6).round()), (timer) {
+      _beatTimer = Timer.periodic(
+          Duration(milliseconds: (beatDurMs / 6).round()), (timer) {
         setState(() {
           _beatT += 1 / (pathMaxIndex.clamp(1, 100));
           if (_beatT > 1) _beatT -= 1;
@@ -397,7 +486,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
   }
 
   void _onPointerDown(PointerDownEvent e) {
-    _pointers[e.pointer] = _PointerSample(position: e.localPosition, time: DateTime.now());
+    _pointers[e.pointer] =
+        _PointerSample(position: e.localPosition, time: DateTime.now());
     setState(() {});
   }
 
@@ -407,10 +497,12 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     if (prev != null) {
       final dt = now.difference(prev.time).inMicroseconds / 1e6;
       final dist = (e.localPosition - prev.position).distance;
-  final speed = dt > 0 ? dist / dt : 0.0; // px/sec
-      _pointers[e.pointer] = _PointerSample(position: e.localPosition, time: now, speed: speed);
+      final speed = dt > 0 ? dist / dt : 0.0; // px/sec
+      _pointers[e.pointer] =
+          _PointerSample(position: e.localPosition, time: now, speed: speed);
     } else {
-      _pointers[e.pointer] = _PointerSample(position: e.localPosition, time: now);
+      _pointers[e.pointer] =
+          _PointerSample(position: e.localPosition, time: now);
     }
 
     switch (_mode) {
@@ -433,7 +525,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     if (_twoHandMode && _pointers.length >= 2) {
       for (final b in _bubbles) {
         if (!b.popped && (e.localPosition - b.center).distance <= b.radius) {
-          b.popped = true; _bubblesPoppedCount += 1;
+          b.popped = true;
+          _bubblesPoppedCount += 1;
         }
       }
     }
@@ -448,12 +541,12 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
 
     final wasCompleted = _completed;
     _completed = _checkCompletion(e.localPosition);
-    
+
     // Save to Firebase when game is completed for the first time
     if (_completed && !wasCompleted) {
       _saveGameSession();
     }
-    
+
     setState(() {});
   }
 
@@ -493,7 +586,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     switch (_mode) {
       case _Mode.trace:
         final avgSpeed = _speedSamples > 0 ? _sumSpeed / _speedSamples : 0;
-        final speedOk = avgSpeed > _targetSpeed * 0.5 && avgSpeed < _targetSpeed * 1.5;
+        final speedOk =
+            avgSpeed > _targetSpeed * 0.5 && avgSpeed < _targetSpeed * 1.5;
         return _progress > 0.95 && speedOk;
       case _Mode.drawMatch:
         if (_drawnStroke.length < 20) return false;
@@ -516,14 +610,20 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
     double d1 = 0;
     for (final p in a) {
       double best = 1e9;
-      for (final q in b) { final d = (p - q).distance; if (d < best) best = d; }
+      for (final q in b) {
+        final d = (p - q).distance;
+        if (d < best) best = d;
+      }
       d1 += best;
     }
     d1 /= max(1, a.length);
     double d2 = 0;
     for (final q in b) {
       double best = 1e9;
-      for (final p in a) { final d = (p - q).distance; if (d < best) best = d; }
+      for (final p in a) {
+        final d = (p - q).distance;
+        if (d < best) best = d;
+      }
       d2 += best;
     }
     d2 /= max(1, b.length);
@@ -547,7 +647,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () =>
+              Navigator.of(context).pushReplacementNamed('/gamesoption'),
         ),
         actions: [
           Container(
@@ -558,7 +659,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
               icon: const Icon(Icons.analytics, color: Colors.white),
               style: IconButton.styleFrom(
                 backgroundColor: const Color(0xFF67AFA5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
@@ -570,7 +672,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
               icon: const Icon(Icons.refresh, color: Colors.white),
               style: IconButton.styleFrom(
                 backgroundColor: const Color(0xFF67AFA5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
@@ -584,19 +687,23 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return GestureDetector(
-                  onScaleStart: _mode == _Mode.shapeSculptor ? (details) {} : null,
-                  onScaleUpdate: _mode == _Mode.shapeSculptor ? (details) {
-                    setState(() {
-                      _sculptPos += details.focalPointDelta;
-                      _sculptScale *= details.scale.clamp(0.9, 1.1);
-                      _sculptRotation += details.rotation;
-                    });
-                  } : null,
+                  onScaleStart:
+                      _mode == _Mode.shapeSculptor ? (details) {} : null,
+                  onScaleUpdate: _mode == _Mode.shapeSculptor
+                      ? (details) {
+                          setState(() {
+                            _sculptPos += details.focalPointDelta;
+                            _sculptScale *= details.scale.clamp(0.9, 1.1);
+                            _sculptRotation += details.rotation;
+                          });
+                        }
+                      : null,
                   child: Listener(
                     onPointerDown: (e) {
                       if (_mode == _Mode.connectPath) {
                         if (_nextDotIndex < _dots.length) {
-                          final d = (e.localPosition - _dots[_nextDotIndex]).distance;
+                          final d =
+                              (e.localPosition - _dots[_nextDotIndex]).distance;
                           if (d < 24) {
                             if (_nextDotIndex > 0) {
                               _connections.add(_dots[_nextDotIndex - 1]);
@@ -646,16 +753,29 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
                             Positioned(
                               right: 12,
                               top: 12,
-                              child: _BubbleBadge(remaining: _bubbles.where((b) => !b.popped).length),
+                              child: _BubbleBadge(
+                                  remaining:
+                                      _bubbles.where((b) => !b.popped).length),
                             ),
                           Positioned(
                             right: 12,
                             bottom: 12,
                             child: _MetricsPanel(
-                              duration: DateTime.now().difference(_sessionStart),
-                              avgSpeed: _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
-                              onPathRatio: _totalSamples > 0 ? _onPathSamples / _totalSamples : 0,
-                              bubblesPerMin: _bubblesPoppedCount / max(1, DateTime.now().difference(_sessionStart).inMinutes).toDouble(),
+                              duration:
+                                  DateTime.now().difference(_sessionStart),
+                              avgSpeed: _speedSamples > 0
+                                  ? _sumSpeed / _speedSamples
+                                  : 0,
+                              onPathRatio: _totalSamples > 0
+                                  ? _onPathSamples / _totalSamples
+                                  : 0,
+                              bubblesPerMin: _bubblesPoppedCount /
+                                  max(
+                                          1,
+                                          DateTime.now()
+                                              .difference(_sessionStart)
+                                              .inMinutes)
+                                      .toDouble(),
                               completed: _completed,
                             ),
                           ),
@@ -694,28 +814,50 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
             children: [
               const Icon(Icons.games, color: Color(0xFF006A5B)),
               const SizedBox(width: 8),
-              const Text('Activity:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF006A5B))),
+              const Text('Activity:',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF006A5B))),
               const SizedBox(width: 12),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFF67AFA5).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF67AFA5).withOpacity(0.3)),
+                    border: Border.all(
+                        color: const Color(0xFF67AFA5).withOpacity(0.3)),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<_Mode>(
                       value: _mode,
                       isExpanded: true,
                       dropdownColor: Colors.white,
-                      onChanged: (m) { if (m != null) { setState(() { _mode = m; }); _setupRhythm(); } },
+                      onChanged: (m) {
+                        if (m != null) {
+                          setState(() {
+                            _mode = m;
+                          });
+                          _setupRhythm();
+                        }
+                      },
                       items: const [
-                        DropdownMenuItem(value: _Mode.trace, child: Text('🖐️ Trace Path')),
-                        DropdownMenuItem(value: _Mode.drawMatch, child: Text('✏️ Draw & Match')),
-                        DropdownMenuItem(value: _Mode.connectPath, child: Text('🔗 Connect Dots')),
-                        DropdownMenuItem(value: _Mode.shapeSculptor, child: Text('🎨 Shape Sculptor')),
-                        DropdownMenuItem(value: _Mode.rhythmTracer, child: Text('🎵 Rhythm Tracer')),
+                        DropdownMenuItem(
+                            value: _Mode.trace, child: Text('🖐️ Trace Path')),
+                        DropdownMenuItem(
+                            value: _Mode.drawMatch,
+                            child: Text('✏️ Draw & Match')),
+                        DropdownMenuItem(
+                            value: _Mode.connectPath,
+                            child: Text('🔗 Connect Dots')),
+                        DropdownMenuItem(
+                            value: _Mode.shapeSculptor,
+                            child: Text('🎨 Shape Sculptor')),
+                        DropdownMenuItem(
+                            value: _Mode.rhythmTracer,
+                            child: Text('🎵 Rhythm Tracer')),
                       ],
                     ),
                   ),
@@ -724,7 +866,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // Level and Options in Cards
           Wrap(
             spacing: 12,
@@ -735,22 +877,33 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
                 label: 'Level',
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: List.generate(5, (i) => 
-                    GestureDetector(
-                      onTap: () { setState(() { _level = i + 1; }); _generateLevel(); },
+                  children: List.generate(
+                    5,
+                    (i) => GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _level = i + 1;
+                        });
+                        _generateLevel();
+                        _saveCurrentLevel();
+                      },
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: _level == i + 1 ? const Color(0xFF006A5B) : Colors.grey.shade200,
+                          color: _level == i + 1
+                              ? const Color(0xFF006A5B)
+                              : Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
                           child: Text(
                             '${i + 1}',
                             style: TextStyle(
-                              color: _level == i + 1 ? Colors.white : Colors.grey.shade600,
+                              color: _level == i + 1
+                                  ? Colors.white
+                                  : Colors.grey.shade600,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -760,21 +913,18 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
                   ),
                 ),
               ),
-              
               _buildToggleCard(
                 icon: Icons.scatter_plot,
                 label: 'Guide Dots',
                 value: _showGuideDots,
                 onChanged: (v) => setState(() => _showGuideDots = v),
               ),
-              
               _buildToggleCard(
                 icon: Icons.back_hand,
                 label: 'Two Hands',
                 value: _twoHandMode,
                 onChanged: (v) => setState(() => _twoHandMode = v),
               ),
-              
               if (_mode == _Mode.rhythmTracer)
                 _buildControlCard(
                   icon: Icons.music_note,
@@ -787,16 +937,23 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
                       max: 140,
                       divisions: 8,
                       activeColor: const Color(0xFF006A5B),
-                      onChanged: (v) { setState(() { _bpm = v.round(); }); _setupRhythm(); },
+                      onChanged: (v) {
+                        setState(() {
+                          _bpm = v.round();
+                        });
+                        _setupRhythm();
+                      },
                     ),
                   ),
                 ),
-              
               if (_mode == _Mode.drawMatch)
                 _buildActionCard(
                   icon: Icons.clear,
                   label: 'Clear',
-                  onTap: () { _drawnStroke.clear(); setState(() {}); },
+                  onTap: () {
+                    _drawnStroke.clear();
+                    setState(() {});
+                  },
                 ),
             ],
           ),
@@ -804,8 +961,9 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
       ),
     );
   }
-  
-  Widget _buildControlCard({required IconData icon, required String label, required Widget child}) {
+
+  Widget _buildControlCard(
+      {required IconData icon, required String label, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -821,7 +979,11 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
             children: [
               Icon(icon, color: const Color(0xFF006A5B), size: 18),
               const SizedBox(width: 6),
-              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF006A5B))),
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF006A5B))),
             ],
           ),
           const SizedBox(height: 8),
@@ -830,21 +992,30 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
       ),
     );
   }
-  
-  Widget _buildToggleCard({required IconData icon, required String label, required bool value, required Function(bool) onChanged}) {
+
+  Widget _buildToggleCard(
+      {required IconData icon,
+      required String label,
+      required bool value,
+      required Function(bool) onChanged}) {
     return GestureDetector(
       onTap: () => onChanged(!value),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: value ? const Color(0xFF006A5B).withOpacity(0.1) : Colors.grey.shade50,
+          color: value
+              ? const Color(0xFF006A5B).withOpacity(0.1)
+              : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: value ? const Color(0xFF006A5B) : Colors.grey.shade300),
+          border: Border.all(
+              color: value ? const Color(0xFF006A5B) : Colors.grey.shade300),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: value ? const Color(0xFF006A5B) : Colors.grey.shade600, size: 20),
+            Icon(icon,
+                color: value ? const Color(0xFF006A5B) : Colors.grey.shade600,
+                size: 20),
             const SizedBox(height: 4),
             Text(
               label,
@@ -881,8 +1052,11 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame> with SingleTick
       ),
     );
   }
-  
-  Widget _buildActionCard({required IconData icon, required String label, required VoidCallback onTap}) {
+
+  Widget _buildActionCard(
+      {required IconData icon,
+      required String label,
+      required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -970,7 +1144,11 @@ class _TracePainter extends CustomPainter {
       final Path p = Path();
       for (int i = 0; i < path.length; i++) {
         final pt = path[i];
-        if (i == 0) { p.moveTo(pt.dx, pt.dy); } else { p.lineTo(pt.dx, pt.dy); }
+        if (i == 0) {
+          p.moveTo(pt.dx, pt.dy);
+        } else {
+          p.lineTo(pt.dx, pt.dy);
+        }
       }
       canvas.drawPath(p, guide);
       if (showGuideDots) {
@@ -982,7 +1160,9 @@ class _TracePainter extends CustomPainter {
       if (mode == _Mode.rhythmTracer && beatT != null && path.isNotEmpty) {
         final idx = (beatT!.clamp(0, 1) * (path.length - 1)).round();
         final pExp = path[idx];
-        final paintBeat = Paint()..color = Colors.purple..style = PaintingStyle.fill;
+        final paintBeat = Paint()
+          ..color = Colors.purple
+          ..style = PaintingStyle.fill;
         canvas.drawCircle(pExp, 10, paintBeat);
       }
     }
@@ -994,13 +1174,22 @@ class _TracePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3;
         final tp = Path()..moveTo(targetShape!.first.dx, targetShape!.first.dy);
-        for (final pt in targetShape!.skip(1)) { tp.lineTo(pt.dx, pt.dy); }
+        for (final pt in targetShape!.skip(1)) {
+          tp.lineTo(pt.dx, pt.dy);
+        }
         canvas.drawPath(tp, tgtPaint);
       }
       if (drawnStroke != null && drawnStroke!.length > 1) {
         final up = Path()..moveTo(drawnStroke!.first.dx, drawnStroke!.first.dy);
-        for (final pt in drawnStroke!.skip(1)) { up.lineTo(pt.dx, pt.dy); }
-        canvas.drawPath(up, Paint()..color = Colors.indigo..style = PaintingStyle.stroke..strokeWidth = 4);
+        for (final pt in drawnStroke!.skip(1)) {
+          up.lineTo(pt.dx, pt.dy);
+        }
+        canvas.drawPath(
+            up,
+            Paint()
+              ..color = Colors.indigo
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4);
       }
     }
 
@@ -1008,7 +1197,8 @@ class _TracePainter extends CustomPainter {
       if (dots != null) {
         final dotPaint = Paint()..style = PaintingStyle.fill;
         for (int i = 0; i < dots!.length; i++) {
-          dotPaint.color = i < (nextDotIndex ?? 0) ? Colors.green : Colors.orange;
+          dotPaint.color =
+              i < (nextDotIndex ?? 0) ? Colors.green : Colors.orange;
           canvas.drawCircle(dots![i], 8, dotPaint);
         }
       }
@@ -1027,12 +1217,27 @@ class _TracePainter extends CustomPainter {
 
     if (mode == _Mode.shapeSculptor) {
       if (sculptTarget != null) {
-        final Path tgt = _transformPoly(sculptTarget!, sculptTargetPos ?? Offset.zero, sculptTargetScale ?? 1.0, sculptTargetRotation ?? 0.0);
-        canvas.drawPath(tgt, Paint()..color = Colors.teal.shade200..style = PaintingStyle.stroke..strokeWidth = 3);
+        final Path tgt = _transformPoly(
+            sculptTarget!,
+            sculptTargetPos ?? Offset.zero,
+            sculptTargetScale ?? 1.0,
+            sculptTargetRotation ?? 0.0);
+        canvas.drawPath(
+            tgt,
+            Paint()
+              ..color = Colors.teal.shade200
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3);
       }
       if (sculptBase != null) {
-        final Path user = _transformPoly(sculptBase!, sculptPos ?? Offset.zero, sculptScale ?? 1.0, sculptRotation ?? 0.0);
-        canvas.drawPath(user, Paint()..color = Colors.indigo..style = PaintingStyle.stroke..strokeWidth = 4);
+        final Path user = _transformPoly(sculptBase!, sculptPos ?? Offset.zero,
+            sculptScale ?? 1.0, sculptRotation ?? 0.0);
+        canvas.drawPath(
+            user,
+            Paint()
+              ..color = Colors.indigo
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 4);
       }
     }
 
@@ -1040,7 +1245,9 @@ class _TracePainter extends CustomPainter {
     if (twoHandMode) {
       final bubblePaint = Paint()..style = PaintingStyle.fill;
       for (final b in bubbles) {
-        bubblePaint.color = b.popped ? Colors.greenAccent.withOpacity(0.4) : Colors.lightBlueAccent.withOpacity(0.6);
+        bubblePaint.color = b.popped
+            ? Colors.greenAccent.withOpacity(0.4)
+            : Colors.lightBlueAccent.withOpacity(0.6);
         canvas.drawCircle(b.center, b.radius, bubblePaint);
       }
     }
@@ -1078,7 +1285,11 @@ class _TracePainter extends CustomPainter {
       final xr = v.dx * cos(rot) - v.dy * sin(rot);
       final yr = v.dx * sin(rot) + v.dy * cos(rot);
       final pt = Offset(xr * scale + pos.dx, yr * scale + pos.dy);
-      if (i == 0) { p.moveTo(pt.dx, pt.dy); } else { p.lineTo(pt.dx, pt.dy); }
+      if (i == 0) {
+        p.moveTo(pt.dx, pt.dy);
+      } else {
+        p.lineTo(pt.dx, pt.dy);
+      }
     }
     return p;
   }
@@ -1148,7 +1359,10 @@ class _ProgressBadge extends StatelessWidget {
               const SizedBox(width: 6),
               const Text(
                 'Progress',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF006A5B)),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF006A5B)),
               ),
             ],
           ),
@@ -1220,11 +1434,15 @@ class _BubbleBadge extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.bubble_chart, color: Color(0xFF67AFA5), size: 18),
+              const Icon(Icons.bubble_chart,
+                  color: Color(0xFF67AFA5), size: 18),
               const SizedBox(width: 6),
               const Text(
                 'Bubbles',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF67AFA5)),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF67AFA5)),
               ),
             ],
           ),
@@ -1265,7 +1483,8 @@ class _MetricsPanel extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    String fmt(double v) => v.isNaN || v.isInfinite ? '-' : v.toStringAsFixed(1);
+    String fmt(double v) =>
+        v.isNaN || v.isInfinite ? '-' : v.toStringAsFixed(1);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1293,7 +1512,8 @@ class _MetricsPanel extends StatelessWidget {
                   color: const Color(0xFF006A5B).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.analytics, color: Color(0xFF006A5B), size: 16),
+                child: const Icon(Icons.analytics,
+                    color: Color(0xFF006A5B), size: 16),
               ),
               const SizedBox(width: 8),
               const Text(
@@ -1307,16 +1527,20 @@ class _MetricsPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          
+
           // Metrics in card format
-          _buildMetricItem(Icons.timer, 'Time', '${duration.inSeconds}s', const Color(0xFF67AFA5)),
+          _buildMetricItem(Icons.timer, 'Time', '${duration.inSeconds}s',
+              const Color(0xFF67AFA5)),
           const SizedBox(height: 8),
-          _buildMetricItem(Icons.speed, 'Speed', '${fmt(avgSpeed)} px/s', Colors.blue),
+          _buildMetricItem(
+              Icons.speed, 'Speed', '${fmt(avgSpeed)} px/s', Colors.blue),
           const SizedBox(height: 8),
-          _buildMetricItem(Icons.gps_fixed, 'Accuracy', '${(onPathRatio * 100).toStringAsFixed(0)}%', Colors.green),
+          _buildMetricItem(Icons.gps_fixed, 'Accuracy',
+              '${(onPathRatio * 100).toStringAsFixed(0)}%', Colors.green),
           const SizedBox(height: 8),
-          _buildMetricItem(Icons.bubble_chart, 'Rate', '${fmt(bubblesPerMin)}/min', Colors.orange),
-          
+          _buildMetricItem(Icons.bubble_chart, 'Rate',
+              '${fmt(bubblesPerMin)}/min', Colors.orange),
+
           if (completed) ...[
             const SizedBox(height: 12),
             Container(
@@ -1349,8 +1573,9 @@ class _MetricsPanel extends StatelessWidget {
       ),
     );
   }
-  
-  Widget _buildMetricItem(IconData icon, String label, String value, Color color) {
+
+  Widget _buildMetricItem(
+      IconData icon, String label, String value, Color color) {
     return Row(
       children: [
         Icon(icon, color: color, size: 14),
@@ -1435,7 +1660,7 @@ class StatisticsDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -1447,51 +1672,72 @@ class StatisticsDialog extends StatelessWidget {
                       Icons.trending_up,
                       const Color(0xFF006A5B),
                       [
-                        _buildStatItem('Highest Level', '${progress.highestLevel}', Icons.stairs),
-                        _buildStatItem('Total Sessions', '${progress.totalSessions}', Icons.play_circle),
-                        _buildStatItem('Play Time', _formatDuration(progress.totalPlayTime), Icons.timer),
-                        _buildStatItem('Bubbles Popped', '${progress.totalBubblesPopped}', Icons.bubble_chart),
+                        _buildStatItem('Highest Level',
+                            '${progress.highestLevel}', Icons.stairs),
+                        _buildStatItem('Total Sessions',
+                            '${progress.totalSessions}', Icons.play_circle),
+                        _buildStatItem(
+                            'Play Time',
+                            _formatDuration(progress.totalPlayTime),
+                            Icons.timer),
+                        _buildStatItem(
+                            'Bubbles Popped',
+                            '${progress.totalBubblesPopped}',
+                            Icons.bubble_chart),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Performance Stats
                     _buildSectionCard(
                       'Performance',
                       Icons.speed,
                       const Color(0xFF67AFA5),
                       [
-                        _buildStatItem('Average Accuracy', '${(statistics.averageAccuracy * 100).toStringAsFixed(1)}%', Icons.gps_fixed),
-                        _buildStatItem('Average Speed', '${statistics.averageSpeed.toStringAsFixed(0)} px/s', Icons.speed),
-                        _buildStatItem('Completion Rate', '${statistics.totalSessions > 0 ? (statistics.totalCompletedSessions / statistics.totalSessions * 100).toStringAsFixed(1) : 0}%', Icons.check_circle),
+                        _buildStatItem(
+                            'Average Accuracy',
+                            '${(statistics.averageAccuracy * 100).toStringAsFixed(1)}%',
+                            Icons.gps_fixed),
+                        _buildStatItem(
+                            'Average Speed',
+                            '${statistics.averageSpeed.toStringAsFixed(0)} px/s',
+                            Icons.speed),
+                        _buildStatItem(
+                            'Completion Rate',
+                            '${statistics.totalSessions > 0 ? (statistics.totalCompletedSessions / statistics.totalSessions * 100).toStringAsFixed(1) : 0}%',
+                            Icons.check_circle),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // Game Modes
                     if (progress.modeCompletions.isNotEmpty) ...[
                       _buildSectionCard(
                         'Game Modes',
                         Icons.games,
                         Colors.blue,
-                        progress.modeCompletions.entries.map((entry) =>
-                          _buildStatItem(_formatModeName(entry.key), '${entry.value} completed', _getModeIcon(entry.key))
-                        ).toList(),
+                        progress.modeCompletions.entries
+                            .map((entry) => _buildStatItem(
+                                _formatModeName(entry.key),
+                                '${entry.value} completed',
+                                _getModeIcon(entry.key)))
+                            .toList(),
                       ),
                       const SizedBox(height: 16),
                     ],
-                    
+
                     // Achievements
                     if (progress.achievements.isNotEmpty) ...[
                       _buildSectionCard(
                         'Achievements',
                         Icons.emoji_events,
                         Colors.orange,
-                        progress.achievements.map((achievement) =>
-                          _buildAchievementItem(achievement)
-                        ).toList(),
+                        progress.achievements
+                            .map((achievement) =>
+                                _buildAchievementItem(achievement))
+                            .toList(),
                       ),
                     ],
                   ],
@@ -1504,7 +1750,8 @@ class StatisticsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionCard(String title, IconData icon, Color color, List<Widget> children) {
+  Widget _buildSectionCard(
+      String title, IconData icon, Color color, List<Widget> children) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1641,26 +1888,63 @@ class StatisticsDialog extends StatelessWidget {
     }
   }
 
-  ({String title, String description, IconData icon}) _getAchievementInfo(String achievement) {
+  ({String title, String description, IconData icon}) _getAchievementInfo(
+      String achievement) {
     switch (achievement) {
       case 'first_completion':
-        return (title: 'First Success!', description: 'Completed your first game', icon: Icons.star);
+        return (
+          title: 'First Success!',
+          description: 'Completed your first game',
+          icon: Icons.star
+        );
       case 'level_3_master':
-        return (title: 'Level 3 Master', description: 'Reached level 3', icon: Icons.trending_up);
+        return (
+          title: 'Level 3 Master',
+          description: 'Reached level 3',
+          icon: Icons.trending_up
+        );
       case 'level_5_master':
-        return (title: 'Level 5 Master', description: 'Reached level 5', icon: Icons.military_tech);
+        return (
+          title: 'Level 5 Master',
+          description: 'Reached level 5',
+          icon: Icons.military_tech
+        );
       case 'bubble_buster':
-        return (title: 'Bubble Buster', description: 'Popped 10 bubbles in one session', icon: Icons.bubble_chart);
+        return (
+          title: 'Bubble Buster',
+          description: 'Popped 10 bubbles in one session',
+          icon: Icons.bubble_chart
+        );
       case 'bubble_master':
-        return (title: 'Bubble Master', description: 'Popped 100 bubbles total', icon: Icons.stars);
+        return (
+          title: 'Bubble Master',
+          description: 'Popped 100 bubbles total',
+          icon: Icons.stars
+        );
       case 'speed_demon':
-        return (title: 'Speed Demon', description: 'Achieved high speed tracing', icon: Icons.speed);
+        return (
+          title: 'Speed Demon',
+          description: 'Achieved high speed tracing',
+          icon: Icons.speed
+        );
       case 'precision_master':
-        return (title: 'Precision Master', description: 'Achieved 90%+ accuracy', icon: Icons.gps_fixed);
+        return (
+          title: 'Precision Master',
+          description: 'Achieved 90%+ accuracy',
+          icon: Icons.gps_fixed
+        );
       case 'ambidextrous':
-        return (title: 'Ambidextrous', description: 'Completed in two-hand mode', icon: Icons.back_hand);
+        return (
+          title: 'Ambidextrous',
+          description: 'Completed in two-hand mode',
+          icon: Icons.back_hand
+        );
       default:
-        return (title: achievement, description: 'Achievement unlocked', icon: Icons.emoji_events);
+        return (
+          title: achievement,
+          description: 'Achievement unlocked',
+          icon: Icons.emoji_events
+        );
     }
   }
 }
