@@ -77,6 +77,133 @@ class GameDataService {
     }
   }
 
+  /// Smart save method that maintains only 2 progress documents per user/game
+  /// Simplified version that doesn't require complex indexes
+  static Future<void> saveGameProgressSmart({
+    required String gameType,
+    required int level,
+    required int score,
+    required bool completed,
+    required Duration sessionDuration,
+    Map<String, dynamic>? gameSpecificData,
+  }) async {
+    try {
+      final userId = await getCurrentUserId();
+      final userInfo = await getCurrentUserInfo();
+      if (userId == null || userInfo == null) return;
+
+      // Create unique document ID based on user and game
+      final docId = '${userId}_${gameType}_progress';
+
+      final progressData = {
+        'userId': userId,
+        'documentId': docId,
+        'type': 'game_progress',
+        'gameType': gameType,
+        'gameMode': _getGameMode(gameType),
+        'level': level,
+        'score': score,
+        'completed': completed,
+        'sessionDuration': sessionDuration.inMilliseconds,
+        'progress': level / _getMaxLevel(gameType),
+        'timestamp': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'gameSpecificData': {
+          ...gameSpecificData ?? {},
+          'playerId': userInfo['userId'],
+          'playerName': userInfo['userName'],
+          'playerType': userInfo['userType'],
+        },
+        'metadata': {
+          'gameVersion': '1.0',
+          'platform': 'flutter',
+          'gameCategory': _getGameCategory(gameType),
+        },
+      };
+
+      // Use set with merge to create or update the document
+      await _firestore
+          .collection('Games')
+          .doc(docId)
+          .set(progressData, SetOptions(merge: true));
+      print(
+          '📝 Updated progress document: $docId (Level $level, Score $score)');
+
+      // Also update unified progress for overall tracking
+      final currentProgress = await getUserGameProgress();
+      final updatedProgress = currentProgress.updateFromSession(
+        gameType: gameType,
+        level: level,
+        score: score,
+        completed: completed,
+        sessionDuration: sessionDuration,
+        gameSpecificData: gameSpecificData ?? {},
+      );
+      await updateUserGameProgress(updatedProgress);
+    } catch (e) {
+      print('❌ Error in smart save: $e');
+    }
+  }
+
+  /// Analyze game documents for a specific game type and user (simplified)
+  static Future<Map<String, dynamic>> analyzeGameDocuments(
+      String gameType) async {
+    try {
+      final userId = await getCurrentUserId();
+      if (userId == null) {
+        return {
+          'error': 'No user ID found',
+          'totalDocuments': 0,
+          'documentIds': [],
+          'levels': [],
+          'scores': [],
+          'lastUpdated': null,
+        };
+      }
+
+      // Get the specific progress document for this user/game
+      final docId = '${userId}_${gameType}_progress';
+      final doc = await _firestore.collection('Games').doc(docId).get();
+
+      if (doc.exists) {
+        final data = doc.data()!;
+        return {
+          'totalDocuments': 1,
+          'documentIds': [doc.id],
+          'levels': [data['level'] ?? 0],
+          'scores': [data['score'] ?? 0],
+          'types': [data['type'] ?? 'unknown'],
+          'lastUpdated': data['timestamp'],
+          'userId': userId,
+          'gameType': gameType,
+          'currentDocument': data,
+        };
+      } else {
+        return {
+          'totalDocuments': 0,
+          'documentIds': [],
+          'levels': [],
+          'scores': [],
+          'types': [],
+          'lastUpdated': null,
+          'userId': userId,
+          'gameType': gameType,
+        };
+      }
+    } catch (e) {
+      print('❌ Error analyzing documents: $e');
+      return {
+        'error': e.toString(),
+        'totalDocuments': 0,
+        'documentIds': [],
+        'levels': [],
+        'scores': [],
+        'lastUpdated': null,
+      };
+    }
+  }
+
   /// Save a game session and update progress
   static Future<void> saveGameSessionAndProgress({
     required String gameType,

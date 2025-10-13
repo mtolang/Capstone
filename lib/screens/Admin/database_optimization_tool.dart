@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/game_data_service.dart';
+import 'package:kindora/services/game_data_service.dart';
 
 class DatabaseOptimizationTool extends StatefulWidget {
   const DatabaseOptimizationTool({super.key});

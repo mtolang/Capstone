@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/therapist/ther_navbar.dart';
-import 'package:capstone_2/screens/therapist/ther_booking_tabbar.dart';
+import 'package:kindora/screens/therapist/ther_navbar.dart';
+import 'package:kindora/screens/therapist/ther_booking_tabbar.dart';
 
 class TherapistBookingPage extends StatelessWidget {
   const TherapistBookingPage({Key? key}) : super(key: key);

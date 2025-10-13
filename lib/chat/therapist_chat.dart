@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:kindora/helper/clinic_auth.dart';
+import 'package:kindora/helper/therapist_auth.dart';
 import 'package:kindora/helper/field_helper.dart';
 import 'package:kindora/services/global_call_service.dart';
 import 'package:kindora/services/call_utility.dart';
@@ -22,52 +22,52 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
   final ScrollController _scrollController = ScrollController();
   String _patientName = '';
 
-  // Dynamic clinic ID - will be loaded from storage
-  String _clinicId = 'CLI01'; // Default fallback
+  // Dynamic therapist ID - will be loaded from storage
+  String _therapistId = 'TherAcc01'; // Default fallback
 
   @override
   void initState() {
     super.initState();
-    _loadClinicIdFromStorage();
+    _loadTherapistIdFromStorage();
     _loadPatientInfo();
   }
 
-  // Load current clinic ID from SharedPreferences
-  Future<void> _loadClinicIdFromStorage() async {
+  // Load current therapist ID from SharedPreferences
+  Future<void> _loadTherapistIdFromStorage() async {
     try {
-      // Use ClinicAuthService to check authentication
-      final isLoggedIn = await ClinicAuthService.isLoggedIn;
-      final clinicId = await ClinicAuthService.getStoredClinicId();
+      // Use TherapistAuthService to check authentication
+      final isLoggedIn = await TherapistAuthService.isLoggedIn;
+      final therapistId = await TherapistAuthService.getStoredTherapistId();
 
       final prefs = await SharedPreferences.getInstance();
       final userType = prefs.getString('user_type');
 
-      print('TherapistChat: Debug clinic auth state:');
-      print('  clinic_id from ClinicAuthService: $clinicId');
-      print('  isLoggedIn from ClinicAuthService: $isLoggedIn');
+      print('TherapistChat: Debug therapist auth state:');
+      print('  therapist_id from TherapistAuthService: $therapistId');
+      print('  isLoggedIn from TherapistAuthService: $isLoggedIn');
       print('  user_type from prefs: $userType');
 
-      if (clinicId != null && isLoggedIn && userType == 'clinic') {
+      if (therapistId != null && isLoggedIn && userType == 'therapist') {
         setState(() {
-          _clinicId = clinicId;
+          _therapistId = therapistId;
         });
-        print('TherapistChat: Using validated clinic ID: $_clinicId');
+        print('TherapistChat: Using validated therapist ID: $_therapistId');
       } else {
-        print('TherapistChat: No valid clinic authentication found');
-        print('TherapistChat: Using default clinic ID: $_clinicId');
+        print('TherapistChat: No valid therapist authentication found');
+        print('TherapistChat: Using default therapist ID: $_therapistId');
         // Show a warning that user might need to log in
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content:
-                  Text('Warning: Please ensure you are logged in as a clinic'),
+              content: Text(
+                  'Warning: Please ensure you are logged in as a therapist'),
               backgroundColor: Colors.orange,
             ),
           );
         }
       }
     } catch (e) {
-      print('TherapistChat: Error loading clinic ID: $e');
+      print('TherapistChat: Error loading therapist ID: $e');
       // Keep default fallback value
     }
   }
@@ -109,11 +109,11 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
 
     final messageText = _messageController.text.trim();
     final timestamp = DateTime.now();
-    final fromId = _clinicId;
+    final fromId = _therapistId;
     final toId = widget.patientId ?? 'unknown';
 
     print('TherapistChat: Sending message:');
-    print('  From (clinic): $fromId');
+    print('  From (therapist): $fromId');
     print('  To (patient): $toId');
     print('  Message: $messageText');
 
@@ -348,21 +348,21 @@ class _TherapistChatPageState extends State<TherapistChatPage> {
                         return const Center(child: Text('No messages yet.'));
                       }
                       final docs = snapshot.data!.docs;
-                      // Filter messages between this clinic and patient
+                      // Filter messages between this therapist and patient
                       final filteredDocs = docs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final fromId = data['fromId']?.toString() ?? '';
                         final toId = data['toId']?.toString() ?? '';
                         final patientId = widget.patientId ?? 'unknown';
 
-                        // Check if message is between clinic and this patient
-                        return (fromId == _clinicId && toId == patientId) ||
-                            (fromId == patientId && toId == _clinicId);
+                        // Check if message is between therapist and this patient
+                        return (fromId == _therapistId && toId == patientId) ||
+                            (fromId == patientId && toId == _therapistId);
                       }).toList();
 
                       final messages = filteredDocs.map((doc) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final isFromTherapist = data['fromId'] == _clinicId;
+                        final isFromTherapist = data['fromId'] == _therapistId;
                         return ChatMessage(
                           id: doc.id,
                           senderId: data['fromId']?.toString() ?? '',

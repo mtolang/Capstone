@@ -38,6 +38,8 @@ import 'package:kindora/screens/therapist/ther_profile.dart';
 import 'package:kindora/screens/therapist/ther_gallery.dart';
 import 'package:kindora/screens/therapist/ther_review.dart';
 import 'package:kindora/screens/therapist/ther_progress.dart';
+import 'package:kindora/screens/therapist/ther_chat_list.dart';
+import 'package:kindora/screens/therapist/ther_patient_selection.dart';
 //clinic page imports
 import 'package:kindora/screens/clinic/clinic_gallery.dart';
 import 'package:kindora/screens/clinic/clinic_profile.dart';
@@ -182,9 +184,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/therapistgallery': (context) => const TherapistGallery(),
           '/therapistreview': (context) => const TherapistReview(),
           '/therapistprogress': (context) => const TherProgress(),
+          '/therapistpatients': (context) =>
+              const _ComingSoonPage(title: 'Patient List'),
+          '/therapiststaff': (context) =>
+              const _ComingSoonPage(title: 'Clinic Staff'),
 
           //Chat Page Routes
           '/patientselection': (context) => const PatientSelectionPage(),
+          '/therapistpatientselection': (context) =>
+              const TherapistPatientSelectionPage(),
+          '/therapistchatlist': (context) => const TherapistChatListPage(),
           '/therapistchat': (context) {
             final args = ModalRoute.of(context)?.settings.arguments as String?;
             return TherapistChatPage(patientId: args);
@@ -264,6 +273,147 @@ class _DemoHome extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Placeholder page for coming soon features
+class _ComingSoonPage extends StatelessWidget {
+  final String title;
+
+  const _ComingSoonPage({Key? key, required this.title}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF006A5B),
+        elevation: 0,
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontFamily: 'Poppins',
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Stack(
+        children: [
+          // Background ellipses
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(
+                  height: MediaQuery.of(context).size.height * 0.3),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container();
+                  },
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(
+                  height: MediaQuery.of(context).size.height * 0.3),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xFF67AFA5), Colors.white],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 2.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container();
+                  },
+                ),
+              ),
+            ),
+          ),
+
+          // Main content
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.construction,
+                  size: 80,
+                  color: const Color(0xFF006A5B).withOpacity(0.6),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '$title Coming Soon!',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'This feature is currently under development.\nStay tuned for updates!',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontFamily: 'Poppins',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF006A5B),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Go Back',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

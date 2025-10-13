@@ -2,9 +2,84 @@ import 'package:flutter/material.dart';
 import 'package:kindora/screens/parent/dashboard_tabbar.dart';
 import 'package:kindora/screens/parent/parent_navbar.dart';
 import 'package:kindora/widgets/map.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class TherapistsDashboard extends StatelessWidget {
+class TherapistsDashboard extends StatefulWidget {
   const TherapistsDashboard({super.key});
+
+  @override
+  State<TherapistsDashboard> createState() => _TherapistsDashboardState();
+}
+
+class _TherapistsDashboardState extends State<TherapistsDashboard> {
+  List<Map<String, dynamic>> therapists = [];
+  List<Map<String, dynamic>> filteredTherapists = [];
+  bool isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTherapists();
+  }
+
+  Future<void> _loadTherapists() async {
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('TherapistAcc')
+          .where('acceptedBy', isEqualTo: 'Admin')
+          .get();
+
+      final loadedTherapists = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'id': doc.id,
+          'name': data['Full_Name'] ?? 'Unknown Therapist',
+          'userName': data['User_Name'] ?? '',
+          'email': data['Email'] ?? '',
+          'address': data['Address'] ?? '',
+          'contactNumber': data['Contact_Number'] ?? '',
+          'acceptedAt': data['acceptedAt'],
+        };
+      }).toList();
+
+      setState(() {
+        therapists = loadedTherapists;
+        filteredTherapists = loadedTherapists;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading therapists: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  void _filterTherapists(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        filteredTherapists = therapists;
+      } else {
+        filteredTherapists = therapists.where((therapist) {
+          final name = therapist['name'].toLowerCase();
+          final address = therapist['address'].toLowerCase();
+          final userName = therapist['userName'].toLowerCase();
+          final searchQuery = query.toLowerCase();
+
+          return name.contains(searchQuery) ||
+              address.contains(searchQuery) ||
+              userName.contains(searchQuery);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,8 +251,11 @@ class TherapistsDashboard extends StatelessWidget {
                       ],
                     ),
                     child: TextField(
+                      controller: _searchController,
+                      onChanged: _filterTherapists,
                       decoration: InputDecoration(
-                        hintText: 'Search...',
+                        hintText: 'Search therapists by name, location...',
+                        hintStyle: const TextStyle(fontFamily: 'Poppins'),
                         border: InputBorder.none,
                         suffixIcon: IconButton(
                           icon: const Icon(
@@ -185,11 +263,7 @@ class TherapistsDashboard extends StatelessWidget {
                             color: Color(0xFF67AFA5),
                           ),
                           onPressed: () {
-                            print('Search pressed');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Search functionality')),
-                            );
+                            // Search is already triggered by onChanged
                           },
                         ),
                       ),
@@ -202,83 +276,199 @@ class TherapistsDashboard extends StatelessWidget {
                   child: SizedBox(height: 15),
                 ),
 
-                SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200.0,
-                    mainAxisSpacing: 12.0,
-                    crossAxisSpacing: 12.0,
-                    childAspectRatio: 0.7,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      return Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10.0),
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.5),
-                                spreadRadius: 2,
-                                blurRadius: 5,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
+                // Loading indicator or therapists grid
+                SliverToBoxAdapter(
+                  child: isLoading
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(50.0),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF006A5B),
+                            ),
                           ),
-                          child: Column(
-                            children: [
-                              // Placeholder for therapist image
-                              Container(
-                                height: 120,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[300],
-                                  borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(10),
-                                    topRight: Radius.circular(10),
-                                  ),
+                        )
+                      : filteredTherapists.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(50.0),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      therapists.isEmpty
+                                          ? Icons.person_off
+                                          : Icons.search_off,
+                                      size: 64,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      therapists.isEmpty
+                                          ? 'No therapists available'
+                                          : 'No therapists found',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.grey,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                    if (therapists.isNotEmpty)
+                                      const Text(
+                                        'Try adjusting your search criteria',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.person,
-                                    size: 50,
-                                    color: Colors.grey,
-                                  ),
-                                ),
                               ),
-                              const SizedBox(height: 10.0),
-                              const Text('Therapist Name',
-                                  style: TextStyle(
-                                      fontSize: 16.0,
-                                      fontWeight: FontWeight.bold)),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: List.generate(5, (starIndex) {
-                                  return Icon(
-                                    Icons.star,
-                                    color: starIndex < 5
-                                        ? Colors.yellow
-                                        : Colors.grey,
-                                    // Adjust star color based on the rating
-                                    size: 15,
-                                  );
-                                }),
-                              ),
-                              const SizedBox(height: 5.0),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8.0),
-                                child: Text('Occupational and Speech Therapist',
-                                    style: TextStyle(fontSize: 12.0),
-                                    textAlign: TextAlign.center),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: 8,
-                  ),
+                            )
+                          : const SizedBox.shrink(),
                 ),
+
+                // Therapists grid
+                if (!isLoading && filteredTherapists.isNotEmpty)
+                  SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 200.0,
+                      mainAxisSpacing: 12.0,
+                      crossAxisSpacing: 12.0,
+                      childAspectRatio: 0.75,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (BuildContext context, int index) {
+                        final therapist = filteredTherapists[index];
+                        return Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10.0),
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.5),
+                                  spreadRadius: 2,
+                                  blurRadius: 5,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: InkWell(
+                              onTap: () {
+                                _showTherapistDetails(context, therapist);
+                              },
+                              borderRadius: BorderRadius.circular(10.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Therapist image placeholder
+                                  Container(
+                                    height: 100,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF006A5B)
+                                          .withOpacity(0.1),
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(10),
+                                        topRight: Radius.circular(10),
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.person,
+                                        size: 40,
+                                        color: Color(0xFF006A5B),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8.0),
+
+                                  // Therapist name
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0),
+                                    child: Text(
+                                      therapist['name'],
+                                      style: const TextStyle(
+                                        fontSize: 14.0,
+                                        fontWeight: FontWeight.bold,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+
+                                  // Rating stars (placeholder)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: List.generate(5, (starIndex) {
+                                        return Icon(
+                                          Icons.star,
+                                          color: starIndex < 4
+                                              ? Colors.yellow[700]
+                                              : Colors.grey[300],
+                                          size: 12,
+                                        );
+                                      }),
+                                    ),
+                                  ),
+
+                                  // Location
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8.0),
+                                      child: Text(
+                                        therapist['address'],
+                                        style: const TextStyle(
+                                          fontSize: 10.0,
+                                          color: Colors.grey,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Status indicator
+                                  Container(
+                                    margin: const EdgeInsets.all(8.0),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8.0,
+                                      vertical: 4.0,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[100],
+                                      borderRadius: BorderRadius.circular(12.0),
+                                    ),
+                                    child: Text(
+                                      'Available',
+                                      style: TextStyle(
+                                        fontSize: 10.0,
+                                        color: Colors.green[700],
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      childCount: filteredTherapists.length,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -313,5 +503,154 @@ class TherapistsDashboard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showTherapistDetails(
+      BuildContext context, Map<String, dynamic> therapist) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15.0),
+          ),
+          title: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: const Color(0xFF006A5B).withOpacity(0.1),
+                child: const Icon(
+                  Icons.person,
+                  color: Color(0xFF006A5B),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  therapist['name'],
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Username', therapist['userName']),
+              _buildDetailRow('Email', therapist['email']),
+              _buildDetailRow('Contact', therapist['contactNumber']),
+              _buildDetailRow('Address', therapist['address']),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle,
+                        color: Colors.green[600], size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Verified Therapist',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _bookAppointment(context, therapist);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF006A5B),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Book Appointment',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? 'Not provided' : value,
+              style: const TextStyle(
+                color: Colors.black87,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _bookAppointment(BuildContext context, Map<String, dynamic> therapist) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Booking appointment with ${therapist['name']}...',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        backgroundColor: const Color(0xFF006A5B),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+    // TODO: Navigate to booking page or implement booking logic
   }
 }

@@ -303,7 +303,7 @@ class _DashboardState extends State<Dashboard> {
                         maxCrossAxisExtent: 200.0,
                         mainAxisSpacing: 12.0,
                         crossAxisSpacing: 12.0,
-                        childAspectRatio: 0.45,
+                        childAspectRatio: 0.75,
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (BuildContext context, int index) {
@@ -341,10 +341,9 @@ class _DashboardState extends State<Dashboard> {
                                 child: Column(
                                   children: [
                                     Container(
-                                      height: 150,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[300],
-                                        borderRadius: const BorderRadius.only(
+                                      height: 100,
+                                      decoration: const BoxDecoration(
+                                        borderRadius: BorderRadius.only(
                                           topLeft: Radius.circular(10),
                                           topRight: Radius.circular(10),
                                         ),
@@ -356,68 +355,54 @@ class _DashboardState extends State<Dashboard> {
                                                   .isNotEmpty
                                           ? Image.network(
                                               clinicData['Clinic_Image'],
-                                              height: 150,
+                                              height: 100,
                                               width: double.infinity,
                                               fit: BoxFit.cover,
                                               errorBuilder:
                                                   (context, error, stackTrace) {
-                                                return Center(
-                                                  child: Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      const Icon(
-                                                        Icons.local_hospital,
-                                                        size: 40,
-                                                        color:
-                                                            Color(0xFF006A5B),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Text(
-                                                        (clinicData['Clinic_Name'] ??
-                                                                'Clinic')[0]
-                                                            .toUpperCase(),
-                                                        style: const TextStyle(
-                                                          fontSize: 24,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color:
-                                                              Color(0xFF006A5B),
-                                                        ),
-                                                      ),
-                                                    ],
+                                                return Container(
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        const Color(0xFF006A5B)
+                                                            .withOpacity(0.1),
+                                                    borderRadius:
+                                                        const BorderRadius.only(
+                                                      topLeft:
+                                                          Radius.circular(10),
+                                                      topRight:
+                                                          Radius.circular(10),
+                                                    ),
+                                                  ),
+                                                  child: const Center(
+                                                    child: Icon(
+                                                      Icons.local_hospital,
+                                                      size: 40,
+                                                      color: Color(0xFF006A5B),
+                                                    ),
                                                   ),
                                                 );
                                               },
                                             )
-                                          : Center(
-                                              child: Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  const Icon(
-                                                    Icons.local_hospital,
-                                                    size: 40,
-                                                    color: Color(0xFF006A5B),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Text(
-                                                    (clinicData['Clinic_Name'] ??
-                                                            'Clinic')[0]
-                                                        .toUpperCase(),
-                                                    style: const TextStyle(
-                                                      fontSize: 24,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Color(0xFF006A5B),
-                                                    ),
-                                                  ),
-                                                ],
+                                          : Container(
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF006A5B)
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    const BorderRadius.only(
+                                                  topLeft: Radius.circular(10),
+                                                  topRight: Radius.circular(10),
+                                                ),
+                                              ),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.local_hospital,
+                                                  size: 40,
+                                                  color: Color(0xFF006A5B),
+                                                ),
                                               ),
                                             ),
                                     ),
-                                    const SizedBox(height: 10.0),
+                                    const SizedBox(height: 8.0),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8.0),
@@ -425,46 +410,35 @@ class _DashboardState extends State<Dashboard> {
                                         clinicData['Clinic_Name'] ??
                                             'Unknown Clinic',
                                         style: const TextStyle(
-                                          fontSize: 16.0,
+                                          fontSize: 14.0,
                                           fontWeight: FontWeight.bold,
+                                          fontFamily: 'Poppins',
                                         ),
                                         textAlign: TextAlign.center,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (clinicData['Contact_Number'] != null)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8.0),
-                                        child: Text(
-                                          clinicData['Contact_Number'],
-                                          style: const TextStyle(
-                                            fontSize: 12.0,
-                                            color: Color(0xFF006A5B),
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
+                                    // Rating stars
                                     Padding(
-                                      padding: const EdgeInsets.all(8.0),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0),
                                       child: Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: List.generate(5, (starIndex) {
                                           return Icon(
                                             Icons.star,
-                                            color: starIndex <
-                                                    (clinicData['rating'] ?? 5)
-                                                ? Colors.yellow
-                                                : Colors.grey,
-                                            size: 15,
+                                            color: starIndex < 4
+                                                ? Colors.yellow[700]
+                                                : Colors.grey[300],
+                                            size: 12,
                                           );
                                         }),
                                       ),
                                     ),
-                                    const SizedBox(height: 5.0),
+
+                                    // Location
                                     Expanded(
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
@@ -472,15 +446,40 @@ class _DashboardState extends State<Dashboard> {
                                         child: Text(
                                           clinicData['Address'] ??
                                               'Address not available',
+                                          style: const TextStyle(
+                                            fontSize: 10.0,
+                                            color: Colors.grey,
+                                            fontFamily: 'Poppins',
+                                          ),
                                           textAlign: TextAlign.center,
-                                          style:
-                                              const TextStyle(fontSize: 12.0),
-                                          maxLines: 3,
+                                          maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(height: 8.0),
+
+                                    // Status indicator
+                                    Container(
+                                      margin: const EdgeInsets.all(8.0),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
+                                        vertical: 4.0,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green[100],
+                                        borderRadius:
+                                            BorderRadius.circular(12.0),
+                                      ),
+                                      child: Text(
+                                        'Open',
+                                        style: TextStyle(
+                                          fontSize: 10.0,
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),

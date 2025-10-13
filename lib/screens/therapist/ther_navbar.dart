@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/auth/login_as.dart';
-import 'package:capstone_2/helper/therapist_auth.dart';
+import 'package:kindora/screens/auth/login_as.dart';
+import 'package:kindora/helper/therapist_auth.dart';
 
 class TherapistNavbar extends StatelessWidget {
   final String currentPage;
@@ -94,7 +94,7 @@ class TherapistNavbar extends StatelessWidget {
             context,
             icon: Icons.message,
             title: 'Chat',
-            routeName: '/therapistchat',
+            routeName: '/therapistpatientselection',
             isSelected: currentPage == 'chat',
           ),
 

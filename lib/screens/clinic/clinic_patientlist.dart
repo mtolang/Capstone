@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_2/helper/field_helper.dart';
+import 'package:kindora/helper/field_helper.dart';
 
 class ClinicPatientListPage extends StatefulWidget {
   const ClinicPatientListPage({Key? key}) : super(key: key);

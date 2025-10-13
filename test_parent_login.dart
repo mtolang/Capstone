@@ -1,7 +1,7 @@
 // Quick test script to verify parent login functionality
 // This demonstrates the field mapping between ParentsReg and ParentsAcc
 
-import 'package:capstone_2/helper/parent_auth.dart';
+import 'package:kindora/helper/parent_auth.dart';
 
 void main() async {
   print('=== PARENT LOGIN TEST ===');

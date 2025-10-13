@@ -1,4 +1,4 @@
-import 'package:capstone_2/helper/field_helper.dart';
+import 'package:kindora/helper/field_helper.dart';
 
 /// Example usage and testing of FieldHelper
 class FieldHelperExample {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:capstone_2/screens/therapist/ther_navbar.dart';
+import 'package:kindora/screens/therapist/ther_navbar.dart';
 
 class TherapistMaterialsPage extends StatelessWidget {
   const TherapistMaterialsPage({Key? key}) : super(key: key);

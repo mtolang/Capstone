@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/accepted_booking_service.dart';
+import '../../services/booking_request_service.dart';
 import '../../helper/field_helper.dart';
+import 'ther_navbar.dart';
 
 class TherapistBookingTabBar extends StatefulWidget {
   const TherapistBookingTabBar({Key? key}) : super(key: key);
@@ -17,10 +19,8 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
   late TabController _tabController;
   DateTime _currentMonth = DateTime.now();
   Map<int, List<Map<String, dynamic>>> _monthlyAppointments = {};
-  String? _therapistId;
-  bool _isLoading = true;
 
-  final List<Map<String, dynamic>> sampleBookings = [
+  final List<Map<String, dynamic>> bookings = [
     {
       'name': 'Alice Johnson',
       'time': '09:00 - 10:00 AM',
@@ -47,28 +47,7 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _initializeData();
-  }
-
-  Future<void> _initializeData() async {
-    await _getTherapistId();
-    await _loadMonthlyAppointments();
-    setState(() {
-      _isLoading = false;
-    });
-  }
-
-  // Get therapist ID from shared preferences
-  Future<void> _getTherapistId() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _therapistId = prefs.getString('therapist_id') ??
-          prefs.getString('user_id') ??
-          prefs.getString('clinic_id');
-      print('Therapist ID loaded: $_therapistId');
-    } catch (e) {
-      print('Error getting therapist ID: $e');
-    }
+    _loadMonthlyAppointments();
   }
 
   // Calendar navigation methods
@@ -88,71 +67,89 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
 
   // Load monthly appointments from AcceptedBooking collection
   Future<void> _loadMonthlyAppointments() async {
-    if (_therapistId == null) return;
-
     try {
+      final therapistId = await _getCurrentTherapistId();
+      if (therapistId == null) {
+        print('No therapist ID found');
+        return;
+      }
+
       // Get the first and last day of the current month
       final firstDayOfMonth =
           DateTime(_currentMonth.year, _currentMonth.month, 1);
       final lastDayOfMonth =
           DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
 
-      print('Loading appointments for therapist: $_therapistId');
-      print('Date range: $firstDayOfMonth to $lastDayOfMonth');
+      print(
+          'Loading appointments for therapist: $therapistId for month: ${DateFormat('MMMM yyyy').format(_currentMonth)}');
 
       // Query AcceptedBooking collection for this therapist
       final querySnapshot = await FirebaseFirestore.instance
           .collection('AcceptedBooking')
-          .where('serviceProvider.therapistId', isEqualTo: _therapistId)
-          .where('appointmentDate',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(firstDayOfMonth))
-          .where('appointmentDate',
-              isLessThanOrEqualTo: Timestamp.fromDate(lastDayOfMonth))
+          .where('serviceProvider.therapistId', isEqualTo: therapistId)
+          .where('status', isEqualTo: 'confirmed')
           .get();
+
+      // Filter results by date range in memory to avoid complex index requirements
+      final filteredDocs = querySnapshot.docs.where((doc) {
+        final data = doc.data();
+        final appointmentDate = (data['appointmentDate'] as Timestamp).toDate();
+        return appointmentDate
+                .isAfter(firstDayOfMonth.subtract(const Duration(days: 1))) &&
+            appointmentDate
+                .isBefore(lastDayOfMonth.add(const Duration(days: 1)));
+      }).toList();
 
       // Group appointments by day
       final Map<int, List<Map<String, dynamic>>> groupedAppointments = {};
 
-      for (var doc in querySnapshot.docs) {
+      for (var doc in filteredDocs) {
         final data = doc.data();
-        final appointmentTimestamp = data['appointmentDate'] as Timestamp?;
+        final appointmentDate = (data['appointmentDate'] as Timestamp).toDate();
+        final dayOfMonth = appointmentDate.day;
 
-        if (appointmentTimestamp != null) {
-          final appointmentDate = appointmentTimestamp.toDate();
-          final day = appointmentDate.day;
+        // Extract patient information using FieldHelper
+        final childInfo = data['childInfo'] as Map<String, dynamic>? ?? {};
+        final parentInfo = data['parentInfo'] as Map<String, dynamic>? ?? {};
 
-          if (!groupedAppointments.containsKey(day)) {
-            groupedAppointments[day] = [];
-          }
+        final patientName = FieldHelper.getName(childInfo) ??
+            FieldHelper.getName(parentInfo) ??
+            'Unknown Patient';
 
-          // Extract patient information using FieldHelper
-          final childInfo = data['childInfo'] as Map<String, dynamic>? ?? {};
-          final parentInfo = data['parentInfo'] as Map<String, dynamic>? ?? {};
+        final appointmentInfo = {
+          'patientName': patientName,
+          'appointmentTime': data['appointmentTime'] ?? 'Time TBD',
+          'appointmentType': data['appointmentType'] ?? 'Therapy Session',
+          'childInfo': childInfo,
+          'parentInfo': parentInfo,
+        };
 
-          final patientName = FieldHelper.getName(childInfo) ??
-              FieldHelper.getName(parentInfo) ??
-              'Unknown Patient';
-
-          groupedAppointments[day]!.add({
-            'id': doc.id,
-            'patientName': patientName,
-            'appointmentTime': data['appointmentTime'] ?? '',
-            'appointmentType': data['appointmentType'] ?? 'Therapy Session',
-            'status': data['status'] ?? 'confirmed',
-            'childInfo': childInfo,
-            'parentInfo': parentInfo,
-            'fullData': data,
-          });
+        if (groupedAppointments[dayOfMonth] == null) {
+          groupedAppointments[dayOfMonth] = [];
         }
+        groupedAppointments[dayOfMonth]!.add(appointmentInfo);
       }
 
       setState(() {
         _monthlyAppointments = groupedAppointments;
       });
 
-      print('Loaded ${querySnapshot.docs.length} appointments for the month');
+      print('Loaded ${filteredDocs.length} appointments for the month');
     } catch (e) {
       print('Error loading monthly appointments: $e');
+    }
+  }
+
+  // Helper method to get current therapist ID
+  Future<String?> _getCurrentTherapistId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('therapist_id') ??
+          prefs.getString('user_id') ??
+          prefs.getString('clinic_id');
+    } catch (e) {
+      print('Error getting therapist ID: $e');
+      return null;
     }
   }
 
@@ -165,78 +162,152 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
   @override
   Widget build(BuildContext context) {
     final today = DateFormat('MMMM dd, yyyy').format(DateTime.now());
+    final size = MediaQuery.sizeOf(context);
 
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF006A5B),
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF006A5B),
+        elevation: 0,
+        title: const Text(
+          'Booking Schedule',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontFamily: 'Poppins',
           ),
         ),
-      );
-    }
-
-    return Column(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF006A5B),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(25),
-              bottomRight: Radius.circular(25),
+        leading: Builder(
+          builder: (BuildContext context) {
+            return IconButton(
+              icon: const Icon(Icons.menu),
+              color: Colors.white,
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
+              },
+            );
+          },
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      drawer: const TherapistNavbar(currentPage: 'booking'),
+      body: Stack(
+        children: [
+          // Top ellipse background
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(height: size.height * 0.30),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(); // Gradient fallback
+                  },
+                ),
+              ),
             ),
           ),
-          child: Column(
+          // Bottom ellipse background
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(height: size.height * 0.3),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xFF67AFA5), Colors.white],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 2.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(); // Gradient fallback
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Main content
+          Column(
             children: [
-              const SizedBox(height: 40),
-              const Text(
-                'My Bookings',
-                style: TextStyle(
+              // Tab bar section
+              Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
                   color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  indicator: BoxDecoration(
+                    color: const Color(0xFF006A5B),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: const Color(0xFF006A5B),
+                  labelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w500,
+                  ),
+                  tabs: const [
+                    Tab(text: 'Today'),
+                    Tab(text: 'Schedule'),
+                    Tab(text: 'Request'),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                today,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
+              // Tab content
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildTodayTab(today),
+                    _buildScheduleTab(),
+                    _buildRequestTab(),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              TabBar(
-                controller: _tabController,
-                indicatorColor: Colors.white,
-                indicatorWeight: 3,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white60,
-                labelStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-                tabs: const [
-                  Tab(text: 'Today'),
-                  Tab(text: 'Schedule'),
-                  Tab(text: 'Requests'),
-                ],
-              ),
-              const SizedBox(height: 10),
             ],
           ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildTodayTab(today),
-              _buildScheduleTab(),
-              _buildRequestTab(),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF006A5B),
+        child: const Icon(Icons.calendar_today, color: Colors.white),
+        onPressed: () {
+          // Navigate to schedule or add functionality
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Quick calendar access')),
+          );
+        },
+      ),
     );
   }
 
@@ -246,17 +317,33 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Today\'s Appointments',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF006A5B),
+          // Add top margin and make text white
+          const SizedBox(height: 30), // Top margin
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              today,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Today's appointments from Firebase
+          const SizedBox(height: 20),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _getTodayAppointments(),
             builder: (context, snapshot) {
@@ -270,28 +357,64 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
 
               if (snapshot.hasError) {
                 return Center(
-                  child: Text('Error: ${snapshot.error}'),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.error, color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      Text('Error: ${snapshot.error}'),
+                    ],
+                  ),
                 );
               }
 
-              final appointments = snapshot.data ?? [];
+              final todayAppointments = snapshot.data ?? [];
 
-              if (appointments.isEmpty) {
-                return const Center(
+              if (todayAppointments.isEmpty) {
+                return Center(
                   child: Column(
                     children: [
-                      SizedBox(height: 40),
-                      Icon(
-                        Icons.calendar_today,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'No appointments for today',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              spreadRadius: 1,
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(
+                              Icons.event_available,
+                              size: 64,
+                              color: Color(0xFF67AFA5),
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'No appointments today',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF006A5B),
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Take some time to prepare for upcoming sessions',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF67AFA5),
+                                fontFamily: 'Poppins',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -299,47 +422,47 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                 );
               }
 
-              return Column(
-                children: appointments
-                    .map((appointment) =>
-                        _buildTodayAppointmentCard(appointment))
-                    .toList(),
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: todayAppointments.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final appointment = todayAppointments[index];
+                  return _buildTodayAppointmentCard(appointment);
+                },
               );
             },
           ),
-
-          const SizedBox(height: 24),
-
-          // Quick actions
-          const Text(
-            'Quick Actions',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF006A5B),
+          const SizedBox(height: 30),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Text(
+                "That's it for today!",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionCard(
-                  'View Schedule',
-                  Icons.calendar_view_week,
-                  () => _tabController.animateTo(1),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionCard(
-                  'Pending Requests',
-                  Icons.pending_actions,
-                  () => _tabController.animateTo(2),
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 100), // Extra space for bottom wave
         ],
       ),
     );
@@ -351,81 +474,202 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Calendar header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: _navigateToPreviousMonth,
-                icon: const Icon(Icons.chevron_left, size: 30),
-                color: const Color(0xFF006A5B),
-              ),
-              Text(
-                DateFormat('MMMM yyyy').format(_currentMonth),
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF006A5B),
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
                 ),
+              ],
+            ),
+            child: const Text(
+              'Schedule Overview',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
               ),
-              IconButton(
-                onPressed: _navigateToNextMonth,
-                icon: const Icon(Icons.chevron_right, size: 30),
-                color: const Color(0xFF006A5B),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 20),
 
-          // Calendar grid
-          _buildCalendarGrid(),
-
-          const SizedBox(height: 24),
-
-          // Weekly overview
-          const Text(
-            'This Week\'s Summary',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF006A5B),
+          // Calendar Widget
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: _getWeeklyAppointments(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(
+            child: Column(
+              children: [
+                // Calendar Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
                     color: Color(0xFF006A5B),
-                  ),
-                );
-              }
-
-              final weeklyAppointments = snapshot.data ?? [];
-
-              if (weeklyAppointments.isEmpty) {
-                return const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'No appointments this week',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
                     ),
                   ),
-                );
-              }
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        onPressed: _navigateToPreviousMonth,
+                        icon:
+                            const Icon(Icons.chevron_left, color: Colors.white),
+                      ),
+                      Text(
+                        DateFormat('MMMM yyyy').format(_currentMonth),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _navigateToNextMonth,
+                        icon: const Icon(Icons.chevron_right,
+                            color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
 
-              return Column(
-                children: weeklyAppointments
-                    .map((appointment) =>
-                        _buildWeeklyAppointmentCard(appointment))
-                    .toList(),
-              );
-            },
+                // Calendar Grid
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Day headers
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children:
+                            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                                .map((day) => SizedBox(
+                                      width: 35,
+                                      child: Text(
+                                        day,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF006A5B),
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCalendarGrid(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+
+          const SizedBox(height: 20),
+
+          // Quick Schedule Actions
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _tabController.animateTo(0),
+                          icon: const Icon(Icons.today, color: Colors.white),
+                          label: const Text(
+                            'Today\'s Schedule',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF006A5B),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _tabController.animateTo(2),
+                          icon: const Icon(Icons.schedule, color: Colors.white),
+                          label: const Text(
+                            'View Requests',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF67AFA5),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 100), // Extra space for bottom wave
         ],
       ),
     );
@@ -437,17 +681,32 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Booking Requests',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF006A5B),
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Text(
+              'Booking Requests',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Pending requests from Firebase
+          const SizedBox(height: 20),
           StreamBuilder<QuerySnapshot>(
             stream: _getBookingRequestsStream(),
             builder: (context, snapshot) {
@@ -461,293 +720,104 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
 
               if (snapshot.hasError) {
                 return Center(
-                  child: Text('Error: ${snapshot.error}'),
-                );
-              }
-
-              final requests = snapshot.data?.docs ?? [];
-
-              if (requests.isEmpty) {
-                return const Center(
                   child: Column(
                     children: [
-                      SizedBox(height: 40),
-                      Icon(
-                        Icons.inbox,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'No pending requests',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                        ),
-                      ),
+                      const Icon(Icons.error, color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      Text('Error: ${snapshot.error}'),
                     ],
                   ),
                 );
               }
 
-              return Column(
-                children: requests
-                    .map((doc) => _buildRequestCard(
-                        doc.id, doc.data() as Map<String, dynamic>))
-                    .toList(),
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Column(
+                      children: [
+                        Icon(
+                          Icons.inbox,
+                          size: 64,
+                          color: Color(0xFF67AFA5),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'No booking requests',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF006A5B),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'New booking requests will appear here',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF67AFA5),
+                            fontFamily: 'Poppins',
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final allRequests = snapshot.data!.docs;
+
+              // Sort by createdAt in descending order (newest first) in memory
+              allRequests.sort((a, b) {
+                final aData = a.data() as Map<String, dynamic>;
+                final bData = b.data() as Map<String, dynamic>;
+                final aCreatedAt = aData['createdAt'] as Timestamp?;
+                final bCreatedAt = bData['createdAt'] as Timestamp?;
+
+                if (aCreatedAt == null && bCreatedAt == null) return 0;
+                if (aCreatedAt == null) return 1;
+                if (bCreatedAt == null) return -1;
+
+                return bCreatedAt.compareTo(aCreatedAt); // Descending order
+              });
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: allRequests.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final request = allRequests[index];
+                  final requestId = request.id;
+                  final requestData = request.data() as Map<String, dynamic>;
+                  return _buildRequestCard(requestId, requestData);
+                },
               );
             },
           ),
+          const SizedBox(height: 100),
         ],
-      ),
-    );
-  }
-
-  Widget _buildActionCard(String title, IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF006A5B).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFF006A5B).withOpacity(0.3),
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color: const Color(0xFF006A5B),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF006A5B),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTodayAppointmentCard(Map<String, dynamic> appointment) {
-    final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
-    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
-
-    final patientName = FieldHelper.getName(childInfo) ??
-        FieldHelper.getName(parentInfo) ??
-        'Unknown Patient';
-
-    final appointmentTime = appointment['appointmentTime'] ?? '';
-    final appointmentType = appointment['appointmentType'] ?? 'Therapy Session';
-    final status = appointment['status'] ?? 'confirmed';
-
-    Color statusColor = Colors.green;
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        statusColor = Colors.green;
-        break;
-      case 'in_progress':
-        statusColor = Colors.orange;
-        break;
-      case 'completed':
-        statusColor = Colors.blue;
-        break;
-      case 'cancelled':
-        statusColor = Colors.red;
-        break;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    patientName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF006A5B),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  appointmentTime,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.medical_services,
-                    size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text(
-                  appointmentType,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _viewAppointmentDetails(appointment),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF006A5B),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('View Details'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: status.toLowerCase() == 'confirmed'
-                        ? () => _markAsInProgress(appointment)
-                        : null,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF006A5B),
-                      side: const BorderSide(color: Color(0xFF006A5B)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      status.toLowerCase() == 'confirmed'
-                          ? 'Start Session'
-                          : 'In Progress',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeeklyAppointmentCard(Map<String, dynamic> appointment) {
-    final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
-    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
-
-    final patientName = FieldHelper.getName(childInfo) ??
-        FieldHelper.getName(parentInfo) ??
-        'Unknown Patient';
-
-    final appointmentDate = appointment['appointmentDate'] as Timestamp?;
-    final dateStr = appointmentDate != null
-        ? DateFormat('MMM dd').format(appointmentDate.toDate())
-        : '';
-    final dayStr = appointmentDate != null
-        ? DateFormat('EEEE').format(appointmentDate.toDate())
-        : '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFF006A5B),
-          child: Text(
-            dateStr.split(' ').last, // Day number
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        title: Text(
-          patientName,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text('$dayStr • ${appointment['appointmentTime'] ?? ''}'),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFF006A5B).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            appointment['appointmentType'] ?? 'Therapy',
-            style: const TextStyle(
-              color: Color(0xFF006A5B),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        onTap: () => _viewAppointmentDetails(appointment),
       ),
     );
   }
 
   Widget _buildRequestCard(String requestId, Map<String, dynamic> request) {
-    final createdAt = request['createdAt'] as Timestamp?;
-    final requestDate = createdAt != null
-        ? DateFormat('MMM dd, yyyy').format(createdAt.toDate())
-        : 'Recently';
-
+    // Extract data from the Firebase structure
     final parentInfo = request['parentInfo'] as Map<String, dynamic>? ?? {};
     final childInfo = request['childInfo'] as Map<String, dynamic>? ?? {};
     final appointmentDetails =
@@ -757,165 +827,457 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     final childName = FieldHelper.getName(childInfo) ?? 'Unknown Child';
     final childAge = childInfo['childAge']?.toString() ?? '';
 
+    // Extract appointment date and time
     final appointmentTimestamp =
         appointmentDetails['requestedDate'] as Timestamp?;
     final appointmentDateStr = appointmentTimestamp != null
         ? DateFormat('MMM dd, yyyy').format(appointmentTimestamp.toDate())
         : 'TBD';
     final appointmentTime = appointmentDetails['requestedTime'] ?? 'TBD';
-    final appointmentType =
-        appointmentDetails['appointmentType'] ?? 'Therapy Session';
 
     final status = request['status'] ?? 'pending';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.1),
             spreadRadius: 1,
-            blurRadius: 4,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            childName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF006A5B),
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Parent: $parentName',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF67AFA5),
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: status == 'pending'
+                            ? Colors.orange.withOpacity(0.2)
+                            : status == 'accepted'
+                                ? Colors.green.withOpacity(0.2)
+                                : Colors.red.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: status == 'pending'
+                              ? Colors.orange
+                              : status == 'accepted'
+                                  ? Colors.green
+                                  : Colors.red,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today,
+                      size: 16,
+                      color: Color(0xFF67AFA5),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Date: $appointmentDateStr',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      size: 16,
+                      color: Color(0xFF67AFA5),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Time: $appointmentTime',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+                if (childAge.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.child_care,
+                          size: 16,
+                          color: Color(0xFF67AFA5),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Age: $childAge years',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF67AFA5),
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (status == 'pending')
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: Color(0xFFE0E0E0),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          _handleRequestAction(requestId, request, 'decline'),
+                      icon:
+                          const Icon(Icons.close, color: Colors.red, size: 18),
+                      label: const Text(
+                        'Decline',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 48,
+                    color: const Color(0xFFE0E0E0),
+                  ),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          _handleRequestAction(requestId, request, 'accept'),
+                      icon: const Icon(Icons.check,
+                          color: Color(0xFF006A5B), size: 18),
+                      label: const Text(
+                        'Accept',
+                        style: TextStyle(
+                          color: Color(0xFF006A5B),
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            bottomRight: Radius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _handleRequestAction(
+      String requestId, Map<String, dynamic> request, String action) async {
+    try {
+      // Extract child name from the structure
+      final childInfo = request['childInfo'] as Map<String, dynamic>? ?? {};
+      final childName = FieldHelper.getName(childInfo) ?? 'Unknown Child';
+
+      if (action == 'accept') {
+        // Get current therapist ID for approval
+        final prefs = await SharedPreferences.getInstance();
+        final therapistId = prefs.getString('therapist_id') ??
+            prefs.getString('user_id') ??
+            'unknown';
+
+        // Use AcceptedBookingService to accept the request
+        await AcceptedBookingService.acceptBookingRequest(
+          requestId: requestId,
+          requestData: request,
+          approvedById: therapistId,
+          assignedTherapistId: therapistId,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '✅ Booking request accepted for $childName and added to schedule'),
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          );
+        }
+      } else {
+        // Use BookingRequestService to decline the request
+        final prefs = await SharedPreferences.getInstance();
+        final therapistId = prefs.getString('therapist_id') ??
+            prefs.getString('user_id') ??
+            'unknown';
+
+        final success = await BookingRequestService.declineBookingRequest(
+          requestId: requestId,
+          reviewerId: therapistId,
+          reason: 'Declined by therapist',
+        );
+
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Booking request declined for $childName'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    Text('❌ Failed to decline booking request for $childName'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('Error in _handleRequestAction: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error processing request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildTodayAppointmentCard(Map<String, dynamic> appointment) {
+    // Extract patient information using FieldHelper
+    final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
+    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
+
+    final patientName = FieldHelper.getName(childInfo) ??
+        FieldHelper.getName(parentInfo) ??
+        appointment['patientName'] ??
+        'Unknown Patient';
+
+    final appointmentTime = appointment['appointmentTime'] ?? 'Time TBD';
+    final appointmentType = appointment['appointmentType'] ?? 'Therapy Session';
+    final childAge = childInfo['childAge']?.toString();
+
+    // Parse color from hex string or use default
+    Color appointmentColor = const Color(0xFF006A5B);
+    try {
+      final colorString = appointment['color'] as String?;
+      if (colorString != null) {
+        appointmentColor =
+            Color(int.parse(colorString.replaceFirst('#', '0xFF')));
+      }
+    } catch (e) {
+      // Use default color if parsing fails
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Booking Request',
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: appointmentColor,
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: Center(
+                child: Text(
+                  patientName.isNotEmpty
+                      ? patientName.substring(0, 1).toUpperCase()
+                      : '?',
                   style: const TextStyle(
-                    fontSize: 16,
+                    color: Colors.white,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
                   ),
                 ),
-                Text(
-                  requestDate,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 12),
-
-            // Child information
-            Row(
-              children: [
-                const Icon(Icons.child_care, size: 16, color: Colors.blue),
-                const SizedBox(width: 8),
-                Text(
-                  'Child: $childName${childAge.isNotEmpty ? ' ($childAge years)' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            // Parent information
-            Row(
-              children: [
-                const Icon(Icons.person, size: 16, color: Colors.green),
-                const SizedBox(width: 8),
-                Text('Parent: $parentName'),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            // Appointment details
-            Row(
-              children: [
-                const Icon(Icons.calendar_today,
-                    size: 16, color: Colors.orange),
-                const SizedBox(width: 8),
-                Text('Date: $appointmentDateStr'),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            Row(
-              children: [
-                const Icon(Icons.access_time, size: 16, color: Colors.purple),
-                const SizedBox(width: 8),
-                Text('Time: $appointmentTime'),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            Row(
-              children: [
-                const Icon(Icons.medical_services, size: 16, color: Colors.red),
-                const SizedBox(width: 8),
-                Text('Type: $appointmentType'),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            if (status == 'pending') ...[
-              Row(
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () =>
-                          _handleRequestAction(requestId, request, 'accept'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text('Accept'),
+                  Text(
+                    patientName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () =>
-                          _handleRequestAction(requestId, request, 'decline'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: Color(0xFF67AFA5),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        appointmentTime,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF67AFA5),
+                          fontFamily: 'Poppins',
                         ),
                       ),
-                      child: const Text('Decline'),
-                    ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.medical_services,
+                        size: 14,
+                        color: Color(0xFF67AFA5),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        appointmentType,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF67AFA5),
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ] else ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: status == 'approved'
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: status == 'approved' ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.bold,
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF006A5B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'TODAY',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
                   ),
                 ),
-              ),
-            ],
+                if (childAge != null && childAge.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Age: $childAge',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -940,18 +1302,17 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
 
     // Add days of the month
     for (int day = 1; day <= daysInMonth; day++) {
-      final isToday = now.year == _currentMonth.year &&
-          now.month == _currentMonth.month &&
-          now.day == day;
-
-      final hasAppointments = _monthlyAppointments.containsKey(day) &&
-          _monthlyAppointments[day]!.isNotEmpty;
+      final isToday = day == now.day &&
+          _currentMonth.year == now.year &&
+          _currentMonth.month == now.month;
+      final hasAppointments = _monthlyAppointments.containsKey(day);
+      final dayAppointments = _monthlyAppointments[day] ?? [];
 
       calendarDays.add(
         GestureDetector(
-          onTap: hasAppointments
-              ? () => _showDaySchedule(day, _monthlyAppointments[day]!)
-              : null,
+          onTap: () {
+            _showDaySchedule(day, dayAppointments);
+          },
           child: Container(
             width: 35,
             height: 45,
@@ -960,9 +1321,12 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
               color: isToday
                   ? const Color(0xFF006A5B)
                   : hasAppointments
-                      ? const Color(0xFF006A5B).withOpacity(0.3)
+                      ? const Color(0xFF67AFA5).withOpacity(0.3)
                       : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
+              border: hasAppointments
+                  ? Border.all(color: const Color(0xFF67AFA5), width: 1)
+                  : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -970,15 +1334,20 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                 Text(
                   day.toString(),
                   style: TextStyle(
-                    color: isToday ? Colors.white : Colors.black,
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isToday
+                        ? Colors.white
+                        : hasAppointments
+                            ? const Color(0xFF006A5B)
+                            : const Color(0xFF67AFA5),
+                    fontFamily: 'Poppins',
                   ),
                 ),
                 if (hasAppointments)
                   Container(
-                    width: 6,
-                    height: 6,
+                    width: 4,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 2),
                     decoration: BoxDecoration(
                       color: isToday ? Colors.white : const Color(0xFF006A5B),
                       shape: BoxShape.circle,
@@ -993,28 +1362,16 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
 
     return Column(
       children: [
-        // Day headers
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-              .map((day) => SizedBox(
-                    width: 35,
-                    child: Text(
-                      day,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF006A5B),
-                      ),
-                    ),
-                  ))
-              .toList(),
-        ),
-        const SizedBox(height: 8),
-        // Calendar grid
-        Wrap(
-          children: calendarDays,
-        ),
+        for (int week = 0; week < 6; week++)
+          if (week * 7 < calendarDays.length)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children:
+                    calendarDays.skip(week * 7).take(7).toList().cast<Widget>(),
+              ),
+            ),
       ],
     );
   }
@@ -1027,70 +1384,91 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Appointments for $formattedDate',
+          formattedDate,
           style: const TextStyle(
-            color: Color(0xFF006A5B),
             fontWeight: FontWeight.bold,
+            color: Color(0xFF006A5B),
+            fontFamily: 'Poppins',
           ),
         ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: appointments.length,
-            itemBuilder: (context, index) {
-              final appointment = appointments[index];
-              final childInfo =
-                  appointment['childInfo'] as Map<String, dynamic>? ?? {};
-              final patientName =
-                  FieldHelper.getName(childInfo) ?? 'Unknown Patient';
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF006A5B),
-                    child: Text(
-                      (index + 1).toString(),
-                      style: const TextStyle(color: Colors.white),
+        content: appointments.isEmpty
+            ? const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.event_available,
+                    size: 48,
+                    color: Color(0xFF67AFA5),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'No appointments scheduled',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Color(0xFF67AFA5),
                     ),
                   ),
-                  title: Text(patientName),
-                  subtitle: Text(
-                    '${appointment['appointmentTime'] ?? ''} • ${appointment['appointmentType'] ?? 'Therapy'}',
-                  ),
-                  trailing: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF006A5B).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      appointment['status']?.toString().toUpperCase() ??
-                          'CONFIRMED',
-                      style: const TextStyle(
-                        color: Color(0xFF006A5B),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                ],
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${appointments.length} appointment${appointments.length > 1 ? 's' : ''}:',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Poppins',
+                      color: Color(0xFF006A5B),
                     ),
                   ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _viewAppointmentDetails(appointment);
-                  },
-                ),
-              );
-            },
-          ),
-        ),
+                  const SizedBox(height: 12),
+                  ...appointments.map((appointment) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF006A5B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF006A5B).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                appointment['patientName'] ?? 'Unknown Patient',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF006A5B),
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${appointment['appointmentTime']} - ${appointment['appointmentType']}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF67AFA5),
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+                ],
+              ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
               'Close',
-              style: TextStyle(color: Color(0xFF006A5B)),
+              style: TextStyle(
+                color: Color(0xFF006A5B),
+                fontFamily: 'Poppins',
+              ),
             ),
           ),
         ],
@@ -1100,22 +1478,21 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
 
   // Helper methods
   Future<List<Map<String, dynamic>>> _getTodayAppointments() async {
-    if (_therapistId == null) return [];
-
     try {
+      final therapistId = await _getCurrentTherapistId();
+      if (therapistId == null) return [];
+
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
 
       final querySnapshot = await FirebaseFirestore.instance
           .collection('AcceptedBooking')
-          .where('serviceProvider.therapistId', isEqualTo: _therapistId)
+          .where('serviceProvider.therapistId', isEqualTo: therapistId)
           .where('appointmentDate',
               isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('appointmentDate',
               isLessThanOrEqualTo: Timestamp.fromDate(endOfDay))
-          .orderBy('appointmentDate')
-          .orderBy('appointmentTime')
           .get();
 
       return querySnapshot.docs.map((doc) {
@@ -1129,205 +1506,10 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getWeeklyAppointments() async {
-    if (_therapistId == null) return [];
-
-    try {
-      final now = DateTime.now();
-      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-      final endOfWeek = startOfWeek.add(const Duration(days: 6));
-
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('AcceptedBooking')
-          .where('serviceProvider.therapistId', isEqualTo: _therapistId)
-          .where('appointmentDate',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(startOfWeek))
-          .where('appointmentDate',
-              isLessThanOrEqualTo: Timestamp.fromDate(endOfWeek))
-          .orderBy('appointmentDate')
-          .orderBy('appointmentTime')
-          .get();
-
-      return querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList();
-    } catch (e) {
-      print('Error getting weekly appointments: $e');
-      return [];
-    }
-  }
-
   Stream<QuerySnapshot> _getBookingRequestsStream() {
-    if (_therapistId == null) {
-      return const Stream.empty();
-    }
-
     return FirebaseFirestore.instance
         .collection('Request')
-        .where('serviceProvider.therapistId', isEqualTo: _therapistId)
         .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
         .snapshots();
-  }
-
-  void _handleRequestAction(
-      String requestId, Map<String, dynamic> request, String action) async {
-    try {
-      if (action == 'accept') {
-        // Use AcceptedBookingService to accept the request
-        await AcceptedBookingService.acceptBookingRequest(
-          requestId: requestId,
-          requestData: request,
-          approvedById: _therapistId!,
-          assignedTherapistId: _therapistId,
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Booking request accepted successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        // Decline the request
-        await FirebaseFirestore.instance
-            .collection('Request')
-            .doc(requestId)
-            .update({
-          'status': 'declined',
-          'declinedAt': FieldValue.serverTimestamp(),
-          'declinedBy': _therapistId,
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Booking request declined'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('Error in _handleRequestAction: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _viewAppointmentDetails(Map<String, dynamic> appointment) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Appointment Details',
-          style: TextStyle(
-            color: Color(0xFF006A5B),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow('Patient',
-                FieldHelper.getName(appointment['childInfo']) ?? 'Unknown'),
-            _buildDetailRow('Parent',
-                FieldHelper.getName(appointment['parentInfo']) ?? 'Unknown'),
-            _buildDetailRow(
-                'Date', _formatAppointmentDate(appointment['appointmentDate'])),
-            _buildDetailRow('Time', appointment['appointmentTime'] ?? ''),
-            _buildDetailRow(
-                'Type', appointment['appointmentType'] ?? 'Therapy Session'),
-            _buildDetailRow('Status',
-                appointment['status']?.toString().toUpperCase() ?? 'CONFIRMED'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: Color(0xFF006A5B)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF006A5B),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(value),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatAppointmentDate(dynamic date) {
-    if (date is Timestamp) {
-      return DateFormat('MMM dd, yyyy').format(date.toDate());
-    }
-    return date?.toString() ?? '';
-  }
-
-  void _markAsInProgress(Map<String, dynamic> appointment) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('AcceptedBooking')
-          .doc(appointment['id'])
-          .update({
-        'status': 'in_progress',
-        'startedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session started'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-
-      // Refresh the data
-      _loadMonthlyAppointments();
-    } catch (e) {
-      print('Error marking as in progress: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 }
