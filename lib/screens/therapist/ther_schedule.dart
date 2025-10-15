@@ -4,6 +4,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../helper/field_helper.dart';
+import 'ther_edit_schedule.dart';
 
 class TherapistSchedulePage extends StatefulWidget {
   const TherapistSchedulePage({Key? key}) : super(key: key);
@@ -121,6 +122,10 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.white),
+            onPressed: _navigateToEditSchedule,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _refreshData,
@@ -851,6 +856,20 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
         .where((apt) =>
             apt['status'] != 'completed' && apt['status'] != 'cancelled')
         .length;
+  }
+
+  void _navigateToEditSchedule() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TherapistEditSchedulePage(),
+      ),
+    );
+
+    // Refresh data if schedule was updated
+    if (result == true) {
+      _refreshData();
+    }
   }
 
   Future<void> _refreshData() async {

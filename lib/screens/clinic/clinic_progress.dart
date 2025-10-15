@@ -35,17 +35,30 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
   Future<void> _getClinicId() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Debug: Print all stored keys
+    print('🔍 All SharedPreferences keys: ${prefs.getKeys()}');
+
     // Use the same lookup logic as clinic_patientlist.dart
     String? clinicId = prefs.getString('clinic_id');
+    print('🔍 clinic_id key result: $clinicId');
+
     if (clinicId == null) {
       final possibleKeys = ['user_id', 'clinicId', 'userId', 'id'];
       for (final key in possibleKeys) {
         clinicId = prefs.getString(key);
+        print('🔍 Trying key "$key": $clinicId');
         if (clinicId != null) {
           print('✅ Found clinic ID with key "$key": $clinicId');
           break;
         }
       }
+    } else {
+      print('✅ Found clinic ID with primary key "clinic_id": $clinicId');
+    }
+
+    if (clinicId == null) {
+      print('❌ No clinic ID found in any key!');
     }
 
     setState(() {
@@ -54,45 +67,115 @@ class _ClinicProgressState extends State<ClinicProgress> {
   }
 
   Future<void> _loadPatientsAndProgress() async {
-    if (clinicId == null) return;
+    if (clinicId == null) {
+      print('❌ Clinic ID is null, cannot load data');
+      return;
+    }
 
     try {
       setState(() {
         isLoading = true;
       });
 
-      print('🚀 Starting optimized data loading...');
+      print('🚀 Starting data loading with clinic ID: $clinicId');
       final startTime = DateTime.now();
 
-      // Load both collections in parallel for better performance
+      // TEMPORARY: Load all documents first to debug field names
+      print('🔍 Loading ALL documents to debug field structure...');
+
       final futures = await Future.wait([
-        FirebaseFirestore.instance
-            .collection('AcceptedBooking')
-            .where('clinicId', isEqualTo: clinicId)
-            .get(),
-        FirebaseFirestore.instance
-            .collection('ClinicProgress')
-            .where('clinicId', isEqualTo: clinicId)
-            .orderBy('date', descending: true)
-            .limit(50) // Limit to recent reports for better performance
-            .get(),
+        FirebaseFirestore.instance.collection('AcceptedBooking').get(),
+        FirebaseFirestore.instance.collection('ClinicProgress').get(),
       ]);
 
       final patientsSnapshot = futures[0];
       final progressSnapshot = futures[1];
 
       print(
-          '📊 Loaded ${patientsSnapshot.docs.length} bookings and ${progressSnapshot.docs.length} reports');
+          '📊 AcceptedBooking query returned: ${patientsSnapshot.docs.length} documents');
+      print(
+          '📊 ClinicProgress query returned: ${progressSnapshot.docs.length} documents');
 
-      // Process analytics data
-      _processAnalyticsData(progressSnapshot.docs);
+      // If no results, check if collections have any data at all
+      if (patientsSnapshot.docs.isEmpty) {
+        print('🔍 Checking if AcceptedBooking collection has any documents...');
+        final allBookings = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .limit(3)
+            .get();
+        print('📋 Total AcceptedBooking documents: ${allBookings.docs.length}');
+        if (allBookings.docs.isNotEmpty) {
+          print(
+              '🔬 Sample AcceptedBooking doc: ${allBookings.docs.first.data()}');
+        }
+      }
+
+      if (progressSnapshot.docs.isEmpty) {
+        print('🔍 Checking if ClinicProgress collection has any documents...');
+        final allProgress = await FirebaseFirestore.instance
+            .collection('ClinicProgress')
+            .limit(3)
+            .get();
+        print('📋 Total ClinicProgress documents: ${allProgress.docs.length}');
+        if (allProgress.docs.isNotEmpty) {
+          print(
+              '🔬 Sample ClinicProgress doc: ${allProgress.docs.first.data()}');
+        }
+      }
+
+      // Debug: Print first few documents to see structure
+      if (patientsSnapshot.docs.isNotEmpty) {
+        print(
+            '🔬 First AcceptedBooking doc: ${patientsSnapshot.docs.first.data()}');
+      }
+      if (progressSnapshot.docs.isNotEmpty) {
+        print(
+            '🔬 First ClinicProgress doc: ${progressSnapshot.docs.first.data()}');
+      }
 
       // Create a map of progress reports by patient ID for O(1) lookup
       final Map<String, List<Map<String, dynamic>>> progressByPatient = {};
       final List<Map<String, dynamic>> allProgressReports = [];
 
+      // Filter documents by clinicId (since we loaded all docs)
+      final List<QueryDocumentSnapshot> filteredPatientDocs = [];
+      final List<QueryDocumentSnapshot> filteredProgressDocs = [];
+
+      // Filter AcceptedBooking documents
+      for (var doc in patientsSnapshot.docs) {
+        final data = doc.data();
+        final docClinicId = data['clinicId']?.toString() ??
+            data['clinic_id']?.toString() ??
+            data['ClinicId']?.toString();
+        print(
+            '🔬 AcceptedBooking doc ${doc.id} has clinicId: $docClinicId (looking for: $clinicId)');
+        if (docClinicId == clinicId) {
+          filteredPatientDocs.add(doc);
+        }
+      }
+
+      // Filter ClinicProgress documents
       for (var doc in progressSnapshot.docs) {
         final data = doc.data();
+        final docClinicId = data['clinicId']?.toString() ??
+            data['clinic_id']?.toString() ??
+            data['ClinicId']?.toString();
+        print(
+            '🔬 ClinicProgress doc ${doc.id} has clinicId: $docClinicId (looking for: $clinicId)');
+        if (docClinicId == clinicId) {
+          filteredProgressDocs.add(doc);
+        }
+      }
+
+      print(
+          '📊 After filtering: ${filteredPatientDocs.length} bookings, ${filteredProgressDocs.length} progress reports');
+
+      // Process analytics data with filtered documents
+      _processAnalyticsData(filteredProgressDocs);
+
+      // Process progress reports with filtered documents
+      for (var doc in filteredProgressDocs) {
+        final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
         allProgressReports.add(data);
 
@@ -105,8 +188,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
       // Process patients data efficiently
       final List<Map<String, dynamic>> patientsList = [];
 
-      for (var doc in patientsSnapshot.docs) {
-        final patientData = doc.data();
+      for (var doc in filteredPatientDocs) {
+        final patientData = doc.data() as Map<String, dynamic>;
         final bookingId = doc.id;
         final patientId = patientData['patientId']?.toString() ?? bookingId;
 
@@ -162,8 +245,6 @@ class _ClinicProgressState extends State<ClinicProgress> {
     progressTypeStats.clear();
     weeklyProgressScores.clear();
 
-    final now = DateTime.now();
-
     for (var doc in progressDocs) {
       final data = doc.data() as Map<String, dynamic>;
 
@@ -197,6 +278,69 @@ class _ClinicProgressState extends State<ClinicProgress> {
     // Fill weekly scores if needed
     while (weeklyProgressScores.length < 7) {
       weeklyProgressScores.add(50.0 + (weeklyProgressScores.length * 5));
+    }
+  }
+
+  int _calculateUpcomingSessions() {
+    if (patientsWithProgress.isEmpty) return 0;
+
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+    final nextWeek = now.add(const Duration(days: 7));
+
+    // Count appointments in the next 7 days
+    int upcomingCount = 0;
+    for (var patient in patientsWithProgress) {
+      try {
+        final appointmentDateStr = patient['appointmentDate'];
+        if (appointmentDateStr != null && appointmentDateStr != 'N/A') {
+          final appointmentDate = DateTime.parse(appointmentDateStr);
+          if (appointmentDate.isAfter(tomorrow) &&
+              appointmentDate.isBefore(nextWeek)) {
+            upcomingCount++;
+          }
+        }
+      } catch (e) {
+        // Skip invalid dates
+      }
+    }
+    return upcomingCount;
+  }
+
+  String _calculateWeeklyChange() {
+    if (progressReports.isEmpty) return '0.0%';
+
+    try {
+      final now = DateTime.now();
+      final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
+      final lastWeekStart = thisWeekStart.subtract(const Duration(days: 7));
+
+      int thisWeekReports = 0;
+      int lastWeekReports = 0;
+
+      for (var report in progressReports) {
+        try {
+          final reportDate = DateTime.parse(report['date']);
+          if (reportDate.isAfter(thisWeekStart)) {
+            thisWeekReports++;
+          } else if (reportDate.isAfter(lastWeekStart) &&
+              reportDate.isBefore(thisWeekStart)) {
+            lastWeekReports++;
+          }
+        } catch (e) {
+          // Skip invalid dates
+        }
+      }
+
+      if (lastWeekReports == 0) {
+        return thisWeekReports > 0 ? '+100%' : '0.0%';
+      }
+
+      final change =
+          ((thisWeekReports - lastWeekReports) / lastWeekReports * 100);
+      return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}%';
+    } catch (e) {
+      return '0.0%';
     }
   }
 
@@ -306,29 +450,62 @@ class _ClinicProgressState extends State<ClinicProgress> {
                   ),
                 ),
 
-                // Stats cards
+                // Stats cards - 4 card layout
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total Patients',
-                          value: patientsWithProgress.length.toString(),
-                          icon: Icons.people,
-                          color: Colors.white,
-                          textColor: const Color(0xFF006A5B),
-                        ),
+                      // First row - Active Patients and Reports Recorded
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Active Patients',
+                              value: patientsWithProgress
+                                  .where((p) => p['status'] == 'confirmed')
+                                  .length
+                                  .toString(),
+                              icon: Icons.people,
+                              color: Colors.white,
+                              textColor: const Color(0xFF006A5B),
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Reports Recorded',
+                              value: progressReports.length.toString(),
+                              icon: Icons.assignment,
+                              color: Colors.white,
+                              textColor: const Color(0xFF006A5B),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total Reports',
-                          value: progressReports.length.toString(),
-                          icon: Icons.assignment,
-                          color: Colors.white,
-                          textColor: const Color(0xFF006A5B),
-                        ),
+                      const SizedBox(height: 15),
+                      // Second row - Upcoming Sessions and Avg Weekly Change
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Upcoming Sessions',
+                              value: _calculateUpcomingSessions().toString(),
+                              icon: Icons.schedule,
+                              color: Colors.white,
+                              textColor: const Color(0xFF006A5B),
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Avg Weekly Change',
+                              value: _calculateWeeklyChange(),
+                              icon: Icons.trending_up,
+                              color: Colors.white,
+                              textColor: const Color(0xFF006A5B),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -336,94 +513,150 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
                 const SizedBox(height: 20),
 
-                // Charts section (only show if not loading and has data)
-                if (!isLoading && progressReports.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Row(
-                      children: [
-                        // Weekly Progress Chart
-                        Expanded(
-                          child: Container(
-                            height: 200,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(15),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  spreadRadius: 2,
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Weekly Progress',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF006A5B),
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Expanded(
-                                    child: _buildProgressChart(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        // Progress Types Chart
-                        Expanded(
-                          child: Container(
-                            height: 200,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(15),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  spreadRadius: 2,
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Progress Types',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF006A5B),
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Expanded(
-                                    child: _buildProgressTypesChart(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                // Progress Tracking Section
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          spreadRadius: 2,
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Progress Tracking Overview',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF006A5B),
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Progress Categories Grid
+                          Row(
+                            children: [
+                              // Motor Progress
+                              Expanded(
+                                child: _buildProgressCategory(
+                                  title: 'Motor',
+                                  progress: 0.11,
+                                  daysOverview: '+11% over last 7 days',
+                                  status: 'On Track',
+                                  statusColor: const Color(0xFF006A5B),
+                                  progressColor: const Color(0xFF006A5B),
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              // Speech Progress
+                              Expanded(
+                                child: _buildProgressCategory(
+                                  title: 'Speech',
+                                  progress: 0.18,
+                                  daysOverview: '+18% over last 7 days',
+                                  status: 'On Track',
+                                  statusColor: const Color(0xFF006A5B),
+                                  progressColor: const Color(0xFF67AFA5),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 15),
+                          Row(
+                            children: [
+                              // Cognitive Progress
+                              Expanded(
+                                child: _buildProgressCategory(
+                                  title: 'Cognitive',
+                                  progress: 0.11,
+                                  daysOverview: '+11% over last 7 days',
+                                  status: 'Needs Attention',
+                                  statusColor: Colors.orange,
+                                  progressColor: Colors.orange,
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              // Socio-emotional Progress
+                              Expanded(
+                                child: _buildProgressCategory(
+                                  title: 'Socio-emotional',
+                                  progress: 0.27,
+                                  daysOverview: '+27% over last 7 days',
+                                  status: 'On Track',
+                                  statusColor: const Color(0xFF006A5B),
+                                  progressColor: const Color(0xFF006A5B),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Upcoming Sessions Section
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF006A5B).withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF006A5B).withOpacity(0.2),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Upcoming Sessions',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF006A5B),
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF006A5B),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.calendar_month,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ..._buildUpcomingSessionsList(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                ),
 
                 const SizedBox(height: 20),
 
@@ -972,5 +1205,262 @@ class _ClinicProgressState extends State<ClinicProgress> {
         ],
       ),
     );
+  }
+
+  Widget _buildProgressCategory({
+    required String title,
+    required double progress,
+    required String daysOverview,
+    required String status,
+    required Color statusColor,
+    required Color progressColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey[200]!,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2C3E50),
+              fontFamily: 'Poppins',
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Progress Bar
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${(progress * 100).toInt()}%',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: progressColor,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  Text(
+                    daysOverview,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[600],
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: progress,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: progressColor,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Status Badge
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: statusColor.withOpacity(0.3),
+              ),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: statusColor,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildUpcomingSessionsList() {
+    // Filter upcoming appointments from the next 7 days
+    final now = DateTime.now();
+    final nextWeek = now.add(const Duration(days: 7));
+
+    final upcomingSessions = patientsWithProgress
+        .where((patient) {
+          try {
+            final appointmentDateStr = patient['appointmentDate'];
+            if (appointmentDateStr != null && appointmentDateStr != 'N/A') {
+              final appointmentDate = DateTime.parse(appointmentDateStr);
+              return appointmentDate.isAfter(now) &&
+                  appointmentDate.isBefore(nextWeek);
+            }
+          } catch (e) {
+            // Skip invalid dates
+          }
+          return false;
+        })
+        .take(3)
+        .toList(); // Show only first 3
+
+    if (upcomingSessions.isEmpty) {
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'No upcoming sessions in the next 7 days',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+              fontFamily: 'Poppins',
+            ),
+          ),
+        ),
+      ];
+    }
+
+    return upcomingSessions.map((session) {
+      final sessionType =
+          _getSessionTypeFromDiagnosis(session['diagnosis'] ?? 'Therapy');
+      final sessionColor = _getSessionColor(sessionType);
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: sessionColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${session['childName']} • ${session['appointmentTime']}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF2C3E50),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  Text(
+                    sessionType,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _formatDate(session['appointmentDate']),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
+  String _getSessionTypeFromDiagnosis(String diagnosis) {
+    final diagnosisLower = diagnosis.toLowerCase();
+    if (diagnosisLower.contains('speech') ||
+        diagnosisLower.contains('language')) {
+      return 'Speech Therapy';
+    } else if (diagnosisLower.contains('motor') ||
+        diagnosisLower.contains('physical')) {
+      return 'Motor Therapy';
+    } else if (diagnosisLower.contains('cognitive') ||
+        diagnosisLower.contains('learning')) {
+      return 'Cognitive Therapy';
+    } else if (diagnosisLower.contains('social') ||
+        diagnosisLower.contains('emotional')) {
+      return 'Socio-emotional';
+    }
+    return 'Teletherapy';
+  }
+
+  Color _getSessionColor(String sessionType) {
+    switch (sessionType) {
+      case 'Speech Therapy':
+        return const Color(0xFF67AFA5);
+      case 'Motor Therapy':
+        return const Color(0xFF006A5B);
+      case 'Cognitive Therapy':
+        return Colors.orange;
+      case 'Socio-emotional':
+        return const Color(0xFF006A5B);
+      default:
+        return const Color(0xFF67AFA5);
+    }
+  }
+
+  String _formatDate(dynamic date) {
+    try {
+      if (date is String) {
+        final parsedDate = DateTime.parse(date);
+        final now = DateTime.now();
+        final difference = parsedDate.difference(now).inDays;
+
+        if (difference == 0) {
+          return 'Today';
+        } else if (difference == 1) {
+          return 'Tomorrow';
+        } else {
+          return '${parsedDate.day}/${parsedDate.month}';
+        }
+      }
+    } catch (e) {
+      // Handle parsing errors
+    }
+    return 'N/A';
   }
 }
