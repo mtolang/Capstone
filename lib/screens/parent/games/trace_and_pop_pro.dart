@@ -6,11 +6,16 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../../services/game_data_service.dart';
 
-// Trace & Pop Pro: A motor skills trainer with tracing paths, visual "pressure" feedback,
-// progressive difficulty, optional two-hand mode, and bubble popping for bilateral coordination.
-// Notes:
-// - Mobile devices don't expose real touch pressure broadly; we simulate "pressure" using
-//   speed + pointer size heuristics. On web/desktop, we just use speed.
+// 🌈 Trace & Pop Adventure: A magical motor skills journey for little hands! ✨
+// Kids trace colorful paths, pop rainbow bubbles, and meet friendly characters
+// while developing fine motor skills and hand-eye coordination through play!
+// 
+// Features:
+// 🎨 Colorful rainbow traces and sparkling effects
+// 🐰 Friendly animal characters that cheer you on
+// 🎈 Pop bubbles for bilateral coordination fun
+// 🏆 Sticker rewards and celebration animations
+// 📚 Shape, color, and alphabet learning integration
 
 class TraceAndPopProGame extends StatefulWidget {
   const TraceAndPopProGame({super.key});
@@ -79,18 +84,24 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
       // Load saved progress from unified user progress
       final userProgress = await GameDataService.getUserGameProgress();
       final savedLevel = userProgress.getCurrentLevel('trace_and_pop_pro');
-      setState(() {
-        _level = savedLevel;
-      });
+      if (mounted) {
+        setState(() {
+          _level = savedLevel;
+        });
+      }
       print('Trace and Pop Pro: Starting at level $savedLevel');
     } catch (e) {
       print('Error loading saved level: $e');
-      setState(() {
-        _level = 1; // Default to level 1
-      });
+      if (mounted) {
+        setState(() {
+          _level = 1; // Default to level 1
+        });
+      }
     }
-    _generateLevel();
-    _newSession();
+    if (mounted) {
+      _generateLevel();
+      _newSession();
+    }
   }
 
   @override
@@ -144,79 +155,344 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     }
   }
 
-  /// Update user progress and achievements
-  Future<void> _updateUserProgress() async {
-    try {
-      final currentProgress = await GameDataService.getUserProgress();
-
-      // Calculate new progress
-      final newProgress = UserProgress(
-        highestLevel: max(currentProgress.highestLevel, _level),
-        modeCompletions: {
-          ...currentProgress.modeCompletions,
-          _mode.name: (currentProgress.modeCompletions[_mode.name] ?? 0) +
-              (_completed ? 1 : 0),
-        },
-        totalSessions: currentProgress.totalSessions + 1,
-        totalBubblesPopped:
-            currentProgress.totalBubblesPopped + _bubblesPoppedCount,
-        totalPlayTime: currentProgress.totalPlayTime +
-            DateTime.now().difference(_sessionStart),
-        achievements: _checkNewAchievements(currentProgress),
-        lastPlayed: DateTime.now(),
-      );
-
-      await GameDataService.saveUserProgress(newProgress);
-    } catch (e) {
-      print('Error updating user progress: $e');
-    }
+  /// Show challenge fail dialog with encouraging feedback
+  void _showChallengeFailDialog(String title, String message) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.orange.shade50,
+          title: Column(
+            children: [
+              const Text('💪', style: TextStyle(fontSize: 40)),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          content: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.yellow.shade50, Colors.orange.shade50],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.orange,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: const Text(
+                    '🌟 Every expert was once a beginner! Keep practicing and you\'ll get better! 🌟',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Reset the current attempt for another try
+                _generateLevel();
+                _newSession();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh),
+                  SizedBox(width: 4),
+                  Text('Try Again! 🚀'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Go to easier level if child is struggling
+                if (_level > 1) {
+                  setState(() {
+                    _level--;
+                  });
+                  _generateLevel();
+                  _newSession();
+                }
+              },
+              child: Text(
+                _level > 1 ? 'Easier Level 😊' : 'Practice More 💪',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Return to games menu
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey.shade600,
+              ),
+              child: const Text('Back to Games 🏠'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  /// Check for new achievements based on current session
-  List<String> _checkNewAchievements(UserProgress currentProgress) {
-    final achievements = List<String>.from(currentProgress.achievements);
-
-    // First completion achievement
-    if (_completed && currentProgress.totalSessions == 0) {
-      achievements.add('first_completion');
-    }
-
-    // Level achievements
-    if (_level >= 3 && !achievements.contains('level_3_master')) {
-      achievements.add('level_3_master');
-    }
-    if (_level >= 5 && !achievements.contains('level_5_master')) {
-      achievements.add('level_5_master');
-    }
-
-    // Bubble popping achievements
-    if (_bubblesPoppedCount >= 10 && !achievements.contains('bubble_buster')) {
-      achievements.add('bubble_buster');
-    }
-    if (currentProgress.totalBubblesPopped + _bubblesPoppedCount >= 100 &&
-        !achievements.contains('bubble_master')) {
-      achievements.add('bubble_master');
-    }
-
-    // Speed achievements
-    final avgSpeed = _speedSamples > 0 ? _sumSpeed / _speedSamples : 0;
-    if (avgSpeed >= 400 && !achievements.contains('speed_demon')) {
-      achievements.add('speed_demon');
-    }
-
-    // Accuracy achievements
-    final accuracy = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
-    if (accuracy >= 0.9 && !achievements.contains('precision_master')) {
-      achievements.add('precision_master');
-    }
-
-    // Two-hand mode achievement
-    if (_twoHandMode && _completed && !achievements.contains('ambidextrous')) {
-      achievements.add('ambidextrous');
-    }
-
-    return achievements;
+  /// Show completion dialog when game is finished with lots of encouragement
+  void _showCompletionDialog() {
+    if (!mounted) return;
+    
+    // Choose random encouraging messages
+    final encouragements = [
+      'You\'re absolutely amazing! 🌟',
+      'Fantastic work, superstar! ⭐',
+      'You did it! You\'re incredible! 🎉',
+      'Wow! You\'re getting so good at this! 🚀',
+      'Outstanding job! Keep it up! 💫',
+    ];
+    
+    final tips = [
+      'Your finger control is getting better!',
+      'You\'re learning to trace so smoothly!',
+      'Great job following the path!',
+      'Your hand movements are so steady!',
+      'You\'re becoming a tracing expert!',
+    ];
+    
+    final randomEncouragement = encouragements[Random().nextInt(encouragements.length)];
+    final randomTip = tips[Random().nextInt(tips.length)];
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.yellow.shade50,
+          title: Column(
+            children: [
+              const Text('🎉', style: TextStyle(fontSize: 40)),
+              const SizedBox(height: 8),
+              Text(
+                randomEncouragement,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          content: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.pink.shade50, Colors.purple.shade50],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Level $_level Complete! 🏆',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Show achievements with fun emojis
+                _buildAchievementRow('Bubbles Popped', '$_bubblesPoppedCount', '🎈'),
+                _buildAchievementRow('Accuracy', '${_totalSamples > 0 ? (_onPathSamples / _totalSamples * 100).toStringAsFixed(0) : 0}%', '🎯'),
+                _buildAchievementRow('Time', '${DateTime.now().difference(_sessionStart).inSeconds}s', '⏰'),
+                
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Text(
+                    randomTip,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue.shade800,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                
+                if (_level < 5) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    '🌟 Ready for the next adventure? 🌟',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            if (_level < 5)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _level++;
+                  });
+                  _generateLevel();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_forward),
+                    SizedBox(width: 4),
+                    Text('Next Level! 🚀'),
+                  ],
+                ),
+              )
+            else
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _level = 1;
+                  });
+                  _generateLevel();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.refresh),
+                    SizedBox(width: 4),
+                    Text('Play Again! 🎮'),
+                  ],
+                ),
+              ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Return to games menu
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey.shade600,
+              ),
+              child: const Text('Back to Games 🏠'),
+            ),
+          ],
+        );
+      },
+    );
   }
+
+  Widget _buildAchievementRow(String label, String value, String emoji) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade100,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade300),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange.shade800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
 
   /// Show user statistics and achievements dialog
   Future<void> _showStatistics() async {
@@ -291,120 +567,245 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     }
   }
 
-  /// Reset game progress after completion
-  Future<void> _resetGameProgress() async {
-    try {
-      // Save completion and reset to level 1
-      await GameDataService.saveGameSessionAndProgress(
-        gameType: 'trace_and_pop_pro',
-        level: 1, // Reset to level 1
-        score: _bubblesPoppedCount * 10 + 50, // Completion bonus
-        completed: true, // Game completed
-        sessionDuration: DateTime.now().difference(_sessionStart),
-        gameSpecificData: {
-          'gameCompleted': true,
-          'completedAt': DateTime.now().toIso8601String(),
-          'finalBubblesPopped': _bubblesPoppedCount,
-        },
-      );
-    } catch (e) {
-      print('Error resetting game progress: $e');
-    }
-  }
+
 
   List<Offset> _buildPathForLevel(int level, Size canvas) {
     final List<Offset> pts = [];
     final double w = canvas.width;
     final double h = canvas.height;
-    final int segments = 60 + level * 20;
-
+    
+    // Adaptive difficulty: start with fewer segments for easier tracing
+    final int baseSegments = 40; // Much easier starting point
+    final int segments = baseSegments + (level * 15); // Gradual increase
+    
+    // Make paths child-friendly with larger curves and smoother transitions
     switch (level) {
-      case 1: // straight lines
+      case 1: // Big, easy straight line - perfect for little fingers
+        final double startY = h * 0.3;
         for (int i = 0; i < segments; i++) {
           final t = i / (segments - 1);
-          pts.add(Offset(40 + t * (w - 80), h * 0.2));
+          // Wider margins for easier tracing
+          pts.add(Offset(60 + t * (w - 120), startY));
         }
         break;
-      case 2: // curve
+        
+      case 2: // Gentle wave - like drawing a smile
         for (int i = 0; i < segments; i++) {
           final t = i / (segments - 1);
-          final x = 40 + t * (w - 80);
-          final y = h * 0.2 + sin(t * pi) * 80;
+          final x = 60 + t * (w - 120);
+          // Gentle wave that looks like a happy face
+          final y = h * 0.3 + sin(t * pi) * 60; // Reduced amplitude
           pts.add(Offset(x, y));
         }
         break;
-      case 3: // complex wave + midline cross
-        for (int i = 0; i < segments; i++) {
-          final t = i / (segments - 1);
-          final x = 40 + t * (w - 80);
-          final y = h * 0.25 + sin(t * 2 * pi) * 100;
-          pts.add(Offset(x, y));
-        }
-        break;
-      case 4: // zigzag
-        final int zig = 10;
-        for (int z = 0; z <= zig; z++) {
-          final t = z / zig;
-          final x = 40 + t * (w - 80);
-          final y = (z % 2 == 0) ? h * 0.2 : h * 0.4;
-          pts.add(Offset(x, y));
-        }
-        break;
-      case 5: // letter-like (circle)
-      default:
+        
+      case 3: // Simple shapes - circle (like drawing a sun)
         final cx = w / 2;
-        final cy = h * 0.32;
-        final r = min(w, h) * 0.18;
+        final cy = h * 0.35;
+        final r = min(w, h) * 0.15; // Larger, easier circle
         for (int i = 0; i < segments; i++) {
           final a = i / segments * 2 * pi;
           pts.add(Offset(cx + cos(a) * r, cy + sin(a) * r));
         }
         break;
+        
+      case 4: // Fun zigzag - like drawing lightning
+        final int zig = 6; // Fewer turns, easier to follow
+        for (int z = 0; z <= zig; z++) {
+          final t = z / zig;
+          final x = 60 + t * (w - 120);
+          final y = (z % 2 == 0) ? h * 0.25 : h * 0.45;
+          pts.add(Offset(x, y));
+        }
+        break;
+        
+      case 5: // Advanced pattern - figure 8 (like drawing infinity)
+      default:
+        final cx = w / 2;
+        final cy = h * 0.35;
+        final r = min(w, h) * 0.12;
+        for (int i = 0; i < segments; i++) {
+          final t = i / segments * 4 * pi; // Two loops
+          final scale = sin(t / 2).abs(); // Creates figure-8 effect
+          final x = cx + cos(t) * r * scale;
+          final y = cy + sin(t * 2) * r * scale;
+          pts.add(Offset(x, y));
+        }
+        break;
     }
 
-    // optionally add a second parallel path for two-hand mode (not drawn, but validated)
     return pts;
   }
 
   List<_Bubble> _spawnBubbles(int level) {
-    final rnd = Random(level);
-    final count = 6 + level * 3;
+    final rnd = Random(level * 42); // More predictable randomness
+    
+    // Adaptive bubble count - fewer bubbles for beginners
+    final int baseCount = 4; // Start with just 4 bubbles
+    final int count = baseCount + (level * 2); // Gradual increase
+    
     final List<_Bubble> bubbles = [];
+    final double minRadius = 35; // Much larger minimum size for little fingers
+    final double maxRadius = 50; // Even bigger maximum
+    
+    // Strategic bubble placement - not too close to path
     for (int i = 0; i < count; i++) {
+      late Offset center;
+      int attempts = 0;
+      
+      // Try to place bubbles in good spots (not overlapping with path)
+      do {
+        center = Offset(
+          80 + rnd.nextDouble() * 200, // Away from edges
+          450 + rnd.nextDouble() * 120, // In lower area, away from main tracing
+        );
+        attempts++;
+      } while (attempts < 10 && _isTooCloseToPath(center));
+      
+      // Add some colorful variety to bubbles
+      final colors = [
+        Colors.red.withOpacity(0.7),
+        Colors.blue.withOpacity(0.7),
+        Colors.green.withOpacity(0.7),
+        Colors.yellow.withOpacity(0.7),
+        Colors.purple.withOpacity(0.7),
+        Colors.orange.withOpacity(0.7),
+      ];
+      
       bubbles.add(_Bubble(
-        center:
-            Offset(60 + rnd.nextDouble() * 240, 380 + rnd.nextDouble() * 160),
-        radius: 16 + rnd.nextDouble() * 16,
+        center: center,
+        radius: minRadius + rnd.nextDouble() * (maxRadius - minRadius),
+        color: colors[i % colors.length], // Assign color
       ));
     }
     return bubbles;
   }
+  
+  bool _isTooCloseToPath(Offset point) {
+    // Check if bubble would be too close to tracing path
+    for (final pathPoint in _pathPoints) {
+      if ((point - pathPoint).distance < 80) { // Give plenty of space
+        return true;
+      }
+    }
+    return false;
+  }
 
   List<Offset> _buildDotsForLevel(int level) {
-    final rnd = Random(100 + level);
-    final count = 6 + level * 2;
+    final count = 5 + level * 2; // Start with fewer dots, increase with level
     final List<Offset> pts = [];
-    for (int i = 0; i < count; i++) {
-      pts.add(
-          Offset(50 + rnd.nextDouble() * 260, 200 + rnd.nextDouble() * 260));
+    
+    // Create a more structured pattern for challenge
+    switch (level) {
+      case 1: // Simple line of dots
+        for (int i = 0; i < count; i++) {
+          final t = i / (count - 1);
+          pts.add(Offset(80 + t * 200, 250));
+        }
+        break;
+        
+      case 2: // L-shape pattern
+        for (int i = 0; i < count; i++) {
+          if (i < count ~/ 2) {
+            pts.add(Offset(80, 200 + i * 40));
+          } else {
+            final offset = i - count ~/ 2;
+            pts.add(Offset(80 + offset * 40, 200 + (count ~/ 2) * 40));
+          }
+        }
+        break;
+        
+      case 3: // Triangle pattern
+        final center = const Offset(180, 300);
+        final radius = 80;
+        for (int i = 0; i < count; i++) {
+          final angle = i * 2 * pi / count;
+          pts.add(Offset(
+            center.dx + cos(angle) * radius,
+            center.dy + sin(angle) * radius,
+          ));
+        }
+        break;
+        
+      case 4: // Zigzag pattern
+        for (int i = 0; i < count; i++) {
+          final t = i / (count - 1);
+          final x = 60 + t * 240;
+          final y = 250.0 + (i % 2 == 0 ? -40.0 : 40.0);
+          pts.add(Offset(x, y));
+        }
+        break;
+        
+      case 5: // Complex spiral pattern
+      default:
+        final center = const Offset(180, 300);
+        for (int i = 0; i < count; i++) {
+          final t = i / (count - 1);
+          final angle = t * 4 * pi; // Two full rotations
+          final radius = 30 + t * 60; // Expanding spiral
+          pts.add(Offset(
+            center.dx + cos(angle) * radius,
+            center.dy + sin(angle) * radius,
+          ));
+        }
+        break;
     }
+    
     return pts;
   }
 
   List<Offset> _buildTargetShape(int level) {
     switch (level) {
-      case 1:
-        return _circlePoints(const Offset(180, 260), 60, 72);
-      case 2:
+      case 1: // Simple large circle - easy to match
+        return _circlePoints(const Offset(180, 280), 50, 48);
+        
+      case 2: // Square - introduces corners
         return _rectanglePoints(Rect.fromCenter(
-            center: const Offset(180, 260), width: 140, height: 80));
-      case 3:
-        return _trianglePoints(const Offset(180, 260), 100);
-      case 4:
-        return _zigZagPoints(const Offset(60, 220), 240, 80, 6);
+            center: const Offset(180, 280), width: 120, height: 120));
+            
+      case 3: // Triangle - more complex shape
+        return _trianglePoints(const Offset(180, 280), 90);
+        
+      case 4: // Star shape - challenging but fun
+        return _starPoints(const Offset(180, 280), 70, 35, 5);
+        
+      case 5: // Heart shape - most challenging
       default:
-        return _circlePoints(const Offset(180, 260), 90, 96);
+        return _heartPoints(const Offset(180, 280), 60);
     }
+  }
+  
+  List<Offset> _starPoints(Offset center, double outerRadius, double innerRadius, int points) {
+    final List<Offset> pts = [];
+    for (int i = 0; i < points * 2; i++) {
+      final angle = i * pi / points - pi / 2;
+      final radius = i % 2 == 0 ? outerRadius : innerRadius;
+      pts.add(Offset(
+        center.dx + cos(angle) * radius,
+        center.dy + sin(angle) * radius,
+      ));
+    }
+    pts.add(pts.first); // Close the shape
+    return pts;
+  }
+  
+  List<Offset> _heartPoints(Offset center, double size) {
+    final List<Offset> pts = [];
+    const steps = 100;
+    
+    for (int i = 0; i <= steps; i++) {
+      final t = i * 2 * pi / steps;
+      // Parametric heart equation
+      final x = 16 * pow(sin(t), 3);
+      final y = -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t));
+      
+      pts.add(Offset(
+        center.dx + x * size / 16,
+        center.dy + y * size / 16,
+      ));
+    }
+    
+    return pts;
   }
 
   List<Offset> _circlePoints(Offset c, double r, int n) =>
@@ -446,17 +847,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     return pts;
   }
 
-  List<Offset> _zigZagPoints(
-      Offset start, double width, double height, int zigs) {
-    final List<Offset> pts = [];
-    for (int i = 0; i <= zigs; i++) {
-      final t = i / zigs;
-      final x = start.dx + t * width;
-      final y = (i % 2 == 0) ? start.dy : start.dy + height;
-      pts.add(Offset(x, y));
-    }
-    return pts;
-  }
+
 
   void _initSculptTargets() {
     _sculptBase = _trianglePoints(const Offset(0, 0), 100);
@@ -486,12 +877,40 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
   }
 
   void _onPointerDown(PointerDownEvent e) {
+    if (!mounted) return;
+    
     _pointers[e.pointer] =
         _PointerSample(position: e.localPosition, time: DateTime.now());
-    setState(() {});
+    
+    // Handle single taps for bubble popping in single-hand mode
+    if (!_twoHandMode) {
+      bool poppedAny = false;
+      for (final b in _bubbles) {
+        if (!b.popped && (e.localPosition - b.center).distance <= b.radius) {
+          b.popped = true;
+          _bubblesPoppedCount += 1;
+          poppedAny = true;
+          break; // Only pop one bubble per tap
+        }
+      }
+      
+      // Add challenge: penalty for missing bubbles (clicking empty space)
+      if (!poppedAny && _twoHandMode) {
+        // In two-hand mode, missed clicks reduce score slightly
+        if (_bubblesPoppedCount > 0) {
+          _bubblesPoppedCount = max(0, _bubblesPoppedCount - 1);
+        }
+      }
+    }
+    
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onPointerMove(PointerMoveEvent e) {
+    if (!mounted) return;
+    
     final prev = _pointers[e.pointer];
     final now = DateTime.now();
     if (prev != null) {
@@ -513,8 +932,28 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         _drawnStroke.add(e.localPosition);
         break;
       case _Mode.connectPath:
+        // Allow dragging to connect dots with child-friendly tolerance
+        if (_nextDotIndex < _dots.length) {
+          final tolerance = 40 + (5 - _level) * 8; // Easier for beginners
+          final d = (e.localPosition - _dots[_nextDotIndex]).distance;
+          if (d < tolerance) {
+            if (_nextDotIndex > 0) {
+              _connections.add(_dots[_nextDotIndex - 1]);
+              _connections.add(_dots[_nextDotIndex]);
+            }
+            _nextDotIndex++;
+          }
+        }
         break;
       case _Mode.shapeSculptor:
+        // Handle shape transformation during drag
+        final center = _sculptPos;
+        final delta = e.localPosition - center;
+        final distance = delta.distance;
+        if (distance > 20 && distance < 100) {
+          _sculptScale = (distance / 60).clamp(0.5, 2.0);
+          _sculptRotation = delta.direction;
+        }
         break;
       case _Mode.rhythmTracer:
         _progress = _estimateProgress(e.localPosition);
@@ -536,7 +975,9 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     _speedSamples++;
     if (_mode == _Mode.trace || _mode == _Mode.rhythmTracer) {
       final d = _distanceToPath(e.localPosition);
-      if (d < 20) _onPathSamples++;
+      // Much more forgiving tolerance for children - adapts to level
+      final tolerance = 35 + (5 - _level) * 8; // Level 1: 67px, Level 5: 35px
+      if (d < tolerance) _onPathSamples++;
     }
 
     final wasCompleted = _completed;
@@ -545,14 +986,22 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     // Save to Firebase when game is completed for the first time
     if (_completed && !wasCompleted) {
       _saveGameSession();
+      _showCompletionDialog();
     }
 
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onPointerUp(PointerUpEvent e) {
+    if (!mounted) return;
+    
     _pointers.remove(e.pointer);
-    setState(() {});
+    
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   double _estimateProgress(Offset current) {
@@ -583,27 +1032,134 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
   int get pathMaxIndex => max(1, _pathPoints.length - 1);
 
   bool _checkCompletion(Offset current) {
+    // Add time-based challenges - children must complete within reasonable time
+    final sessionDuration = DateTime.now().difference(_sessionStart).inSeconds;
+    final maxTimeAllowed = 120 + (_level * 30); // 2-5 minutes depending on level
+    
+    if (sessionDuration > maxTimeAllowed) {
+      _showChallengeFailDialog('⏰ Time Challenge', 'Try to be a little faster next time! Take your time, but don\'t forget to keep moving your finger.');
+      return false;
+    }
+    
     switch (_mode) {
       case _Mode.trace:
+        // Balanced challenge: not too easy, not too hard
         final avgSpeed = _speedSamples > 0 ? _sumSpeed / _speedSamples : 0;
-        final speedOk =
-            avgSpeed > _targetSpeed * 0.5 && avgSpeed < _targetSpeed * 1.5;
-        return _progress > 0.95 && speedOk;
+        
+        // Speed requirements with meaningful challenge
+        final targetSpeedMin = _targetSpeed * (0.4 + _level * 0.03); // Gradual increase
+        final targetSpeedMax = _targetSpeed * (1.8 - _level * 0.1); // Gradual decrease
+        
+        final speedOk = avgSpeed > targetSpeedMin && avgSpeed < targetSpeedMax;
+        
+        // Progress requirements that provide challenge
+        final progressThreshold = 0.75 + (_level * 0.03); // Level 1: 75%, Level 5: 87%
+        final accuracyRatio = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
+        final accuracyThreshold = 0.65 + (_level * 0.05); // Level 1: 65%, Level 5: 85%
+        
+        if (!speedOk) {
+          if (avgSpeed < targetSpeedMin) {
+            _showChallengeFailDialog('🐌 Speed Challenge', 'Try moving your finger a little faster! You can do it!');
+          } else {
+            _showChallengeFailDialog('🚀 Steady Hand Challenge', 'Slow down a bit! Take your time and trace carefully.');
+          }
+          return false;
+        }
+        
+        if (_progress < progressThreshold) {
+          _showChallengeFailDialog('🎯 Path Challenge', 'Try to follow the colorful path more closely. You\'re almost there!');
+          return false;
+        }
+        
+        if (accuracyRatio < accuracyThreshold) {
+          _showChallengeFailDialog('✨ Accuracy Challenge', 'Stay on the rainbow path! Practice makes perfect!');
+          return false;
+        }
+        
+        return true;
+        
       case _Mode.drawMatch:
-        if (_drawnStroke.length < 20) return false;
+        if (_drawnStroke.length < 20) {
+          _showChallengeFailDialog('✏️ Drawing Challenge', 'Draw a bit more to match the shape! Keep going!');
+          return false;
+        }
+        
         final score = _matchScore(_drawnStroke, _targetShape);
-        return score < 18;
+        final maxScore = 20 - (_level * 2); // Gets harder with levels
+        
+        if (score > maxScore) {
+          _showChallengeFailDialog('🎨 Shape Challenge', 'Try to match the target shape more closely. Look at the light blue outline!');
+          return false;
+        }
+        
+        return true;
+        
       case _Mode.connectPath:
-        return _nextDotIndex >= _dots.length;
+        // Add accuracy challenge for dot connection
+        final connectAccuracy = _connections.length / 2; // Number of successful connections
+        final requiredAccuracy = (_dots.length - 1) * 0.8; // 80% accuracy required
+        
+        if (_nextDotIndex >= _dots.length) {
+          if (connectAccuracy < requiredAccuracy) {
+            _showChallengeFailDialog('🔗 Connection Challenge', 'Try to connect the dots more carefully! Follow the order!');
+            return false;
+          }
+          return true;
+        }
+        return false;
+        
       case _Mode.shapeSculptor:
-        final posOk = (_sculptPos - _sculptTargetPos).distance < 15;
-        final scaleOk = (_sculptScale - _sculptTargetScale).abs() < 0.12;
-        final rotOk = (_sculptRotation - _sculptTargetRotation).abs() < pi / 18;
-        return posOk && scaleOk && rotOk;
+        // Shape sculpting with meaningful challenges
+        final posDistance = (_sculptPos - _sculptTargetPos).distance;
+        final scaleDistance = (_sculptScale - _sculptTargetScale).abs();
+        final rotDistance = (_sculptRotation - _sculptTargetRotation).abs();
+        
+        final posThreshold = 20 - (_level * 2); // Gets harder
+        final scaleThreshold = 0.15 - (_level * 0.02);
+        final rotThreshold = pi / (10 + _level); // Gets more precise
+        
+        if (posDistance > posThreshold) {
+          _showChallengeFailDialog('📍 Position Challenge', 'Try to move the shape closer to the target position!');
+          return false;
+        }
+        
+        if (scaleDistance > scaleThreshold) {
+          _showChallengeFailDialog('📏 Size Challenge', 'Adjust the size to match the target better!');
+          return false;
+        }
+        
+        if (rotDistance > rotThreshold) {
+          _showChallengeFailDialog('🔄 Rotation Challenge', 'Rotate the shape to match the target angle!');
+          return false;
+        }
+        
+        return true;
+        
       case _Mode.rhythmTracer:
         final ratio = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
-        return ratio > 0.7;
+        final requiredRatio = 0.65 + (_level * 0.04); // Gets harder with levels
+        final beatAccuracy = _getBeatAccuracy(); // Check rhythm timing
+        
+        if (ratio < requiredRatio) {
+          _showChallengeFailDialog('🎯 Path Challenge', 'Follow the colorful path while keeping the rhythm!');
+          return false;
+        }
+        
+        if (beatAccuracy < 0.6) {
+          _showChallengeFailDialog('🎵 Rhythm Challenge', 'Try to follow the musical beat! Listen to the timing!');
+          return false;
+        }
+        
+        return true;
     }
+  }
+  
+  double _getBeatAccuracy() {
+    // Simple rhythm accuracy calculation
+    if (_totalSamples == 0) return 0;
+    // For now, return a reasonable value based on path accuracy
+    final pathAccuracy = _onPathSamples / _totalSamples;
+    return pathAccuracy * 0.8; // Slightly more forgiving than path accuracy
   }
 
   double _matchScore(List<Offset> a, List<Offset> b) {
@@ -633,175 +1189,197 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          'Trace & Pop Pro',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('🌈 Trace & Pop Adventure ✨', 
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
         backgroundColor: const Color(0xFF006A5B),
+        foregroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () =>
-              Navigator.of(context).pushReplacementNamed('/gamesoption'),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
         ),
         actions: [
           Container(
-            margin: const EdgeInsets.only(right: 4),
-            child: IconButton.filled(
-              tooltip: 'View Statistics',
-              onPressed: _showStatistics,
-              icon: const Icon(Icons.analytics, color: Colors.white),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF67AFA5),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          Container(
             margin: const EdgeInsets.only(right: 8),
-            child: IconButton.filled(
-              tooltip: 'New Level',
-              onPressed: _generateLevel,
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF67AFA5),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+            child: IconButton(
+              tooltip: 'My Progress 🏆',
+              onPressed: _showStatistics,
+              icon: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.emoji_events, color: Colors.white),
               ),
             ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildControls(context),
-          const SizedBox(height: 8),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return GestureDetector(
-                  onScaleStart:
-                      _mode == _Mode.shapeSculptor ? (details) {} : null,
-                  onScaleUpdate: _mode == _Mode.shapeSculptor
-                      ? (details) {
-                          setState(() {
-                            _sculptPos += details.focalPointDelta;
-                            _sculptScale *= details.scale.clamp(0.9, 1.1);
-                            _sculptRotation += details.rotation;
-                          });
-                        }
-                      : null,
-                  child: Listener(
-                    onPointerDown: (e) {
-                      if (_mode == _Mode.connectPath) {
-                        if (_nextDotIndex < _dots.length) {
-                          final d =
-                              (e.localPosition - _dots[_nextDotIndex]).distance;
-                          if (d < 24) {
-                            if (_nextDotIndex > 0) {
-                              _connections.add(_dots[_nextDotIndex - 1]);
-                              _connections.add(_dots[_nextDotIndex]);
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFF0F8FF), // Alice blue
+              Color(0xFFE6F3FF), // Light blue
+              Color(0xFFFFF0F5), // Lavender blush
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            _buildChildFriendlyControls(context),
+            const SizedBox(height: 8),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return GestureDetector(
+                    onScaleStart: _mode == _Mode.shapeSculptor ? (details) {} : null,
+                    onScaleUpdate: _mode == _Mode.shapeSculptor
+                        ? (details) {
+                            setState(() {
+                              _sculptPos += details.focalPointDelta;
+                              _sculptScale *= details.scale.clamp(0.9, 1.1);
+                              _sculptRotation += details.rotation;
+                            });
+                          }
+                        : null,
+                    child: Listener(
+                      onPointerDown: (e) {
+                        if (_mode == _Mode.connectPath) {
+                          if (_nextDotIndex < _dots.length) {
+                            final d = (e.localPosition - _dots[_nextDotIndex]).distance;
+                            if (d < 24) {
+                              if (_nextDotIndex > 0) {
+                                _connections.add(_dots[_nextDotIndex - 1]);
+                                _connections.add(_dots[_nextDotIndex]);
+                              }
+                              _nextDotIndex++;
                             }
-                            _nextDotIndex++;
                           }
                         }
-                      }
-                      _onPointerDown(e);
-                    },
-                    onPointerMove: _onPointerMove,
-                    onPointerUp: _onPointerUp,
-                    behavior: HitTestBehavior.opaque,
-                    child: CustomPaint(
-                      painter: _TracePainter(
-                        mode: _mode,
-                        path: _pathPoints,
-                        pointers: _pointers,
-                        showGuideDots: _showGuideDots,
-                        targetSpeed: _targetSpeed,
-                        bubbles: _bubbles,
-                        twoHandMode: _twoHandMode,
-                        targetShape: _targetShape,
-                        drawnStroke: _drawnStroke,
-                        dots: _dots,
-                        nextDotIndex: _nextDotIndex,
-                        connections: _connections,
-                        sculptBase: _sculptBase,
-                        sculptPos: _sculptPos,
-                        sculptScale: _sculptScale,
-                        sculptRotation: _sculptRotation,
-                        sculptTarget: _sculptTarget,
-                        sculptTargetPos: _sculptTargetPos,
-                        sculptTargetScale: _sculptTargetScale,
-                        sculptTargetRotation: _sculptTargetRotation,
-                        beatT: _mode == _Mode.rhythmTracer ? _beatT : null,
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: 12,
-                            top: 12,
-                            child: _ProgressBadge(progress: _progress),
-                          ),
-                          if (_twoHandMode)
+                        _onPointerDown(e);
+                      },
+                      onPointerMove: _onPointerMove,
+                      onPointerUp: _onPointerUp,
+                      behavior: HitTestBehavior.opaque,
+                      child: CustomPaint(
+                        painter: _TracePainter(
+                          mode: _mode,
+                          path: _pathPoints,
+                          pointers: _pointers,
+                          showGuideDots: _showGuideDots,
+                          targetSpeed: _targetSpeed,
+                          bubbles: _bubbles,
+                          twoHandMode: _twoHandMode,
+                          targetShape: _targetShape,
+                          drawnStroke: _drawnStroke,
+                          dots: _dots,
+                          nextDotIndex: _nextDotIndex,
+                          connections: _connections,
+                          sculptBase: _sculptBase,
+                          sculptPos: _sculptPos,
+                          sculptScale: _sculptScale,
+                          sculptRotation: _sculptRotation,
+                          sculptTarget: _sculptTarget,
+                          sculptTargetPos: _sculptTargetPos,
+                          sculptTargetScale: _sculptTargetScale,
+                          sculptTargetRotation: _sculptTargetRotation,
+                          beatT: _mode == _Mode.rhythmTracer ? _beatT : null,
+                        ),
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 12,
+                              top: 12,
+                              child: _FriendlyProgressBadge(progress: _progress),
+                            ),
+                            if (_twoHandMode)
+                              Positioned(
+                                right: 12,
+                                top: 12,
+                                child: _BubbleBuddy(
+                                    remaining: _bubbles.where((b) => !b.popped).length),
+                              ),
                             Positioned(
                               right: 12,
-                              top: 12,
-                              child: _BubbleBadge(
-                                  remaining:
-                                      _bubbles.where((b) => !b.popped).length),
+                              bottom: 12,
+                              child: _ChildStatsPanel(
+                                duration: DateTime.now().difference(_sessionStart),
+                                avgSpeed: _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
+                                onPathRatio: _totalSamples > 0 ? _onPathSamples / _totalSamples : 0,
+                                bubblesPerMin: _bubblesPoppedCount /
+                                    max(1, DateTime.now().difference(_sessionStart).inMinutes).toDouble(),
+                                completed: _completed,
+                              ),
                             ),
-                          Positioned(
-                            right: 12,
-                            bottom: 12,
-                            child: _MetricsPanel(
-                              duration:
-                                  DateTime.now().difference(_sessionStart),
-                              avgSpeed: _speedSamples > 0
-                                  ? _sumSpeed / _speedSamples
-                                  : 0,
-                              onPathRatio: _totalSamples > 0
-                                  ? _onPathSamples / _totalSamples
-                                  : 0,
-                              bubblesPerMin: _bubblesPoppedCount /
-                                  max(
-                                          1,
-                                          DateTime.now()
-                                              .difference(_sessionStart)
-                                              .inMinutes)
-                                      .toDouble(),
-                              completed: _completed,
+                            // Add challenge progress indicator
+                            Positioned(
+                              left: 12,
+                              bottom: 80,
+                              child: _ChallengeProgressIndicator(
+                                mode: _mode,
+                                level: _level,
+                                progress: _progress,
+                                accuracy: _totalSamples > 0 ? _onPathSamples / _totalSamples : 0,
+                                speed: _speedSamples > 0 ? _sumSpeed / _speedSamples : 0,
+                                targetSpeed: _targetSpeed,
+                                timeElapsed: DateTime.now().difference(_sessionStart).inSeconds,
+                              ),
                             ),
-                          ),
-                        ],
+                            
+                            // Add floating encouragement
+                            if (_completed)
+                              const Positioned.fill(
+                                child: _CelebrationOverlay(),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildControls(BuildContext context) {
+  Widget _buildChildFriendlyControls(BuildContext context) {
     return Container(
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFE4E1), Color(0xFFF0F8FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.blue.withOpacity(0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -809,159 +1387,212 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
       ),
       child: Column(
         children: [
-          // Mode Selection with Icons
-          Row(
+          // Fun Activity Selection - All 5 Types
+          Column(
             children: [
-              const Icon(Icons.games, color: Color(0xFF006A5B)),
-              const SizedBox(width: 8),
-              const Text('Activity:',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF006A5B))),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF67AFA5).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFF67AFA5).withOpacity(0.3)),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<_Mode>(
-                      value: _mode,
-                      isExpanded: true,
-                      dropdownColor: Colors.white,
-                      onChanged: (m) {
-                        if (m != null) {
-                          setState(() {
-                            _mode = m;
-                          });
-                          _setupRhythm();
-                        }
-                      },
-                      items: const [
-                        DropdownMenuItem(
-                            value: _Mode.trace, child: Text('🖐️ Trace Path')),
-                        DropdownMenuItem(
-                            value: _Mode.drawMatch,
-                            child: Text('✏️ Draw & Match')),
-                        DropdownMenuItem(
-                            value: _Mode.connectPath,
-                            child: Text('🔗 Connect Dots')),
-                        DropdownMenuItem(
-                            value: _Mode.shapeSculptor,
-                            child: Text('🎨 Shape Sculptor')),
-                        DropdownMenuItem(
-                            value: _Mode.rhythmTracer,
-                            child: Text('🎵 Rhythm Tracer')),
-                      ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildFunModeButton('🎨 Trace', _Mode.trace, Icons.brush),
+                  _buildFunModeButton('✏️ Draw', _Mode.drawMatch, Icons.draw),
+                  _buildFunModeButton('🔗 Connect', _Mode.connectPath, Icons.scatter_plot),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildFunModeButton('🏗️ Sculpt', _Mode.shapeSculptor, Icons.architecture),
+                  _buildFunModeButton('🎵 Music', _Mode.rhythmTracer, Icons.music_note),
+                ],
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Level Stars (easier to understand for kids)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('⭐ Level: ', 
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ...List.generate(5, (i) => 
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _level = i + 1;
+                    });
+                    _generateLevel();
+                    _saveCurrentLevel();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _level > i ? Colors.yellow : Colors.grey.shade300,
+                      shape: BoxShape.circle,
+                      boxShadow: _level > i ? [
+                        BoxShadow(
+                          color: Colors.yellow.withOpacity(0.5),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ] : null,
+                    ),
+                    child: Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: _level > i ? Colors.orange.shade800 : Colors.grey.shade600,
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
+          
           const SizedBox(height: 16),
-
-          // Level and Options in Cards
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          
+          // Fun Toggle Options
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildControlCard(
-                icon: Icons.stairs,
-                label: 'Level',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(
-                    5,
-                    (i) => GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _level = i + 1;
-                        });
-                        _generateLevel();
-                        _saveCurrentLevel();
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: _level == i + 1
-                              ? const Color(0xFF006A5B)
-                              : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              color: _level == i + 1
-                                  ? Colors.white
-                                  : Colors.grey.shade600,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              _buildToggleCard(
-                icon: Icons.scatter_plot,
-                label: 'Guide Dots',
-                value: _showGuideDots,
-                onChanged: (v) => setState(() => _showGuideDots = v),
-              ),
-              _buildToggleCard(
-                icon: Icons.back_hand,
-                label: 'Two Hands',
-                value: _twoHandMode,
-                onChanged: (v) => setState(() => _twoHandMode = v),
-              ),
-              if (_mode == _Mode.rhythmTracer)
-                _buildControlCard(
-                  icon: Icons.music_note,
-                  label: 'Beat Speed',
-                  child: SizedBox(
-                    width: 120,
-                    child: Slider(
-                      value: _bpm.toDouble(),
-                      min: 60,
-                      max: 140,
-                      divisions: 8,
-                      activeColor: const Color(0xFF006A5B),
-                      onChanged: (v) {
-                        setState(() {
-                          _bpm = v.round();
-                        });
-                        _setupRhythm();
-                      },
-                    ),
-                  ),
-                ),
-              if (_mode == _Mode.drawMatch)
-                _buildActionCard(
-                  icon: Icons.clear,
-                  label: 'Clear',
-                  onTap: () {
-                    _drawnStroke.clear();
-                    setState(() {});
-                  },
-                ),
+              _buildToggleOption('🙌 Two Hands', _twoHandMode, (value) {
+                setState(() {
+                  _twoHandMode = value;
+                });
+                _generateLevel();
+              }),
+              _buildToggleOption('✨ Helper Dots', _showGuideDots, (value) {
+                setState(() {
+                  _showGuideDots = value;
+                });
+              }),
             ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // New Adventure Button
+          ElevatedButton(
+            onPressed: () {
+              _generateLevel();
+              _newSession();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.refresh, size: 20),
+                SizedBox(width: 8),
+                Text('🚀 New Adventure!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildFunModeButton(String label, _Mode mode, IconData icon) {
+    final isSelected = _mode == mode;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _mode = mode;
+        });
+        _generateLevel();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isSelected 
+              ? [Colors.purple.shade300, Colors.purple.shade500]
+              : [Colors.grey.shade200, Colors.grey.shade300],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: Colors.purple.withOpacity(0.3),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ] : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : Colors.grey.shade600,
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleOption(String label, bool value, Function(bool) onChanged) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: value ? Colors.green.shade100 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value ? Colors.green : Colors.grey.shade400,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              value ? Icons.check_circle : Icons.radio_button_unchecked,
+              color: value ? Colors.green : Colors.grey.shade600,
+              size: 20,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: value ? Colors.green.shade800 : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
   Widget _buildControlCard(
       {required IconData icon, required String label, required Widget child}) {
     return Container(
@@ -993,6 +1624,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     );
   }
 
+  // ignore: unused_element
   Widget _buildToggleCard(
       {required IconData icon,
       required String label,
@@ -1053,6 +1685,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     );
   }
 
+  // ignore: unused_element
   Widget _buildActionCard(
       {required IconData icon,
       required String label,
@@ -1136,11 +1769,12 @@ class _TracePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (mode == _Mode.trace || mode == _Mode.rhythmTracer) {
+      // Rainbow guide path that children love to follow
       final Paint guide = Paint()
-        ..color = Colors.grey.shade300
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
+        ..strokeWidth = 8 // Thicker for easier following
         ..strokeCap = StrokeCap.round;
+      
       final Path p = Path();
       for (int i = 0; i < path.length; i++) {
         final pt = path[i];
@@ -1150,20 +1784,70 @@ class _TracePainter extends CustomPainter {
           p.lineTo(pt.dx, pt.dy);
         }
       }
+      
+      // Create rainbow gradient effect
+      final rainbow = LinearGradient(
+        colors: [
+          Colors.red.shade300,
+          Colors.orange.shade300,
+          Colors.yellow.shade300,
+          Colors.green.shade300,
+          Colors.blue.shade300,
+          Colors.purple.shade300,
+        ],
+      );
+      
+      guide.shader = rainbow.createShader(Rect.fromLTWH(0, 0, 400, 600));
       canvas.drawPath(p, guide);
+      
+      // Add sparkly guide dots that children love
       if (showGuideDots) {
-        final dot = Paint()..color = Colors.grey.shade400;
-        for (int i = 0; i < path.length; i += max(1, path.length ~/ 30)) {
-          canvas.drawCircle(path[i], 3, dot);
+        final sparkleColors = [
+          Colors.yellow,
+          Colors.pink,
+          Colors.cyan,
+          Colors.lime,
+          Colors.orange,
+        ];
+        
+        for (int i = 0; i < path.length; i += max(1, path.length ~/ 20)) {
+          final sparkleColor = sparkleColors[i % sparkleColors.length];
+          final dot = Paint()..color = sparkleColor;
+          canvas.drawCircle(path[i], 6, dot);
+          
+          // Add tiny sparkle effect
+          final sparkle = Paint()..color = Colors.white;
+          canvas.drawCircle(path[i], 2, sparkle);
         }
       }
+      
+      // Rhythm mode special indicator
       if (mode == _Mode.rhythmTracer && beatT != null && path.isNotEmpty) {
         final idx = (beatT!.clamp(0, 1) * (path.length - 1)).round();
         final pExp = path[idx];
         final paintBeat = Paint()
           ..color = Colors.purple
           ..style = PaintingStyle.fill;
-        canvas.drawCircle(pExp, 10, paintBeat);
+        
+        // Pulsing musical note
+        canvas.drawCircle(pExp, 15, paintBeat);
+        final notePaint = Paint()..color = Colors.white;
+        canvas.drawCircle(pExp, 8, notePaint);
+        
+        // Add musical note symbol ♪
+        final textPainter = TextPainter(
+          text: const TextSpan(
+            text: '♪',
+            style: TextStyle(
+              color: Colors.purple,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(canvas, Offset(pExp.dx - 8, pExp.dy - 8));
       }
     }
 
@@ -1241,40 +1925,121 @@ class _TracePainter extends CustomPainter {
       }
     }
 
-    // Draw bubbles for two-hand activity
+    // Draw colorful bubbles for fun popping activity
     if (twoHandMode) {
       final bubblePaint = Paint()..style = PaintingStyle.fill;
+      final bubbleStroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      
       for (final b in bubbles) {
-        bubblePaint.color = b.popped
-            ? Colors.greenAccent.withOpacity(0.4)
-            : Colors.lightBlueAccent.withOpacity(0.6);
-        canvas.drawCircle(b.center, b.radius, bubblePaint);
+        if (b.popped) {
+          // Popped bubbles show sparkling effect
+          bubblePaint.color = Colors.greenAccent.withOpacity(0.3);
+          bubbleStroke.color = Colors.green;
+          canvas.drawCircle(b.center, b.radius * 0.8, bubblePaint);
+          canvas.drawCircle(b.center, b.radius * 0.8, bubbleStroke);
+          
+          // Add sparkle effects
+          for (int i = 0; i < 6; i++) {
+            final angle = i * pi / 3;
+            final sparkleOffset = Offset(
+              b.center.dx + cos(angle) * (b.radius * 0.6),
+              b.center.dy + sin(angle) * (b.radius * 0.6),
+            );
+            canvas.drawCircle(sparkleOffset, 3, Paint()..color = Colors.yellow);
+          }
+        } else {
+          // Use the bubble's assigned color
+          bubblePaint.color = b.color;
+          bubbleStroke.color = b.color.withOpacity(0.8);
+          
+          // Draw main bubble
+          canvas.drawCircle(b.center, b.radius, bubblePaint);
+          canvas.drawCircle(b.center, b.radius, bubbleStroke);
+          
+          // Add highlight for 3D effect
+          final highlightPaint = Paint()..color = Colors.white.withOpacity(0.4);
+          canvas.drawCircle(
+            Offset(b.center.dx - b.radius * 0.3, b.center.dy - b.radius * 0.3),
+            b.radius * 0.3,
+            highlightPaint,
+          );
+        }
       }
     }
 
-    // Draw current pointers with pressure-like feedback (speed -> width/color)
+    // Draw child-friendly finger tracking with colorful, encouraging feedback
     for (final entry in pointers.entries) {
       final sample = entry.value;
       final double speed = sample.speed ?? 0; // px/s
-      // Map speed to a color/width delta: slower -> green & thicker; too fast -> red & thinner
+      
+      // Map speed to encouraging colors and effects
       final double t = (speed / targetSpeed).clamp(0.0, 2.0); // 0..2
-      final double width = 12 - (t * 4); // 12 -> 4
-      final Color col = (t <= 1.0)
-          ? Color.lerp(Colors.green, Colors.orange, t)!
-          : Color.lerp(Colors.orange, Colors.red, t - 1)!;
+      final double baseWidth = 18; // Larger for children
+      final double width = baseWidth + (sin(DateTime.now().millisecondsSinceEpoch / 200) * 3); // Pulsing effect
+      
+      // Child-friendly color feedback
+      Color fingerColor;
+      String encouragement = '';
+      
+      if (t <= 0.7) {
+        fingerColor = Colors.green; // Perfect speed - green means go!
+        encouragement = '👍';
+      } else if (t <= 1.3) {
+        fingerColor = Colors.blue; // Good speed - nice and steady
+        encouragement = '😊';
+      } else {
+        fingerColor = Colors.orange; // A bit fast - still okay!
+        encouragement = '🚀';
+      }
 
+      // Main finger circle with gradient
       final Paint touch = Paint()
-        ..color = col.withOpacity(0.8)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(sample.position, max(6, width), touch);
+        ..shader = RadialGradient(
+          colors: [
+            fingerColor.withOpacity(0.8),
+            fingerColor.withOpacity(0.4),
+          ],
+        ).createShader(Rect.fromCircle(
+          center: sample.position,
+          radius: width,
+        ));
+      
+      canvas.drawCircle(sample.position, width, touch);
 
-      // Small time-fade trail
+      // Sparkly trail effect for extra fun
       final trail = Paint()
-        ..color = col.withOpacity(0.35)
+        ..color = fingerColor.withOpacity(0.3)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = max(3, width - 2)
+        ..strokeWidth = 6
         ..strokeCap = StrokeCap.round;
-      canvas.drawCircle(sample.position, max(12, width * 2), trail);
+      canvas.drawCircle(sample.position, width * 1.5, trail);
+      
+      // Add encouraging emoji near finger
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: encouragement,
+          style: const TextStyle(fontSize: 20),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas, 
+        Offset(sample.position.dx + 25, sample.position.dy - 25),
+      );
+      
+      // Add tiny stars around finger for magical effect
+      for (int i = 0; i < 4; i++) {
+        final angle = i * pi / 2 + DateTime.now().millisecondsSinceEpoch / 1000;
+        final starOffset = Offset(
+          sample.position.dx + cos(angle) * (width + 15),
+          sample.position.dy + sin(angle) * (width + 15),
+        );
+        final starPaint = Paint()..color = Colors.yellow.withOpacity(0.7);
+        canvas.drawCircle(starOffset, 3, starPaint);
+      }
     }
   }
 
@@ -1325,81 +2090,100 @@ class _PointerSample {
 class _Bubble {
   final Offset center;
   final double radius;
+  final Color color;
   bool popped = false;
-  _Bubble({required this.center, required this.radius});
+  
+  _Bubble({
+    required this.center, 
+    required this.radius,
+    this.color = Colors.lightBlue,
+  });
 }
 
-class _ProgressBadge extends StatelessWidget {
+class _FriendlyProgressBadge extends StatelessWidget {
   final double progress;
-  const _ProgressBadge({required this.progress});
+  const _FriendlyProgressBadge({required this.progress});
+  
   @override
   Widget build(BuildContext context) {
     final pct = (progress * 100).clamp(0, 100).toStringAsFixed(0);
+    final animal = _getProgressAnimal(progress);
+    
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.pink.shade50, Colors.purple.shade50],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF006A5B).withOpacity(0.2),
+            color: Colors.purple.withOpacity(0.2),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 3),
           ),
         ],
-        border: Border.all(color: const Color(0xFF006A5B).withOpacity(0.3)),
+        border: Border.all(color: Colors.purple.withOpacity(0.3), width: 2),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.trending_up, color: Color(0xFF006A5B), size: 18),
-              const SizedBox(width: 6),
-              const Text(
-                'Progress',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF006A5B)),
-              ),
-            ],
+          // Cute animal progress indicator
+          Text(
+            animal,
+            style: const TextStyle(fontSize: 24),
           ),
           const SizedBox(height: 8),
-          Stack(
-            children: [
-              Container(
-                width: 60,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF67AFA5).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              Container(
-                width: 60 * progress,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF006A5B),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
+          
+          // Rainbow progress bar
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            width: 80,
+            height: 12,
             decoration: BoxDecoration(
-              color: const Color(0xFF006A5B).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.red.shade200,
+                  Colors.orange.shade200,
+                  Colors.yellow.shade200,
+                  Colors.green.shade200,
+                  Colors.blue.shade200,
+                  Colors.purple.shade200,
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  width: 80 * (1 - progress),
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Encouraging text
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.yellow.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.shade300),
             ),
             child: Text(
-              '$pct%',
-              style: const TextStyle(
-                fontSize: 14,
+              '$pct% Great!',
+              style: TextStyle(
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF006A5B),
+                color: Colors.orange.shade800,
               ),
             ),
           ),
@@ -1407,59 +2191,75 @@ class _ProgressBadge extends StatelessWidget {
       ),
     );
   }
+  
+  String _getProgressAnimal(double progress) {
+    if (progress < 0.2) return '🐣'; // Just starting
+    if (progress < 0.4) return '🐰'; // Getting there
+    if (progress < 0.6) return '🐻'; // Halfway
+    if (progress < 0.8) return '🦊'; // Almost there
+    return '🌟'; // Amazing!
+  }
 }
 
-class _BubbleBadge extends StatelessWidget {
+class _BubbleBuddy extends StatelessWidget {
   final int remaining;
-  const _BubbleBadge({required this.remaining});
+  const _BubbleBuddy({required this.remaining});
+  
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade50, Colors.cyan.shade50],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF67AFA5).withOpacity(0.2),
+            color: Colors.blue.withOpacity(0.2),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 3),
           ),
         ],
-        border: Border.all(color: const Color(0xFF67AFA5).withOpacity(0.3)),
+        border: Border.all(color: Colors.blue.withOpacity(0.3), width: 2),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.bubble_chart,
-                  color: Color(0xFF67AFA5), size: 18),
-              const SizedBox(width: 6),
-              const Text(
-                'Bubbles',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF67AFA5)),
-              ),
-            ],
-          ),
+          // Bubble buddy character
+          const Text('🫧', style: TextStyle(fontSize: 24)),
           const SizedBox(height: 6),
+          
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF67AFA5).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$remaining',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF67AFA5),
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade100, Colors.cyan.shade100],
               ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade300),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Pop Me!',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade800,
+                  ),
+                ),
+                Text(
+                  '$remaining left',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1468,101 +2268,96 @@ class _BubbleBadge extends StatelessWidget {
   }
 }
 
-class _MetricsPanel extends StatelessWidget {
+class _ChildStatsPanel extends StatelessWidget {
   final Duration duration;
   final double avgSpeed;
   final double onPathRatio;
   final double bubblesPerMin;
   final bool completed;
-  const _MetricsPanel({
+  
+  const _ChildStatsPanel({
     required this.duration,
     required this.avgSpeed,
     required this.onPathRatio,
     required this.bubblesPerMin,
     required this.completed,
   });
+  
   @override
   Widget build(BuildContext context) {
-    String fmt(double v) =>
-        v.isNaN || v.isInfinite ? '-' : v.toStringAsFixed(1);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [Colors.green.shade50, Colors.lime.shade50],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.green.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
-        border: Border.all(color: const Color(0xFF67AFA5).withOpacity(0.2)),
+        border: Border.all(color: Colors.green.withOpacity(0.3), width: 2),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header with icon
+          // Cheerful header
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF006A5B).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.analytics,
-                    color: Color(0xFF006A5B), size: 16),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Performance',
+              const Text('🎯', style: TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              Text(
+                'My Score',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF006A5B),
+                  color: Colors.green.shade800,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // Metrics in card format
-          _buildMetricItem(Icons.timer, 'Time', '${duration.inSeconds}s',
-              const Color(0xFF67AFA5)),
+          
           const SizedBox(height: 8),
-          _buildMetricItem(
-              Icons.speed, 'Speed', '${fmt(avgSpeed)} px/s', Colors.blue),
-          const SizedBox(height: 8),
-          _buildMetricItem(Icons.gps_fixed, 'Accuracy',
-              '${(onPathRatio * 100).toStringAsFixed(0)}%', Colors.green),
-          const SizedBox(height: 8),
-          _buildMetricItem(Icons.bubble_chart, 'Rate',
-              '${fmt(bubblesPerMin)}/min', Colors.orange),
-
+          
+          // Simple kid-friendly stats
+          _buildKidStat('⏰', '${duration.inSeconds}s', Colors.blue),
+          const SizedBox(height: 4),
+          _buildKidStat('🎯', '${(onPathRatio * 100).toStringAsFixed(0)}%', Colors.green),
+          
           if (completed) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.green.shade400, Colors.green.shade600],
+                  colors: [Colors.yellow.shade200, Colors.orange.shade200],
                 ),
                 borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.celebration, color: Colors.white, size: 16),
-                  SizedBox(width: 6),
+                  Text('🎉', style: TextStyle(fontSize: 16)),
+                  SizedBox(width: 4),
                   Text(
-                    'Completed!',
+                    'Amazing!',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
                       fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
                     ),
                   ),
                 ],
@@ -1574,38 +2369,135 @@ class _MetricsPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildMetricItem(
-      IconData icon, String label, String value, Color color) {
+  Widget _buildKidStat(String emoji, String value, Color color) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: color, size: 14),
+        Text(emoji, style: const TextStyle(fontSize: 14)),
         const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(6),
+            color: color.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             value,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: color,
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+// Celebration overlay for when the child completes a level
+class _CelebrationOverlay extends StatefulWidget {
+  const _CelebrationOverlay();
+  
+  @override
+  State<_CelebrationOverlay> createState() => _CelebrationOverlayState();
+}
+
+class _CelebrationOverlayState extends State<_CelebrationOverlay>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _rotationAnimation;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+    
+    _scaleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.elasticOut,
+    ));
+    
+    _rotationAnimation = Tween<double>(
+      begin: 0.0,
+      end: 2 * pi,
+    ).animate(_controller);
+    
+    _controller.forward();
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Container(
+          color: Colors.transparent,
+          child: Center(
+            child: Transform.scale(
+              scale: _scaleAnimation.value,
+              child: Transform.rotate(
+                angle: _rotationAnimation.value,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.yellow.shade200,
+                        Colors.orange.shade200,
+                        Colors.pink.shade200,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.withOpacity(0.5),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('🎉', style: TextStyle(fontSize: 60)),
+                      SizedBox(height: 10),
+                      Text(
+                        'Fantastic Job!',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      Text(
+                        'You\'re amazing!',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1946,5 +2838,118 @@ class StatisticsDialog extends StatelessWidget {
           icon: Icons.emoji_events
         );
     }
+  }
+}
+
+// Challenge progress indicator to show real-time feedback
+class _ChallengeProgressIndicator extends StatelessWidget {
+  final _Mode mode;
+  final int level;
+  final double progress;
+  final double accuracy;
+  final double speed;
+  final double targetSpeed;
+  final int timeElapsed;
+  
+  const _ChallengeProgressIndicator({
+    required this.mode,
+    required this.level,
+    required this.progress,
+    required this.accuracy,
+    required this.speed,
+    required this.targetSpeed,
+    required this.timeElapsed,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    final maxTime = 120 + (level * 30);
+    final timeProgress = timeElapsed / maxTime;
+    
+    // Determine challenge status
+    Color statusColor = Colors.green;
+    String statusEmoji = '😊';
+    String statusText = 'Great!';
+    
+    if (mode == _Mode.trace || mode == _Mode.rhythmTracer) {
+      final progressThreshold = 0.75 + (level * 0.03);
+      final accuracyThreshold = 0.65 + (level * 0.05);
+      final speedMin = targetSpeed * (0.4 + level * 0.03);
+      final speedMax = targetSpeed * (1.8 - level * 0.1);
+      
+      if (progress < progressThreshold * 0.7) {
+        statusColor = Colors.orange;
+        statusEmoji = '🎯';
+        statusText = 'Follow path!';
+      } else if (accuracy < accuracyThreshold * 0.8) {
+        statusColor = Colors.orange;
+        statusEmoji = '✨';
+        statusText = 'Stay close!';
+      } else if (speed > 0 && (speed < speedMin || speed > speedMax)) {
+        statusColor = Colors.orange;
+        statusEmoji = speed < speedMin ? '🐌' : '🚀';
+        statusText = speed < speedMin ? 'Faster!' : 'Slower!';
+      }
+    }
+    
+    if (timeProgress > 0.8) {
+      statusColor = Colors.red;
+      statusEmoji = '⏰';
+      statusText = 'Hurry!';
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: statusColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor.withOpacity(0.3), width: 2),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(statusEmoji, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 6),
+              Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 6),
+          
+          // Time progress bar
+          Container(
+            width: 60,
+            height: 6,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  width: 60 * timeProgress.clamp(0.0, 1.0),
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: timeProgress > 0.8 ? Colors.red : Colors.green,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

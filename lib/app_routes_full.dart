@@ -18,7 +18,7 @@ import 'package:kindora/screens/parent/ther_dash.dart';
 import 'package:kindora/screens/parent/materials.dart';
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
-import 'package:kindora/screens/parent/games/shape_shifters.dart';
+import 'package:kindora/screens/parent/games/cognitive_pattern_master.dart';
 import 'package:kindora/screens/parent/games/trace_and_pop_pro.dart';
 
 // Therapist pages
@@ -57,7 +57,7 @@ final Map<String, WidgetBuilder> routes = {
   '/materials': (context) => const MaterialsPage(),
   '/gamesoption': (context) => const GamesOption(),
   '/talkwithtiles': (context) => const TalkWithTilesGame(),
-  '/shapeshifters': (context) => const ShapeShiftersGame(),
+  '/shapeshifters': (context) => const PatternMasterApp(),
   '/traceandpoppro': (context) => const TraceAndPopProGame(),
 
   // Therapist pages

@@ -31,7 +31,7 @@ import 'package:kindora/screens/parent/ther_dash.dart';
 import 'package:kindora/screens/parent/materials.dart';
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
-import 'package:kindora/screens/parent/games/shape_shifters.dart';
+import 'package:kindora/screens/parent/games/cognitive_pattern_master.dart';
 import 'package:kindora/screens/parent/parent_schedule.dart';
 //therapist page imports
 import 'package:kindora/screens/therapist/ther_profile.dart';
@@ -171,7 +171,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/materials': (context) => const MaterialsPage(),
           '/gamesoption': (context) => const GamesOption(),
           '/talkwithtiles': (context) => const TalkWithTilesGame(),
-          '/shapeshifters': (context) => const ShapeShiftersGame(),
+          '/shapeshifters': (context) => const PatternMasterApp(),
+          '/cognitivepatternmaster': (context) => const PatternMasterApp(),
           '/parentschedule': (context) => const ParentSchedulePage(),
 
           //Therapist Page Routes

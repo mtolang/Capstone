@@ -12,16 +12,16 @@ class GamesOption extends StatelessWidget {
       appBar: AppBar(
         title: const Text(
           'Games',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
-        backgroundColor: const Color(0xFF006A5B),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: Colors.white,
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
+        backgroundColor: const Color(0xFF006A5B), // Kindora's primary theme color
+        foregroundColor: Colors.white,
+        elevation: 2,
+        centerTitle: true,
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -107,9 +107,9 @@ class GamesOption extends StatelessWidget {
                   ),
                   const SizedBox(height: 30.0),
 
-                  // Title
+                  // Simple title
                   const Text(
-                    'Choose a Game',
+                    'Choose a Game:',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -117,96 +117,146 @@ class GamesOption extends StatelessWidget {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 40.0),
+                  const SizedBox(height: 30.0),
 
                   // Game Button 1 - Talk with Tiles
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF006A5B),
-                      padding: const EdgeInsets.symmetric(vertical: 20.0),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.blue.shade400, Colors.cyan.shade500],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      shadowColor: Colors.black.withOpacity(0.3),
-                      elevation: 8,
-                    ),
-                    onPressed: () {
-                      print('Talk with Tiles pressed');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Loading Talk with Tiles...'),
-                          backgroundColor: Color(0xFF006A5B),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
                         ),
-                      );
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 24.0),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        shadowColor: Colors.transparent,
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        print('Talk with Tiles pressed');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Loading Talk with Tiles...'),
+                            backgroundColor: Color(0xFF006A5B),
+                          ),
+                        );
                       // Add navigation to talk with tiles game
                       Navigator.pushNamed(context, '/talkwithtiles');
                     },
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.chat_bubble_outline, size: 24),
-                        SizedBox(width: 10),
-                        Text(
-                          'Talk with Tiles',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble_outline, size: 28),
+                          SizedBox(width: 12),
+                          Text(
+                            '💬 Talk with Tiles',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20.0),
 
-                  // Game Button 2 - Shape Shifters
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF006A5B),
-                      padding: const EdgeInsets.symmetric(vertical: 20.0),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
+                  // Game Button 2 - Pattern Master
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.purple.shade400, Colors.pink.shade400],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      shadowColor: Colors.black.withOpacity(0.3),
-                      elevation: 8,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.purple.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 24.0),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        shadowColor: Colors.transparent,
+                        elevation: 0,
+                      ),
                     onPressed: () {
-                      print('Shape Shifters pressed');
+                      print('Pattern Master pressed');
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Loading Shape Shifters...'),
+                          content: Text('Loading Pattern Master...'),
                           backgroundColor: Color(0xFF006A5B),
                         ),
                       );
-                      // Navigate to Shape Shifters game
-                      Navigator.pushNamed(context, '/shapeshifters');
+                      // Navigate to Pattern Master game
+                      Navigator.pushNamed(context, '/cognitivepatternmaster');
                     },
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.category, size: 24),
-                        SizedBox(width: 10),
-                        Text(
-                          'Shape Shifters',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.psychology, size: 28),
+                          SizedBox(width: 12),
+                          Text(
+                            '🧠 Pattern Master',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20.0),
 
                   // Game Button 3 - Trace & Pop Pro (Motor Skills)
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF006A5B),
-                      padding: const EdgeInsets.symmetric(vertical: 20.0),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.green.shade400, Colors.teal.shade500],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      shadowColor: Colors.black.withOpacity(0.3),
-                      elevation: 8,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 24.0),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        shadowColor: Colors.transparent,
+                        elevation: 0,
+                      ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -216,17 +266,18 @@ class GamesOption extends StatelessWidget {
                       );
                       Navigator.pushNamed(context, '/traceandpoppro');
                     },
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.gesture, size: 24),
-                        SizedBox(width: 10),
-                        Text(
-                          'Trace & Pop Pro',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.touch_app, size: 28),
+                          SizedBox(width: 12),
+                          Text(
+                            '✨ Trace & Pop Pro',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -270,7 +321,7 @@ class GamesOption extends StatelessWidget {
                       ],
                     ),
                     child: const Text(
-                      'Interactive games designed to help with speech, coordination, and communication development',
+                      'Interactive games designed to help with speech, coordination, cognitive skills, and communication development',
                       style: TextStyle(
                         fontSize: 14,
                         color: Color(0xFF006A5B),
