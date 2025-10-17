@@ -155,131 +155,6 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     }
   }
 
-  /// Show challenge fail dialog with encouraging feedback
-  void _showChallengeFailDialog(String title, String message) {
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: Colors.orange.shade50,
-          title: Column(
-            children: [
-              const Text('💪', style: TextStyle(fontSize: 40)),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          content: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.yellow.shade50, Colors.orange.shade50],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  message,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.orange,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: const Text(
-                    '🌟 Every expert was once a beginner! Keep practicing and you\'ll get better! 🌟',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Reset the current attempt for another try
-                _generateLevel();
-                _newSession();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.refresh),
-                  SizedBox(width: 4),
-                  Text('Try Again! 🚀'),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Go to easier level if child is struggling
-                if (_level > 1) {
-                  setState(() {
-                    _level--;
-                  });
-                  _generateLevel();
-                  _newSession();
-                }
-              },
-              child: Text(
-                _level > 1 ? 'Easier Level 😊' : 'Practice More 💪',
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop(); // Return to games menu
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey.shade600,
-              ),
-              child: const Text('Back to Games 🏠'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   /// Show completion dialog when game is finished with lots of encouragement
   void _showCompletionDialog() {
     if (!mounted) return;
@@ -981,6 +856,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     }
 
     final wasCompleted = _completed;
+    // Only check for successful completion, not failures during gameplay
     _completed = _checkCompletion(e.localPosition);
 
     // Save to Firebase when game is completed for the first time
@@ -1032,136 +908,46 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
   int get pathMaxIndex => max(1, _pathPoints.length - 1);
 
   bool _checkCompletion(Offset current) {
-    // Add time-based challenges - children must complete within reasonable time
-    final sessionDuration = DateTime.now().difference(_sessionStart).inSeconds;
-    final maxTimeAllowed = 120 + (_level * 30); // 2-5 minutes depending on level
-    
-    if (sessionDuration > maxTimeAllowed) {
-      _showChallengeFailDialog('⏰ Time Challenge', 'Try to be a little faster next time! Take your time, but don\'t forget to keep moving your finger.');
-      return false;
-    }
+    // Only check for successful completion during gameplay, not failures
+    // Failures should only be checked when user explicitly tries to complete or gives up
     
     switch (_mode) {
       case _Mode.trace:
-        // Balanced challenge: not too easy, not too hard
+        // Much more forgiving completion criteria - just check if genuinely completed
         final avgSpeed = _speedSamples > 0 ? _sumSpeed / _speedSamples : 0;
         
-        // Speed requirements with meaningful challenge
-        final targetSpeedMin = _targetSpeed * (0.4 + _level * 0.03); // Gradual increase
-        final targetSpeedMax = _targetSpeed * (1.8 - _level * 0.1); // Gradual decrease
-        
-        final speedOk = avgSpeed > targetSpeedMin && avgSpeed < targetSpeedMax;
-        
-        // Progress requirements that provide challenge
-        final progressThreshold = 0.75 + (_level * 0.03); // Level 1: 75%, Level 5: 87%
+        // Very lenient completion - focus on completion rather than perfection
+        final progressThreshold = 0.80; // Fixed 80% for all levels
         final accuracyRatio = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
-        final accuracyThreshold = 0.65 + (_level * 0.05); // Level 1: 65%, Level 5: 85%
+        final accuracyThreshold = 0.60; // Fixed 60% for all levels
         
-        if (!speedOk) {
-          if (avgSpeed < targetSpeedMin) {
-            _showChallengeFailDialog('🐌 Speed Challenge', 'Try moving your finger a little faster! You can do it!');
-          } else {
-            _showChallengeFailDialog('🚀 Steady Hand Challenge', 'Slow down a bit! Take your time and trace carefully.');
-          }
-          return false;
-        }
+        // Only require reasonable speed, not perfect speed
+        final speedOk = avgSpeed > 50 && avgSpeed < 1000; // Very lenient range
         
-        if (_progress < progressThreshold) {
-          _showChallengeFailDialog('🎯 Path Challenge', 'Try to follow the colorful path more closely. You\'re almost there!');
-          return false;
-        }
-        
-        if (accuracyRatio < accuracyThreshold) {
-          _showChallengeFailDialog('✨ Accuracy Challenge', 'Stay on the rainbow path! Practice makes perfect!');
-          return false;
-        }
-        
-        return true;
+        return _progress > progressThreshold && 
+               accuracyRatio > accuracyThreshold && 
+               speedOk;
         
       case _Mode.drawMatch:
-        if (_drawnStroke.length < 20) {
-          _showChallengeFailDialog('✏️ Drawing Challenge', 'Draw a bit more to match the shape! Keep going!');
-          return false;
-        }
-        
+        if (_drawnStroke.length < 15) return false;
         final score = _matchScore(_drawnStroke, _targetShape);
-        final maxScore = 20 - (_level * 2); // Gets harder with levels
-        
-        if (score > maxScore) {
-          _showChallengeFailDialog('🎨 Shape Challenge', 'Try to match the target shape more closely. Look at the light blue outline!');
-          return false;
-        }
-        
-        return true;
+        return score < 30; // More forgiving matching
         
       case _Mode.connectPath:
-        // Add accuracy challenge for dot connection
-        final connectAccuracy = _connections.length / 2; // Number of successful connections
-        final requiredAccuracy = (_dots.length - 1) * 0.8; // 80% accuracy required
-        
-        if (_nextDotIndex >= _dots.length) {
-          if (connectAccuracy < requiredAccuracy) {
-            _showChallengeFailDialog('🔗 Connection Challenge', 'Try to connect the dots more carefully! Follow the order!');
-            return false;
-          }
-          return true;
-        }
-        return false;
+        return _nextDotIndex >= _dots.length;
         
       case _Mode.shapeSculptor:
-        // Shape sculpting with meaningful challenges
-        final posDistance = (_sculptPos - _sculptTargetPos).distance;
-        final scaleDistance = (_sculptScale - _sculptTargetScale).abs();
-        final rotDistance = (_sculptRotation - _sculptTargetRotation).abs();
-        
-        final posThreshold = 20 - (_level * 2); // Gets harder
-        final scaleThreshold = 0.15 - (_level * 0.02);
-        final rotThreshold = pi / (10 + _level); // Gets more precise
-        
-        if (posDistance > posThreshold) {
-          _showChallengeFailDialog('📍 Position Challenge', 'Try to move the shape closer to the target position!');
-          return false;
-        }
-        
-        if (scaleDistance > scaleThreshold) {
-          _showChallengeFailDialog('📏 Size Challenge', 'Adjust the size to match the target better!');
-          return false;
-        }
-        
-        if (rotDistance > rotThreshold) {
-          _showChallengeFailDialog('🔄 Rotation Challenge', 'Rotate the shape to match the target angle!');
-          return false;
-        }
-        
-        return true;
+        final posOk = (_sculptPos - _sculptTargetPos).distance < 30;
+        final scaleOk = (_sculptScale - _sculptTargetScale).abs() < 0.25;
+        final rotOk = (_sculptRotation - _sculptTargetRotation).abs() < pi / 8;
+        return posOk && scaleOk && rotOk;
         
       case _Mode.rhythmTracer:
         final ratio = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
-        final requiredRatio = 0.65 + (_level * 0.04); // Gets harder with levels
-        final beatAccuracy = _getBeatAccuracy(); // Check rhythm timing
-        
-        if (ratio < requiredRatio) {
-          _showChallengeFailDialog('🎯 Path Challenge', 'Follow the colorful path while keeping the rhythm!');
-          return false;
-        }
-        
-        if (beatAccuracy < 0.6) {
-          _showChallengeFailDialog('🎵 Rhythm Challenge', 'Try to follow the musical beat! Listen to the timing!');
-          return false;
-        }
-        
-        return true;
+        return ratio > 0.65; // Fixed threshold
     }
   }
   
-  double _getBeatAccuracy() {
-    // Simple rhythm accuracy calculation
-    if (_totalSamples == 0) return 0;
-    // For now, return a reasonable value based on path accuracy
-    final pathAccuracy = _onPathSamples / _totalSamples;
-    return pathAccuracy * 0.8; // Slightly more forgiving than path accuracy
-  }
-
   double _matchScore(List<Offset> a, List<Offset> b) {
     double d1 = 0;
     for (final p in a) {

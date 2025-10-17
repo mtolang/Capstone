@@ -226,7 +226,7 @@ class _PatternMasterGameState extends State<PatternMasterGame>
       ));
     }
 
-    // Memory flash obstacle
+    // Memory flash obstacle with 1-minute total time
     activeObstacles.add(GameObstacle(
       type: 'memory_flash',
       properties: {
@@ -236,6 +236,10 @@ class _PatternMasterGameState extends State<PatternMasterGame>
     ));
 
     _startMemoryPhase();
+    // Start 1-minute timer after memory phase
+    Timer(const Duration(seconds: 3), () {
+      _startTimerChallenge(60); // 1 minute for gameplay
+    });
   }
 
   // Level 2: Sequence Recognition with Timer
@@ -260,12 +264,12 @@ class _PatternMasterGameState extends State<PatternMasterGame>
     activeObstacles.add(GameObstacle(
       type: 'timer',
       properties: {
-        'timeLimit': 15, // 15 seconds
+        'timeLimit': 60, // 1 minute
         'instructions': 'Tap numbers in this order: 1, 3, 2, 5, 4'
       },
     ));
 
-    _startTimerChallenge(15);
+    _startTimerChallenge(60); // 1 minute
     setState(() {
       gameActive = true;
     });
@@ -295,14 +299,15 @@ class _PatternMasterGameState extends State<PatternMasterGame>
     Random random = Random();
     
     for (int i = 0; i < 9; i++) {
+      bool isRedShape = i < 3; // First 3 are red target shapes
       gameElements.add(CognitiveElement(
         id: 'element_$i',
         type: 'shape',
-        value: shapes[random.nextInt(shapes.length)],
-        color: colors[random.nextInt(colors.length)],
+        value: shapes[i % 3],
+        color: isRedShape ? Colors.red : colors[random.nextInt(colors.length - 1) + 1], // Avoid red for distractors
         size: 45,
         position: Offset(60 + (i % 3) * 80, 320 + (i ~/ 3) * 70),
-        isObstacle: colors[random.nextInt(colors.length)] != Colors.red,
+        isObstacle: !isRedShape,
       ));
     }
 
@@ -311,9 +316,11 @@ class _PatternMasterGameState extends State<PatternMasterGame>
       properties: {
         'instructions': 'Find and tap only the RED shapes that match the pattern above!',
         'distractorCount': gameElements.where((e) => e.isObstacle).length,
+        'timeLimit': 60, // 1 minute
       },
     ));
 
+    _startTimerChallenge(60); // 1 minute
     setState(() {
       gameActive = true;
     });
@@ -344,10 +351,15 @@ class _PatternMasterGameState extends State<PatternMasterGame>
         'sequence': sequenceToRemember,
         'instructions': 'Remember: B → D → A → F → C. Tap in this order!',
         'memoryTime': 4000,
+        'timeLimit': 60, // 1 minute after memory phase
       },
     ));
 
     _startSequenceMemoryPhase();
+    // Start 1-minute timer after memory phase
+    Timer(const Duration(seconds: 4), () {
+      _startTimerChallenge(60); // 1 minute for gameplay
+    });
   }
 
   // Level 5: Executive Function Master
@@ -381,12 +393,12 @@ class _PatternMasterGameState extends State<PatternMasterGame>
       type: 'executive',
       properties: {
         'instructions': 'TAP: Blue circles & Green squares. AVOID: Red 3s & Purple Xs',
-        'timeLimit': 20,
+        'timeLimit': 60, // 1 minute
         'penaltyForMistakes': true,
       },
     ));
 
-    _startTimerChallenge(20);
+    _startTimerChallenge(60); // 1 minute
     setState(() {
       gameActive = true;
     });
@@ -503,16 +515,28 @@ class _PatternMasterGameState extends State<PatternMasterGame>
       });
     });
     
-    // Check if tapped element matches target pattern
-    bool isCorrect = targetPattern.any((target) => 
-        target.value == element.value && target.color == element.color);
+    // Check if tapped element EXACTLY matches target pattern (both shape and color)
+    bool isCorrect = false;
+    CognitiveElement? matchedTarget;
     
-    if (isCorrect && !element.isMatched) {
+    for (var target in targetPattern) {
+      if (target.value == element.value && target.color == element.color && !target.isMatched) {
+        isCorrect = true;
+        matchedTarget = target;
+        break;
+      }
+    }
+    
+    if (isCorrect && !element.isMatched && matchedTarget != null) {
       setState(() {
         element.isMatched = true;
+        matchedTarget!.isMatched = true; // Mark target as matched too
       });
       _correctMatches++;
-      _showPositiveFeedback(); // Add encouraging feedback
+      _showPositiveFeedback();
+    } else if (!isCorrect) {
+      // Show negative feedback for wrong selection
+      _showNegativeFeedback();
     }
 
     if (_checkLevelCompletion()) {
@@ -536,37 +560,60 @@ class _PatternMasterGameState extends State<PatternMasterGame>
       });
     });
     
-    if (userSequence.length < sequenceToRemember.length) {
-      userSequence.add(element.value);
+    if (userSequence.length < sequenceToRemember.length && !element.isMatched) {
+      // Check if this is the correct next number in sequence
+      String expectedNext = sequenceToRemember[userSequence.length];
       
-      setState(() {
-        element.isMatched = true;
-      });
-
-      if (userSequence.length == sequenceToRemember.length) {
-        if (_listsEqual(userSequence, sequenceToRemember)) {
+      if (element.value == expectedNext) {
+        userSequence.add(element.value);
+        setState(() {
+          element.isMatched = true;
+        });
+        _showPositiveFeedback();
+        
+        // Check if sequence is complete
+        if (userSequence.length == sequenceToRemember.length) {
           _correctMatches++;
           _showSuccess();
-        } else {
-          _showIncorrectSequence();
         }
+      } else {
+        // Wrong number in sequence - reset
+        _showNegativeFeedback();
+        _showIncorrectSequence();
       }
     }
   }
 
   void _handleLevel3Tap(CognitiveElement element) {
+    // Only process red shapes that haven't been matched yet
     if (element.color == Colors.red && !element.isMatched) {
-      bool matchesPattern = targetPattern.any((target) => target.value == element.value);
+      // Check if this red shape exactly matches one of the target patterns
+      bool matchesPattern = false;
+      CognitiveElement? matchedTarget;
       
-      if (matchesPattern) {
+      for (var target in targetPattern) {
+        if (target.value == element.value && target.color == Colors.red && !target.isMatched) {
+          matchesPattern = true;
+          matchedTarget = target;
+          break;
+        }
+      }
+      
+      if (matchesPattern && matchedTarget != null) {
         setState(() {
           element.isMatched = true;
+          matchedTarget!.isMatched = true;
         });
         _correctMatches++;
+        _showPositiveFeedback();
+      } else {
+        _showNegativeFeedback();
       }
-    } else if (element.isObstacle) {
-      // Penalty for tapping distractors
+    } else if (element.color != Colors.red || element.isObstacle) {
+      // Penalty for tapping non-red shapes or distractors
       _totalAttempts += 2; // Double penalty
+      _showNegativeFeedback();
+      timeRemaining = max(0, timeRemaining - 2); // Time penalty
     }
 
     if (_checkLevelCompletion()) {
@@ -575,20 +622,26 @@ class _PatternMasterGameState extends State<PatternMasterGame>
   }
 
   void _handleLevel4Tap(CognitiveElement element) {
-    if (userSequence.length < sequenceToRemember.length) {
-      userSequence.add(element.value);
+    if (userSequence.length < sequenceToRemember.length && !element.isMatched) {
+      // Check if this is the correct next letter in sequence
+      String expectedNext = sequenceToRemember[userSequence.length];
       
-      setState(() {
-        element.isMatched = true;
-      });
-
-      if (userSequence.length == sequenceToRemember.length) {
-        if (_listsEqual(userSequence, sequenceToRemember)) {
+      if (element.value == expectedNext) {
+        userSequence.add(element.value);
+        setState(() {
+          element.isMatched = true;
+        });
+        _showPositiveFeedback();
+        
+        // Check if sequence is complete
+        if (userSequence.length == sequenceToRemember.length) {
           _correctMatches++;
           _showSuccess();
-        } else {
-          _showIncorrectSequence();
         }
+      } else {
+        // Wrong letter in sequence - reset
+        _showNegativeFeedback();
+        _showIncorrectSequence();
       }
     }
   }
@@ -605,10 +658,15 @@ class _PatternMasterGameState extends State<PatternMasterGame>
         element.isMatched = true;
       });
       _correctMatches++;
+      _showPositiveFeedback();
     } else if (shouldAvoid) {
       // Penalty for tapping items that should be avoided
       _totalAttempts += 3;
       timeRemaining = max(0, timeRemaining - 3); // Time penalty
+      _showNegativeFeedback();
+    } else if (!shouldTap && !shouldAvoid) {
+      // Tapped something that's neither correct nor forbidden
+      _showNegativeFeedback();
     }
 
     if (_checkLevelCompletion()) {
@@ -618,22 +676,26 @@ class _PatternMasterGameState extends State<PatternMasterGame>
 
   bool _checkLevelCompletion() {
     switch (currentLevel) {
-      case 0:
-        return gameElements.where((e) => e.isMatched).length >= 4;
-      case 1:
+      case 0: // Level 1: All target patterns must be matched
+        return targetPattern.every((target) => target.isMatched);
+      case 1: // Level 2: Correct sequence completion
         return userSequence.length == sequenceToRemember.length &&
                _listsEqual(userSequence, sequenceToRemember);
-      case 2:
-        int redShapesMatched = gameElements.where((e) => 
-            e.color == Colors.red && e.isMatched).length;
-        return redShapesMatched >= 3;
-      case 3:
+      case 2: // Level 3: All red target shapes must be matched
+        return targetPattern.every((target) => target.isMatched);
+      case 3: // Level 4: Correct sequence completion
         return userSequence.length == sequenceToRemember.length &&
                _listsEqual(userSequence, sequenceToRemember);
-      case 4:
-        int correctTaps = gameElements.where((e) => 
-            e.isMatched && !e.isObstacle).length;
-        return correctTaps >= 6;
+      case 4: // Level 5: All correct elements tapped, no penalties from wrong taps
+        int correctTargets = gameElements.where((e) => 
+            !e.isObstacle && 
+            ((e.type == 'shape' && e.value == 'circle' && e.color == Colors.blue) ||
+             (e.type == 'shape' && e.value == 'square' && e.color == Colors.green))).length;
+        int matchedCorrect = gameElements.where((e) => 
+            e.isMatched && !e.isObstacle &&
+            ((e.type == 'shape' && e.value == 'circle' && e.color == Colors.blue) ||
+             (e.type == 'shape' && e.value == 'square' && e.color == Colors.green))).length;
+        return matchedCorrect >= correctTargets;
       default:
         return false;
     }
@@ -685,6 +747,49 @@ class _PatternMasterGameState extends State<PatternMasterGame>
         ),
         backgroundColor: Colors.green.shade400,
         duration: const Duration(milliseconds: 1000),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        margin: const EdgeInsets.all(20),
+      ),
+    );
+  }
+
+  void _showNegativeFeedback() {
+    List<String> encouragingMessages = [
+      "🤔 Try again!",
+      "💪 Keep trying!",
+      "🎯 Look closer!",
+      "🧐 Not quite!",
+      "🔍 Check again!",
+      "👀 Look carefully!",
+    ];
+    
+    String message = encouragingMessages[Random().nextInt(encouragingMessages.length)];
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange.shade400,
+        duration: const Duration(milliseconds: 800),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         margin: const EdgeInsets.all(20),
