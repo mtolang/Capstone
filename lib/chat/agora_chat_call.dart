@@ -7,6 +7,7 @@ import 'package:kindora/services/global_call_service.dart';
 import 'package:kindora/services/agora_call_service.dart';
 import 'package:kindora/services/agora_config.dart';
 import 'package:kindora/services/call_state_manager.dart';
+import 'package:kindora/services/session_manager.dart';
 
 class AgoraChatCallScreen extends StatefulWidget {
   final String callId;
@@ -68,6 +69,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
 
     // Set active call state to prevent auto-logout
     CallStateManager.setCallActive(true);
+    SessionManager.setCallStatus(true);
     AgoraChatCallScreen.setCallActive(true);
 
     // Join existing call using the provided callId
@@ -766,6 +768,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
 
     // Reset call state to allow auto-logout
     CallStateManager.setCallActive(false);
+    SessionManager.setCallStatus(false);
     setState(() {
       _isCallMinimized = false;
     });
@@ -1287,6 +1290,7 @@ class _AgoraChatCallScreenState extends State<AgoraChatCallScreen> {
 
     // Reset call state to allow auto-logout after call ends
     CallStateManager.setCallActive(false);
+    SessionManager.setCallStatus(false);
     _isCallMinimized = false;
     AgoraChatCallScreen.setCallActive(false);
 

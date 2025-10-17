@@ -99,71 +99,232 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
   Future<void> _loadCalendarBookings() async {
     try {
       final clinicId = await AcceptedBookingService.getCurrentClinicId();
-      if (clinicId == null) return;
+      if (clinicId == null) {
+        print('❌ No clinic ID found');
+        return;
+      }
+
+      print('🏥 Loading bookings for clinic: $clinicId');
 
       final now = DateTime.now();
-      final startDate = DateTime(now.year, now.month - 1, 1); // Previous month
-      final endDate = DateTime(now.year, now.month + 2, 0); // Next month
+      // Load events for a wide range - from 1 month ago to 1 year ahead for contracts
+      final startDate = DateTime(now.year, now.month - 1, 1);
+      final endDate = DateTime(now.year + 1, now.month, 0); // 1 year ahead
 
-      final snapshot =
-          await AcceptedBookingService.getAcceptedBookingsForClinic(
-        clinicId: clinicId,
-        startDate: startDate,
-        endDate: endDate,
-        status: 'confirmed',
-      ).first;
+      // Get all accepted bookings for this clinic
+      final snapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('clinicId', isEqualTo: clinicId)
+          .where('status', isEqualTo: 'confirmed')
+          .get();
+
+      print('📦 Found ${snapshot.docs.length} confirmed bookings');
 
       final Map<DateTime, List<Map<String, dynamic>>> events = {};
+      final List<Map<String, dynamic>> contracts = [];
 
       for (var doc in snapshot.docs) {
-        final booking = doc.data() as Map<String, dynamic>;
+        final booking = doc.data();
 
-        // Extract appointment date
-        dynamic appointmentDate = booking['appointmentDate'];
-        DateTime? bookingDate;
+        print('📄 Doc: ${doc.id}');
 
-        if (appointmentDate is Timestamp) {
-          bookingDate = appointmentDate.toDate();
-        } else if (appointmentDate is String) {
-          try {
-            bookingDate = DateTime.parse(appointmentDate);
-          } catch (e) {
-            print('Error parsing date string: $appointmentDate');
-            continue;
-          }
+        // Get originalRequestData
+        final originalRequestData = booking['originalRequestData'];
+
+        if (originalRequestData == null) {
+          print('   No originalRequestData - skipping');
+          continue;
         }
 
-        if (bookingDate != null) {
-          // Normalize to date only (remove time)
-          final dateKey =
-              DateTime(bookingDate.year, bookingDate.month, bookingDate.day);
+        // Check bookingProcessType inside originalRequestData (NOT root level!)
+        final bookingProcessType = originalRequestData['bookingProcessType'];
+        print('   originalRequestData.bookingProcessType: $bookingProcessType');
 
-          if (events[dateKey] == null) {
-            events[dateKey] = [];
-          }
-
-          events[dateKey]!.add({
-            'id': doc.id,
-            'patientName':
-                booking['patientInfo']?['childName'] ?? 'Unknown Patient',
-            'parentName':
-                booking['patientInfo']?['parentName'] ?? 'Unknown Parent',
-            'time': booking['appointmentTime'] ?? 'No time',
-            'type': booking['appointmentType'] ?? 'Consultation',
-            'status': booking['status'] ?? 'confirmed',
-            'date': DateFormat('yyyy-MM-dd').format(bookingDate),
-            'appointmentDetails': booking['appointmentDetails'],
-            'patientInfo': booking['patientInfo'],
-          });
+        // Is this a contract?
+        if (bookingProcessType != 'contract') {
+          print('   Not a contract - skipping');
+          continue;
         }
+
+        print('   🔶 CONTRACT FOUND!');
+
+        // Get contractInfo from originalRequestData
+        final contractInfo = originalRequestData['contractInfo'];
+        if (contractInfo == null) {
+          print('   ❌ No contractInfo');
+          continue;
+        }
+
+        // Get dayOfWeek and appointmentTime from contractInfo
+        final dayOfWeek = contractInfo['dayOfWeek'];
+        final appointmentTime = contractInfo['appointmentTime'];
+
+        print('   dayOfWeek: $dayOfWeek');
+        print('   appointmentTime: $appointmentTime');
+
+        if (dayOfWeek == null || appointmentTime == null) {
+          print('   ❌ Missing dayOfWeek or appointmentTime');
+          continue;
+        }
+
+        // Get patient info from originalRequestData
+        final childInfo = originalRequestData['childInfo'];
+        final parentInfo = originalRequestData['parentInfo'];
+
+        final childName =
+            childInfo?['childName'] ?? booking['patientName'] ?? 'Unknown';
+        final parentName =
+            parentInfo?['parentName'] ?? booking['parentName'] ?? 'Unknown';
+
+        // Add to contracts list - NO END DATE CHECK!
+        contracts.add({
+          'id': doc.id,
+          'dayOfWeek': dayOfWeek.toString(),
+          'timeSlot': appointmentTime.toString(),
+          'patientName': childName,
+          'parentName': parentName,
+          'type': contractInfo['appointmentType'] ??
+              booking['appointmentType'] ??
+              'Contract Session',
+          'status': 'contract',
+        });
+
+        print('   ✅ Contract added: Every $dayOfWeek at $appointmentTime');
+      }
+
+      // Generate recurring events from contracts - NO END DATE
+      print(
+          '🔄 Generating recurring events from ${contracts.length} contracts...');
+      _generateRecurringEventsFromContracts(
+          contracts, events, startDate, endDate);
+
+      print('📅 Calendar loaded: ${events.length} days with bookings');
+      print('📋 Contract bookings found: ${contracts.length}');
+      if (contracts.isNotEmpty) {
+        print(
+            '📋 Contracts: ${contracts.map((c) => '${c['dayOfWeek']} ${c['timeSlot']}').join(', ')}');
+      }
+
+      // Show alert if contracts found but no events generated
+      if (contracts.isNotEmpty && events.isEmpty) {
+        print('⚠️⚠️⚠️ CONTRACTS FOUND BUT NO EVENTS GENERATED! ⚠️⚠️⚠️');
       }
 
       setState(() {
         _bookingEvents = events;
         _selectedDayBookings = _getEventsForDay(_selectedDay ?? DateTime.now());
       });
+
+      // Show a snackbar with the result
+      if (mounted && contracts.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '✅ Found ${contracts.length} contract(s): ${contracts.map((c) => c['dayOfWeek']).join(', ')}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('❌ No contract bookings found'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
-      print('Error loading calendar bookings: $e');
+      print('❌ Error loading calendar bookings: $e');
+      print('Stack trace: ${StackTrace.current}');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading bookings: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Generate recurring calendar events from contract bookings
+  void _generateRecurringEventsFromContracts(
+    List<Map<String, dynamic>> contracts,
+    Map<DateTime, List<Map<String, dynamic>>> events,
+    DateTime startDate,
+    DateTime endDate,
+  ) {
+    print('🔄 Starting recurring event generation...');
+    print(
+        '   Date range: ${DateFormat('yyyy-MM-dd').format(startDate)} to ${DateFormat('yyyy-MM-dd').format(endDate)}');
+
+    for (var contract in contracts) {
+      final dayOfWeek = contract['dayOfWeek'].toString().toLowerCase();
+      final timeSlot = contract['timeSlot'];
+
+      print('   Processing contract: $dayOfWeek at $timeSlot');
+
+      // Map day names to weekday numbers (1 = Monday, 7 = Sunday)
+      final dayMap = {
+        'monday': 1,
+        'tuesday': 2,
+        'wednesday': 3,
+        'thursday': 4,
+        'friday': 5,
+        'saturday': 6,
+        'sunday': 7,
+      };
+
+      final targetWeekday = dayMap[dayOfWeek];
+      if (targetWeekday == null) {
+        print('   ⚠️  Unknown day of week: $dayOfWeek');
+        continue;
+      }
+
+      print('   Target weekday number: $targetWeekday');
+
+      // For contracts, there's NO end date - they continue indefinitely
+      // Use the endDate parameter (1 year ahead) as the limit
+      DateTime endLimit = endDate;
+
+      // Generate events for every occurrence of this day
+      DateTime currentDate = startDate;
+      int eventCount = 0;
+
+      while (currentDate.isBefore(endLimit) ||
+          currentDate.isAtSameMomentAs(endLimit)) {
+        // Check if this day matches our target weekday
+        if (currentDate.weekday == targetWeekday) {
+          final dateKey =
+              DateTime(currentDate.year, currentDate.month, currentDate.day);
+
+          if (events[dateKey] == null) {
+            events[dateKey] = [];
+          }
+
+          // Add contract booking to this date
+          events[dateKey]!.add({
+            'id': contract['id'],
+            'patientName': contract['patientName'],
+            'parentName': contract['parentName'],
+            'time': timeSlot,
+            'type': contract['type'],
+            'status': 'contract',
+            'date': DateFormat('yyyy-MM-dd').format(currentDate),
+            'isRecurring': true,
+            'dayOfWeek': contract['dayOfWeek'],
+            'patientInfo': contract['patientInfo'],
+          });
+
+          eventCount++;
+        }
+
+        currentDate = currentDate.add(const Duration(days: 1));
+      }
+
+      print('   ✅ Generated $eventCount recurring events for $dayOfWeek');
     }
   }
 
@@ -535,8 +696,49 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
 
   /// Build Calendar Tab - Shows dynamic calendar with highlighted bookings
   Widget _buildCalendarTab() {
+    // Calculate contract stats for debug
+    int totalDaysWithEvents = _bookingEvents.length;
+    int contractEventCount = 0;
+    for (var events in _bookingEvents.values) {
+      contractEventCount +=
+          events.where((e) => e['status'] == 'contract').length;
+    }
+
     return Column(
       children: [
+        // DEBUG BANNER
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          decoration: BoxDecoration(
+            color: contractEventCount > 0 ? Colors.green[100] : Colors.red[100],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: contractEventCount > 0 ? Colors.green : Colors.red,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'DEBUG INFO',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: contractEventCount > 0
+                      ? Colors.green[900]
+                      : Colors.red[900],
+                ),
+              ),
+              Text('Days with events: $totalDaysWithEvents'),
+              Text('Contract events: $contractEventCount'),
+              Text(
+                  'Status: ${contractEventCount > 0 ? "✅ Contracts loaded" : "❌ No contracts found"}'),
+            ],
+          ),
+        ),
+
         // Calendar widget
         Container(
           decoration: BoxDecoration(
@@ -703,12 +905,19 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
 
   /// Build booking card for calendar view
   Widget _buildCalendarBookingCard(Map<String, dynamic> booking) {
+    final isRecurring = booking['isRecurring'] == true;
+    final status = booking['status'];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF006A5B).withOpacity(0.2)),
+        border: Border.all(
+          color: isRecurring
+              ? const Color(0xFFFF9800).withOpacity(0.5) // Orange for contracts
+              : const Color(0xFF006A5B).withOpacity(0.2),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -721,14 +930,51 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            // Time indicator
-            Container(
-              width: 4,
-              height: 60,
-              decoration: BoxDecoration(
-                color: const Color(0xFF006A5B),
-                borderRadius: BorderRadius.circular(2),
-              ),
+            // Time indicator with contract badge
+            Column(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isRecurring
+                        ? const Color(0xFFFF9800).withOpacity(0.1)
+                        : const Color(0xFF006A5B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    booking['time'] ?? 'No time',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isRecurring
+                          ? const Color(0xFFFF9800)
+                          : const Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                if (isRecurring) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF9800),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'CONTRACT',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(width: 16),
 
@@ -739,57 +985,45 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 16,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        booking['time'] ?? 'No time',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[600],
-                          fontFamily: 'Poppins',
+                      Expanded(
+                        child: Text(
+                          booking['patientName'] ?? 'Unknown Client',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2C3E50),
+                            fontFamily: 'Poppins',
+                          ),
                         ),
                       ),
-                      const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(booking['status'])
-                              .withOpacity(0.1),
+                          color: _getStatusColor(status).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          (booking['status'] ?? 'confirmed').toUpperCase(),
+                          isRecurring
+                              ? 'Recurring'
+                              : (status ?? 'confirmed').toUpperCase(),
                           style: TextStyle(
                             fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: _getStatusColor(booking['status']),
+                            fontWeight: FontWeight.w600,
+                            color: _getStatusColor(status),
                             fontFamily: 'Poppins',
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    booking['patientName'] ?? 'Unknown Patient',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF006A5B),
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
                   const SizedBox(height: 4),
                   Text(
                     'Parent: ${booking['parentName'] ?? 'Unknown'}',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       color: Colors.grey[600],
                       fontFamily: 'Poppins',
                     ),
@@ -798,17 +1032,21 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
                   Row(
                     children: [
                       Icon(
-                        Icons.medical_services,
+                        isRecurring ? Icons.repeat : Icons.event,
                         size: 14,
-                        color: Colors.grey[500],
+                        color: Colors.grey[600],
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        booking['type'] ?? 'Consultation',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                          fontFamily: 'Poppins',
+                      Expanded(
+                        child: Text(
+                          isRecurring
+                              ? 'Every ${booking['dayOfWeek']} • ${booking['type'] ?? 'Session'}'
+                              : booking['type'] ?? 'Consultation',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontFamily: 'Poppins',
+                          ),
                         ),
                       ),
                     ],
@@ -819,11 +1057,8 @@ class _ClinicSchedulePageState extends State<ClinicSchedulePage>
 
             // Action button
             IconButton(
+              icon: const Icon(Icons.info_outline, color: Color(0xFF006A5B)),
               onPressed: () => _showBookingDetails(booking),
-              icon: const Icon(
-                Icons.more_vert,
-                color: Color(0xFF006A5B),
-              ),
             ),
           ],
         ),

@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:kindora/splash_page.dart';
 import 'package:kindora/services/global_call_service.dart'; // Add GlobalCallService import
-import 'package:shared_preferences/shared_preferences.dart'; // Add for lifecycle ID cleanup
+import 'package:kindora/services/session_manager.dart'; // Add SessionManager import
 import 'package:flutter/foundation.dart';
+import 'dart:async'; // Add for Timer
 import 'package:kindora/app_routes_demo.dart'
     if (dart.library.io) 'package:kindora/app_routes_full.dart' as routes;
 //logins imports
@@ -86,49 +87,119 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
+  // Auto-logout timer for 1-hour inactivity
+  Timer? _autoLogoutTimer;
+  DateTime? _lastActivityTime;
+  static const Duration _autoLogoutDuration = Duration(hours: 1);
+
+  // Static instance to allow global access to activity updates
+  static _MyAppState? _instance;
+
   @override
   void initState() {
     super.initState();
+    _instance = this;
     WidgetsBinding.instance.addObserver(this);
+
+    // Initialize SessionManager with navigator key
+    SessionManager.initialize(navigatorKey);
+
+    _updateLastActivity();
+    _startAutoLogoutTimer();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _autoLogoutTimer?.cancel();
+    _instance = null;
     super.dispose();
+  }
+
+  /// Static method to update user activity from anywhere in the app
+  static void updateUserActivity() {
+    _instance?._updateLastActivity();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // Clear stored IDs when app is terminated or becomes inactive
-    if (state == AppLifecycleState.detached ||
-        state == AppLifecycleState.paused) {
-      _clearStoredIdsOnAppClose();
+    print('App Lifecycle State: $state');
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App is back in foreground - check if should logout due to inactivity
+        _checkForAutoLogout();
+        break;
+      case AppLifecycleState.paused:
+        // App goes to background - update last activity time but don't logout immediately
+        _updateLastActivity();
+        break;
+      case AppLifecycleState.detached:
+        // App is being terminated - clear IDs for security
+        _clearStoredIdsOnAppClose();
+        break;
+      case AppLifecycleState.inactive:
+        // App is inactive (e.g., phone call, notification) - update activity time
+        _updateLastActivity();
+        break;
+      default:
+        break;
+    }
+  }
+
+  /// Update the last activity timestamp
+  void _updateLastActivity() {
+    _lastActivityTime = DateTime.now();
+    SessionManager.updateUserActivity(); // Also update SessionManager
+    print('Updated last activity time: $_lastActivityTime');
+  }
+
+  /// Start the auto-logout timer
+  void _startAutoLogoutTimer() {
+    _autoLogoutTimer?.cancel();
+    _autoLogoutTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      _checkForAutoLogout();
+    });
+    print(
+        'Auto-logout timer started - checking every 5 minutes for 1-hour inactivity');
+  }
+
+  /// Check if user should be logged out due to inactivity
+  void _checkForAutoLogout() async {
+    if (_lastActivityTime == null) {
+      _updateLastActivity();
+      return;
+    }
+
+    final now = DateTime.now();
+    final inactiveDuration = now.difference(_lastActivityTime!);
+
+    print(
+        'Checking auto-logout: inactive for ${inactiveDuration.inMinutes} minutes');
+
+    // Check if user has been inactive for more than 1 hour
+    if (inactiveDuration >= _autoLogoutDuration) {
+      // Check if user is in an active call (should prevent auto-logout)
+      final isInCall = await SessionManager.isUserInActiveCall();
+
+      if (isInCall) {
+        print('Auto-logout prevented: User is in active call');
+        _updateLastActivity(); // Reset activity time during call
+        return;
+      }
+
+      print(
+          'Auto-logout triggered: User inactive for ${inactiveDuration.inHours} hours');
+      await SessionManager.forceLogout(
+          reason: 'Session expired due to inactivity');
     }
   }
 
   /// Clear stored user IDs when app is closed to prevent conflicts
   Future<void> _clearStoredIdsOnAppClose() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Clear all potential user IDs but keep login status for next session
-      await prefs.remove('user_id');
-      await prefs.remove('clinic_id');
-      await prefs.remove('current_user_id');
-      await prefs.remove('userId');
-      await prefs.remove('parent_id');
-      await prefs.remove('static_clinic_id');
-      await prefs.remove('static_parent_id');
-      await prefs.remove('fallback_id');
-
-      print(
-          'App Lifecycle: Cleared stored IDs to prevent conflicts on next app start');
-    } catch (e) {
-      print('App Lifecycle: Error clearing stored IDs: $e');
-    }
+    await SessionManager.clearStoredUserIds();
   }
 
   @override
@@ -136,93 +207,101 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Initialize GlobalCallService with navigator key
     GlobalCallService().initialize(navigatorKey);
 
-    return MaterialApp(
-        navigatorKey: navigatorKey, // Add the navigator key
-        title: 'Flutter Demo',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-          useMaterial3: true,
-        ),
-        home: widget.firebaseReady ? const SplashScreen() : const _DemoHome(),
-        routes: {
-          //Logins Routes
-          '/login': (context) => const LoginPage(),
-          '/parentlogin': (context) => const ParentLogin(), // <-- Add this
-          '/therlogin': (context) => const TherapistLogin(), // <-- Add this
-          '/loginas': (context) => const LoginAs(),
-          '/adminlogin': (context) =>
-              const AdminLogin(), // <-- Admin login route
-          '/admindashboard': (context) =>
-              const AdminDashboard(), // <-- Admin dashboard route
-          '/fixtherapist': (context) =>
-              const FixTherapistAccountPage(), // Fix therapist accounts
-          '/logintest': (context) => const LoginTestPage(), // Test route
-          '/storagetest': (context) =>
-              const StorageTestScreen(), // Storage debug route
+    return GestureDetector(
+      // Track user interactions to reset inactivity timer
+      onTap: _updateLastActivity,
+      onPanDown: (_) => _updateLastActivity(),
+      onScaleStart: (_) => _updateLastActivity(),
+      behavior: HitTestBehavior.translucent,
+      child: MaterialApp(
+          navigatorKey: navigatorKey, // Add the navigator key
+          title: 'Flutter Demo',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+            useMaterial3: true,
+          ),
+          home: widget.firebaseReady ? const SplashScreen() : const _DemoHome(),
+          routes: {
+            //Logins Routes
+            '/login': (context) => const LoginPage(),
+            '/parentlogin': (context) => const ParentLogin(), // <-- Add this
+            '/therlogin': (context) => const TherapistLogin(), // <-- Add this
+            '/loginas': (context) => const LoginAs(),
+            '/adminlogin': (context) =>
+                const AdminLogin(), // <-- Admin login route
+            '/admindashboard': (context) =>
+                const AdminDashboard(), // <-- Admin dashboard route
+            '/fixtherapist': (context) =>
+                const FixTherapistAccountPage(), // Fix therapist accounts
+            '/logintest': (context) => const LoginTestPage(), // Test route
+            '/storagetest': (context) =>
+                const StorageTestScreen(), // Storage debug route
 
-          //Registration Routes
-          '/clinicreg': (context) => const ClinicRegister(),
-          '/parentreg': (context) => const ParentRegister(),
-          '/therapistreg': (context) => const TherapistRegister(),
+            //Registration Routes
+            '/clinicreg': (context) => const ClinicRegister(),
+            '/parentreg': (context) => const ParentRegister(),
+            '/therapistreg': (context) => const TherapistRegister(),
 
-          //Parent Page Routes
-          '/parentdashboard': (context) => const Dashboard(),
-          '/therdashboard': (context) => const TherapistsDashboard(),
-          '/materials': (context) => const MaterialsPage(),
-          '/gamesoption': (context) => const GamesOption(),
-          '/talkwithtiles': (context) => const TalkWithTilesGame(),
-          '/shapeshifters': (context) => const PatternMasterApp(),
-          '/cognitivepatternmaster': (context) => const PatternMasterApp(),
-          '/parentschedule': (context) => const ParentSchedulePage(),
+            //Parent Page Routes
+            '/parentdashboard': (context) => const Dashboard(),
+            '/therdashboard': (context) => const TherapistsDashboard(),
+            '/materials': (context) => const MaterialsPage(),
+            '/gamesoption': (context) => const GamesOption(),
+            '/talkwithtiles': (context) => const TalkWithTilesGame(),
+            '/shapeshifters': (context) => const PatternMasterApp(),
+            '/cognitivepatternmaster': (context) => const PatternMasterApp(),
+            '/parentschedule': (context) => const ParentSchedulePage(),
 
-          //Therapist Page Routes
-          '/therapistprofile': (context) => const TherapistProfile(),
-          '/therapistbooking': (context) =>
-              const ther_booking_full.TherapistBookingPage(),
-          '/therapistbookingmain': (context) =>
-              const ther_booking_main.TherapistBookingPage(),
-          '/therapistmaterials': (context) => const TherapistMaterialsPage(),
-          '/therapistgallery': (context) => const TherapistGallery(),
-          '/therapistreview': (context) => const TherapistReview(),
-          '/therapistprogress': (context) => const TherProgress(),
-          '/therapistpatients': (context) =>
-              const _ComingSoonPage(title: 'Patient List'),
-          '/therapiststaff': (context) =>
-              const _ComingSoonPage(title: 'Clinic Staff'),
+            //Therapist Page Routes
+            '/therapistprofile': (context) => const TherapistProfile(),
+            '/therapistbooking': (context) =>
+                const ther_booking_full.TherapistBookingPage(),
+            '/therapistbookingmain': (context) =>
+                const ther_booking_main.TherapistBookingPage(),
+            '/therapistmaterials': (context) => const TherapistMaterialsPage(),
+            '/therapistgallery': (context) => const TherapistGallery(),
+            '/therapistreview': (context) => const TherapistReview(),
+            '/therapistprogress': (context) => const TherProgress(),
+            '/therapistpatients': (context) =>
+                const _ComingSoonPage(title: 'Patient List'),
+            '/therapiststaff': (context) =>
+                const _ComingSoonPage(title: 'Clinic Staff'),
 
-          //Chat Page Routes
-          '/patientselection': (context) => const PatientSelectionPage(),
-          '/therapistpatientselection': (context) =>
-              const TherapistPatientSelectionPage(),
-          '/therapistchatlist': (context) => const TherapistChatListPage(),
-          '/therapistchat': (context) {
-            final args = ModalRoute.of(context)?.settings.arguments as String?;
-            return TherapistChatPage(patientId: args);
-          },
-          '/patientchat': (context) {
-            final args = ModalRoute.of(context)?.settings.arguments
-                as Map<String, dynamic>?;
-            return PatientChatPage(
-              therapistId: args?['therapistId'] as String?,
-              therapistName: args?['therapistName'] as String?,
-              isPatientSide: args?['isPatientSide'] as bool? ?? true,
-            );
-          },
-          '/patientsideselect': (context) => const PatientSideSelectPage(),
+            //Chat Page Routes
+            '/patientselection': (context) => const PatientSelectionPage(),
+            '/therapistpatientselection': (context) =>
+                const TherapistPatientSelectionPage(),
+            '/therapistchatlist': (context) => const TherapistChatListPage(),
+            '/therapistchat': (context) {
+              final args =
+                  ModalRoute.of(context)?.settings.arguments as String?;
+              return TherapistChatPage(patientId: args);
+            },
+            '/patientchat': (context) {
+              final args = ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?;
+              return PatientChatPage(
+                therapistId: args?['therapistId'] as String?,
+                therapistName: args?['therapistName'] as String?,
+                isPatientSide: args?['isPatientSide'] as bool? ?? true,
+              );
+            },
+            '/patientsideselect': (context) => const PatientSideSelectPage(),
 
-          //Clinic Page Routes
-          '/clinicgallery': (context) => const ClinicGallery(),
-          '/clinicprofile': (context) => const ClinicProfile(),
-          '/clinicbooking': (context) => const ClinicBookingPage(),
-          '/clinicschedule': (context) => const ClinicSchedulePage(),
-          '/cliniceditschedule': (context) => const ClinicEditSchedulePage(),
-          '/clinicpatientlist': (context) => const ClinicPatientListPage(),
-          '/clinicprogress': (context) => const ClinicProgress(),
+            //Clinic Page Routes
+            '/clinicgallery': (context) => const ClinicGallery(),
+            '/clinicprofile': (context) => const ClinicProfile(),
+            '/clinicbooking': (context) => const ClinicBookingPage(),
+            '/clinicschedule': (context) => const ClinicSchedulePage(),
+            '/cliniceditschedule': (context) => const ClinicEditSchedulePage(),
+            '/clinicpatientlist': (context) => const ClinicPatientListPage(),
+            '/clinicprogress': (context) => const ClinicProgress(),
 
-          // Add routes from the routes module
-          ...routes.routes,
-        } // Show splash screen first
-        );
+            // Add routes from the routes module
+            ...routes.routes,
+          } // Show splash screen first
+          ),
+    );
   }
 }
 

@@ -70,8 +70,14 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted && result != null) {
         final clinicData = result['clinicData'] as Map<String, dynamic>;
         final clinicId = result['clinicId'] as String;
-        _showSuccessMessage(
-            'Welcome back, ${clinicData['Clinic_Name']}! (ID: $clinicId)');
+
+        // Get clinic name from either Clinic_Name or clinic_name field
+        final clinicName = clinicData['Clinic_Name'] ??
+            clinicData['clinic_name'] ??
+            clinicData['clinicName'] ??
+            'Unknown Clinic';
+
+        _showSuccessMessage('Welcome back, $clinicName! (ID: $clinicId)');
         Navigator.pushReplacementNamed(context, '/clinicprofile');
       }
     } catch (e) {

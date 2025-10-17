@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'clinic_patient_progress_report.dart';
+import 'client_progress_detail.dart';
 
 class ClinicProgress extends StatefulWidget {
   const ClinicProgress({Key? key}) : super(key: key);
@@ -13,7 +13,7 @@ class ClinicProgress extends StatefulWidget {
 
 class _ClinicProgressState extends State<ClinicProgress> {
   String? clinicId;
-  List<Map<String, dynamic>> patientsWithProgress = [];
+  List<Map<String, dynamic>> clientsWithProgress = [];
   List<Map<String, dynamic>> progressReports = [];
   bool isLoading = true;
 
@@ -30,7 +30,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
   Future<void> _initializeData() async {
     await _getClinicId();
-    await _loadPatientsAndProgress();
+    await _loadClientsAndProgress();
   }
 
   Future<void> _getClinicId() async {
@@ -66,7 +66,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
     });
   }
 
-  Future<void> _loadPatientsAndProgress() async {
+  Future<void> _loadClientsAndProgress() async {
     if (clinicId == null) {
       print('❌ Clinic ID is null, cannot load data');
       return;
@@ -185,39 +185,39 @@ class _ClinicProgressState extends State<ClinicProgress> {
         }
       }
 
-      // Process patients data efficiently
-      final List<Map<String, dynamic>> patientsList = [];
+      // Process clients data efficiently
+      final List<Map<String, dynamic>> clientsList = [];
 
       for (var doc in filteredPatientDocs) {
-        final patientData = doc.data() as Map<String, dynamic>;
+        final clientData = doc.data() as Map<String, dynamic>;
         final bookingId = doc.id;
-        final patientId = patientData['patientId']?.toString() ?? bookingId;
+        final clientId = clientData['patientId']?.toString() ?? bookingId;
 
         // Extract child name from different possible fields
-        final childName = patientData['patientName'] ??
-            patientData['childName'] ??
-            patientData['patientInfo']?['childName'] ??
+        final childName = clientData['patientName'] ??
+            clientData['childName'] ??
+            clientData['patientInfo']?['childName'] ??
             'Unknown';
 
-        final patientReports = progressByPatient[patientId] ?? [];
+        final clientReports = progressByPatient[clientId] ?? [];
 
-        patientsList.add({
+        clientsList.add({
           'bookingId': bookingId,
-          'patientId': patientId,
+          'clientId': clientId,
           'childName': childName,
-          'parentName': patientData['parentName'] ??
-              patientData['patientInfo']?['parentName'] ??
+          'parentName': clientData['parentName'] ??
+              clientData['patientInfo']?['parentName'] ??
               'Unknown',
-          'age': patientData['patientInfo']?['age']?.toString() ?? 'N/A',
-          'diagnosis': patientData['patientInfo']?['diagnosis'] ?? 'N/A',
-          'appointmentType': patientData['appointmentType'] ?? 'N/A',
-          'status': patientData['status'] ?? 'confirmed',
-          'appointmentDate': patientData['appointmentDate'] ?? 'N/A',
-          'appointmentTime': patientData['appointmentTime'] ?? 'N/A',
-          'progressReports': patientReports,
-          'totalReports': patientReports.length,
+          'age': clientData['patientInfo']?['age']?.toString() ?? 'N/A',
+          'diagnosis': clientData['patientInfo']?['diagnosis'] ?? 'N/A',
+          'appointmentType': clientData['appointmentType'] ?? 'N/A',
+          'status': clientData['status'] ?? 'confirmed',
+          'appointmentDate': clientData['appointmentDate'] ?? 'N/A',
+          'appointmentTime': clientData['appointmentTime'] ?? 'N/A',
+          'progressReports': clientReports,
+          'totalReports': clientReports.length,
           'lastReportDate':
-              patientReports.isNotEmpty ? patientReports.first['date'] : null,
+              clientReports.isNotEmpty ? clientReports.first['date'] : null,
         });
       }
 
@@ -225,13 +225,13 @@ class _ClinicProgressState extends State<ClinicProgress> {
       print('⚡ Data loaded in ${loadTime}ms');
 
       setState(() {
-        patientsWithProgress = patientsList;
+        clientsWithProgress = clientsList;
         progressReports = allProgressReports;
         isLoading = false;
       });
 
       print(
-          '✅ Final: ${patientsList.length} patients, ${allProgressReports.length} reports');
+          '✅ Final: ${clientsList.length} clients, ${allProgressReports.length} reports');
     } catch (e) {
       print('❌ Error loading data: $e');
       setState(() {
@@ -282,7 +282,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
   }
 
   int _calculateUpcomingSessions() {
-    if (patientsWithProgress.isEmpty) return 0;
+    if (clientsWithProgress.isEmpty) return 0;
 
     final now = DateTime.now();
     final tomorrow = now.add(const Duration(days: 1));
@@ -290,9 +290,9 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
     // Count appointments in the next 7 days
     int upcomingCount = 0;
-    for (var patient in patientsWithProgress) {
+    for (var client in clientsWithProgress) {
       try {
-        final appointmentDateStr = patient['appointmentDate'];
+        final appointmentDateStr = client['appointmentDate'];
         if (appointmentDateStr != null && appointmentDateStr != 'N/A') {
           final appointmentDate = DateTime.parse(appointmentDateStr);
           if (appointmentDate.isAfter(tomorrow) &&
@@ -407,290 +407,303 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
           // Main content
           SafeArea(
-            child: Column(
-              children: [
-                // Header section
-                Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.arrow_back,
-                                color: Colors.white, size: 28),
-                          ),
-                          const Expanded(
-                            child: Text(
-                              'Progress Reports',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                fontFamily: 'Poppins',
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(width: 48),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Comprehensive tracking of patient progress',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                          fontFamily: 'Poppins',
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Stats cards - 4 card layout
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    children: [
-                      // First row - Active Patients and Reports Recorded
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              title: 'Active Patients',
-                              value: patientsWithProgress
-                                  .where((p) => p['status'] == 'confirmed')
-                                  .length
-                                  .toString(),
-                              icon: Icons.people,
-                              color: Colors.white,
-                              textColor: const Color(0xFF006A5B),
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: _buildStatCard(
-                              title: 'Reports Recorded',
-                              value: progressReports.length.toString(),
-                              icon: Icons.assignment,
-                              color: Colors.white,
-                              textColor: const Color(0xFF006A5B),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      // Second row - Upcoming Sessions and Avg Weekly Change
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              title: 'Upcoming Sessions',
-                              value: _calculateUpcomingSessions().toString(),
-                              icon: Icons.schedule,
-                              color: Colors.white,
-                              textColor: const Color(0xFF006A5B),
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: _buildStatCard(
-                              title: 'Avg Weekly Change',
-                              value: _calculateWeeklyChange(),
-                              icon: Icons.trending_up,
-                              color: Colors.white,
-                              textColor: const Color(0xFF006A5B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Progress Tracking Section
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          spreadRadius: 2,
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF006A5B),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Progress Tracking Overview',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF006A5B),
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Progress Categories Grid
-                          Row(
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // Header section
+                        Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Column(
                             children: [
-                              // Motor Progress
-                              Expanded(
-                                child: _buildProgressCategory(
-                                  title: 'Motor',
-                                  progress: 0.11,
-                                  daysOverview: '+11% over last 7 days',
-                                  status: 'On Track',
-                                  statusColor: const Color(0xFF006A5B),
-                                  progressColor: const Color(0xFF006A5B),
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              // Speech Progress
-                              Expanded(
-                                child: _buildProgressCategory(
-                                  title: 'Speech',
-                                  progress: 0.18,
-                                  daysOverview: '+18% over last 7 days',
-                                  status: 'On Track',
-                                  statusColor: const Color(0xFF006A5B),
-                                  progressColor: const Color(0xFF67AFA5),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 15),
-                          Row(
-                            children: [
-                              // Cognitive Progress
-                              Expanded(
-                                child: _buildProgressCategory(
-                                  title: 'Cognitive',
-                                  progress: 0.11,
-                                  daysOverview: '+11% over last 7 days',
-                                  status: 'Needs Attention',
-                                  statusColor: Colors.orange,
-                                  progressColor: Colors.orange,
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              // Socio-emotional Progress
-                              Expanded(
-                                child: _buildProgressCategory(
-                                  title: 'Socio-emotional',
-                                  progress: 0.27,
-                                  daysOverview: '+27% over last 7 days',
-                                  status: 'On Track',
-                                  statusColor: const Color(0xFF006A5B),
-                                  progressColor: const Color(0xFF006A5B),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // Upcoming Sessions Section
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF006A5B).withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFF006A5B).withOpacity(0.2),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text(
-                                      'Upcoming Sessions',
+                              Row(
+                                children: [
+                                  IconButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    icon: const Icon(Icons.arrow_back,
+                                        color: Colors.white, size: 28),
+                                  ),
+                                  const Expanded(
+                                    child: Text(
+                                      'Progress Reports',
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 24,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF006A5B),
+                                        color: Colors.white,
                                         fontFamily: 'Poppins',
                                       ),
+                                      textAlign: TextAlign.center,
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF006A5B),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(
-                                        Icons.calendar_month,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
+                                  const SizedBox(width: 48),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Comprehensive tracking of client progress',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                  fontFamily: 'Poppins',
                                 ),
-                                const SizedBox(height: 12),
-                                ..._buildUpcomingSessionsList(),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Stats cards - 4 card layout
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: Column(
+                            children: [
+                              // First row - Active Clients and Reports Recorded
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Active Clients',
+                                      value: clientsWithProgress
+                                          .where(
+                                              (p) => p['status'] == 'confirmed')
+                                          .length
+                                          .toString(),
+                                      icon: Icons.people,
+                                      color: Colors.white,
+                                      textColor: const Color(0xFF006A5B),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Reports Recorded',
+                                      value: progressReports.length.toString(),
+                                      icon: Icons.assignment,
+                                      color: Colors.white,
+                                      textColor: const Color(0xFF006A5B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 15),
+                              // Second row - Upcoming Sessions and Avg Weekly Change
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Upcoming Sessions',
+                                      value: _calculateUpcomingSessions()
+                                          .toString(),
+                                      icon: Icons.schedule,
+                                      color: Colors.white,
+                                      textColor: const Color(0xFF006A5B),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Avg Weekly Change',
+                                      value: _calculateWeeklyChange(),
+                                      icon: Icons.trending_up,
+                                      color: Colors.white,
+                                      textColor: const Color(0xFF006A5B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Progress Tracking Section
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  spreadRadius: 2,
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
                               ],
                             ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Progress Tracking Overview',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF006A5B),
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  // Progress Categories Grid
+                                  Row(
+                                    children: [
+                                      // Motor Progress
+                                      Expanded(
+                                        child: _buildProgressCategory(
+                                          title: 'Motor',
+                                          progress: 0.11,
+                                          daysOverview: '+11% over last 7 days',
+                                          status: 'On Track',
+                                          statusColor: const Color(0xFF006A5B),
+                                          progressColor:
+                                              const Color(0xFF006A5B),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 15),
+                                      // Speech Progress
+                                      Expanded(
+                                        child: _buildProgressCategory(
+                                          title: 'Speech',
+                                          progress: 0.18,
+                                          daysOverview: '+18% over last 7 days',
+                                          status: 'On Track',
+                                          statusColor: const Color(0xFF006A5B),
+                                          progressColor:
+                                              const Color(0xFF67AFA5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 15),
+                                  Row(
+                                    children: [
+                                      // Cognitive Progress
+                                      Expanded(
+                                        child: _buildProgressCategory(
+                                          title: 'Cognitive',
+                                          progress: 0.11,
+                                          daysOverview: '+11% over last 7 days',
+                                          status: 'Needs Attention',
+                                          statusColor: Colors.orange,
+                                          progressColor: Colors.orange,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 15),
+                                      // Socio-emotional Progress
+                                      Expanded(
+                                        child: _buildProgressCategory(
+                                          title: 'Socio-emotional',
+                                          progress: 0.27,
+                                          daysOverview: '+27% over last 7 days',
+                                          status: 'On Track',
+                                          statusColor: const Color(0xFF006A5B),
+                                          progressColor:
+                                              const Color(0xFF006A5B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 20),
+
+                                  // Upcoming Sessions Section
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF006A5B)
+                                          .withOpacity(0.05),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: const Color(0xFF006A5B)
+                                            .withOpacity(0.2),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text(
+                                              'Upcoming Sessions',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF006A5B),
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF006A5B),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: const Icon(
+                                                Icons.calendar_month,
+                                                color: Colors.white,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        ..._buildUpcomingSessionsList(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                        ),
 
-                const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                // Content area with rounded container
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(30),
-                        topRight: Radius.circular(30),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 10,
-                          offset: Offset(0, -5),
+                        // Content area with rounded container
+                        Container(
+                          width: double.infinity,
+                          constraints: BoxConstraints(
+                            minHeight: MediaQuery.of(context).size.height * 0.3,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(30),
+                              topRight: Radius.circular(30),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 10,
+                                offset: Offset(0, -5),
+                              ),
+                            ],
+                          ),
+                          child: clientsWithProgress.isEmpty
+                              ? _buildEmptyState()
+                              : _buildClientsList(),
                         ),
                       ],
                     ),
-                    child: isLoading
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFF006A5B),
-                            ),
-                          )
-                        : patientsWithProgress.isEmpty
-                            ? _buildEmptyState()
-                            : _buildPatientsList(),
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -786,13 +799,14 @@ class _ClinicProgressState extends State<ClinicProgress> {
     );
   }
 
-  Widget _buildPatientsList() {
+  Widget _buildClientsList() {
     return ClipRRect(
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(30),
         topRight: Radius.circular(30),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Header
           Container(
@@ -805,7 +819,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                 Expanded(
                   flex: 3,
                   child: Text(
-                    'Patient Information',
+                    'Client Information',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF006A5B),
@@ -817,7 +831,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    'Reports',
+                    'Assessments',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF006A5B),
@@ -842,34 +856,21 @@ class _ClinicProgressState extends State<ClinicProgress> {
               ],
             ),
           ),
-          // Patient list
-          Expanded(
-            child: ListView.builder(
-              itemCount: patientsWithProgress.length,
-              itemBuilder: (context, index) {
-                return _buildPatientRow(patientsWithProgress[index]);
-              },
-            ),
+          // Client list
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: clientsWithProgress.length,
+            itemBuilder: (context, index) {
+              return _buildClientRow(clientsWithProgress[index]);
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPatientRow(Map<String, dynamic> patient) {
-    final hasReports = patient['totalReports'] > 0;
-    final lastReportDate = patient['lastReportDate'];
-    String formattedDate = 'No reports';
-
-    if (lastReportDate != null) {
-      try {
-        final date = DateTime.parse(lastReportDate);
-        formattedDate = '${date.day}/${date.month}/${date.year}';
-      } catch (e) {
-        formattedDate = 'Invalid date';
-      }
-    }
-
+  Widget _buildClientRow(Map<String, dynamic> client) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -885,7 +886,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  patient['childName'] ?? 'Unknown',
+                  client['childName'] ?? 'Unknown',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF2C3E50),
@@ -895,7 +896,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Parent: ${patient['parentName'] ?? 'N/A'}',
+                  'Parent: ${client['parentName'] ?? 'N/A'}',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF7F8C8D),
@@ -903,101 +904,114 @@ class _ClinicProgressState extends State<ClinicProgress> {
                   ),
                 ),
                 Text(
-                  'Age: ${patient['age']} • ${patient['diagnosis']}',
+                  'Age: ${client['age']} • ${client['diagnosis']}',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF7F8C8D),
                     fontFamily: 'Poppins',
                   ),
                 ),
-                if (patient['appointmentDate'] != null &&
-                    patient['appointmentDate'] != 'N/A')
-                  Text(
-                    'Booking: ${patient['appointmentDate']} ${patient['appointmentTime'] ?? ''}',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF95A5A6),
-                      fontFamily: 'Poppins',
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
               ],
             ),
           ),
           Expanded(
             flex: 2,
-            child: Column(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color:
-                        hasReports ? const Color(0xFF006A5B) : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${patient['totalReports']} reports',
-                    style: TextStyle(
-                      color: hasReports ? Colors.white : Colors.grey[600],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Poppins',
+            child: FutureBuilder<int>(
+              future: _getOTAssessmentsCount(client['clientId']),
+              builder: (context, snapshot) {
+                final assessmentCount = snapshot.data ?? 0;
+                return Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: assessmentCount > 0
+                            ? const Color(0xFF006A5B)
+                            : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$assessmentCount assessments',
+                        style: TextStyle(
+                          color: assessmentCount > 0
+                              ? Colors.white
+                              : Colors.grey[600],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  formattedDate,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF95A5A6),
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
           Expanded(
             child: Center(
-              child: ElevatedButton(
-                onPressed: hasReports
-                    ? () {
-                        // Navigate to latest progress report
-                        final latestReport = patient['progressReports'][0];
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ClinicPatientProgressReport(
-                              patientName: patient['childName'],
-                              progressData: latestReport,
-                            ),
-                          ),
-                        );
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      hasReports ? const Color(0xFF006A5B) : Colors.grey[300],
-                  foregroundColor: hasReports ? Colors.white : Colors.grey[600],
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  minimumSize: const Size(60, 32),
-                ),
-                child: Text(
-                  hasReports ? 'View' : 'None',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
+              child: FutureBuilder<int>(
+                future: _getOTAssessmentsCount(client['clientId']),
+                builder: (context, snapshot) {
+                  final hasAssessments = (snapshot.data ?? 0) > 0;
+                  return ElevatedButton(
+                    onPressed: hasAssessments
+                        ? () => _viewClientProgress(client)
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: hasAssessments
+                          ? const Color(0xFF006A5B)
+                          : Colors.grey[300],
+                      foregroundColor:
+                          hasAssessments ? Colors.white : Colors.grey[600],
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      minimumSize: const Size(60, 32),
+                    ),
+                    child: Text(
+                      hasAssessments ? 'View' : 'None',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<int> _getOTAssessmentsCount(String? clientId) async {
+    if (clientId == null) return 0;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('patientId', isEqualTo: clientId)
+          .where('clinicId', isEqualTo: clinicId)
+          .get();
+      return snapshot.docs.length;
+    } catch (e) {
+      print('Error getting OT assessments count: $e');
+      return 0;
+    }
+  }
+
+  void _viewClientProgress(Map<String, dynamic> client) async {
+    // Navigate to individual client progress page
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClientProgressDetailPage(
+          clientData: client,
+          clinicId: clinicId!,
+        ),
       ),
     );
   }
@@ -1320,10 +1334,10 @@ class _ClinicProgressState extends State<ClinicProgress> {
     final now = DateTime.now();
     final nextWeek = now.add(const Duration(days: 7));
 
-    final upcomingSessions = patientsWithProgress
-        .where((patient) {
+    final upcomingSessions = clientsWithProgress
+        .where((client) {
           try {
-            final appointmentDateStr = patient['appointmentDate'];
+            final appointmentDateStr = client['appointmentDate'];
             if (appointmentDateStr != null && appointmentDateStr != 'N/A') {
               final appointmentDate = DateTime.parse(appointmentDateStr);
               return appointmentDate.isAfter(now) &&

@@ -43,12 +43,21 @@ class ClinicAuthService {
     required String password,
   }) async {
     try {
-      // First, check if clinic exists in ClinicAcc collection with exact field names
-      final QuerySnapshot clinicQuery = await _firestore
+      // First, try to find clinic with lowercase email field
+      QuerySnapshot clinicQuery = await _firestore
           .collection('ClinicAcc')
           .where('email', isEqualTo: email.trim())
           .limit(1)
           .get();
+
+      // If not found, try with capitalized Email field
+      if (clinicQuery.docs.isEmpty) {
+        clinicQuery = await _firestore
+            .collection('ClinicAcc')
+            .where('Email', isEqualTo: email.trim())
+            .limit(1)
+            .get();
+      }
 
       if (clinicQuery.docs.isEmpty) {
         throw 'No clinic found with this email address.';
@@ -56,15 +65,19 @@ class ClinicAuthService {
 
       final clinicDoc = clinicQuery.docs.first;
       final clinicData = clinicDoc.data() as Map<String, dynamic>;
-      final documentId = clinicDoc.id; // This will be CLI01
+      final documentId = clinicDoc.id; // This will be CLI01, CLI02, CLI03, etc.
 
       // Debug: Print the data to verify field names
       print('Clinic data from Firebase: $clinicData');
       print('Document ID: $documentId');
 
-      // Check if the password matches exactly
-      final storedPassword = clinicData['password']?.toString() ?? '';
-      if (storedPassword != password) {
+      // Check password - try both lowercase and capitalized field names
+      String? storedPassword = clinicData['password']?.toString();
+      if (storedPassword == null) {
+        storedPassword = clinicData['Password']?.toString();
+      }
+
+      if (storedPassword == null || storedPassword != password) {
         throw 'Invalid email or password.';
       }
 
@@ -114,12 +127,20 @@ class ClinicAuthService {
     required String address,
   }) async {
     try {
-      // Check if clinic already exists
-      final QuerySnapshot existingClinic = await _firestore
+      // Check if clinic already exists - try both lowercase and capitalized fields
+      QuerySnapshot existingClinic = await _firestore
           .collection('ClinicAcc')
           .where('email', isEqualTo: email.trim())
           .limit(1)
           .get();
+
+      if (existingClinic.docs.isEmpty) {
+        existingClinic = await _firestore
+            .collection('ClinicAcc')
+            .where('Email', isEqualTo: email.trim())
+            .limit(1)
+            .get();
+      }
 
       if (existingClinic.docs.isNotEmpty) {
         throw 'A clinic with this email already exists.';
@@ -135,18 +156,21 @@ class ClinicAuthService {
       // Update display name
       await userCredential.user?.updateDisplayName(userName);
 
-      // Save clinic data to ClinicAcc collection
+      // Save clinic data to ClinicAcc collection using capitalized field names to match existing structure
       final docRef = await _firestore.collection('ClinicAcc').add({
-        'email': email.trim(),
-        'password':
-            password, // WARNING: Storing plain text passwords is not secure
+        'Email':
+            email.trim(), // Use capitalized field to match existing database
+        'Password':
+            password, // Use capitalized field to match existing database
         'Clinic_Name': clinicName,
-        'User_name': userName,
+        'User_Name': userName,
         'Contact_Number': contactNumber,
         'Address': address,
         'uid': userCredential.user?.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'acceptedBy': 'System',
       });
 
       return {
@@ -164,11 +188,21 @@ class ClinicAuthService {
   // Get clinic data by email
   static Future<Map<String, dynamic>?> getClinicData(String email) async {
     try {
-      final QuerySnapshot clinicQuery = await _firestore
+      // Try lowercase email field first
+      QuerySnapshot clinicQuery = await _firestore
           .collection('ClinicAcc')
           .where('email', isEqualTo: email.trim())
           .limit(1)
           .get();
+
+      // If not found, try capitalized Email field
+      if (clinicQuery.docs.isEmpty) {
+        clinicQuery = await _firestore
+            .collection('ClinicAcc')
+            .where('Email', isEqualTo: email.trim())
+            .limit(1)
+            .get();
+      }
 
       if (clinicQuery.docs.isNotEmpty) {
         final clinicDoc = clinicQuery.docs.first;

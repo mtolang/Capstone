@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:kindora/services/schedule_database_service.dart';
 import 'package:kindora/screens/parent/parent_booking_process.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ParentBookingPage extends StatefulWidget {
   final String? clinicId;
@@ -25,6 +26,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
   bool isLoading = true;
   List<Map<String, dynamic>> availableSlots = [];
   String bookingProcessType = 'single'; // Default to single session
+  Set<String> bookedSlotIds = {}; // Track booked slot IDs for selected date
 
   @override
   void initState() {
@@ -72,7 +74,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
     }
   }
 
-  void _loadAvailableSlotsForDate(DateTime date) {
+  void _loadAvailableSlotsForDate(DateTime date) async {
     if (clinicSchedule == null) return;
 
     final dayName = _getDayName(date);
@@ -84,6 +86,9 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       final timeSlots =
           List<Map<String, dynamic>>.from(daySchedule['timeSlots'] ?? []);
 
+      // Load booked slots for this date
+      await _loadBookedSlotsForDate(date);
+
       setState(() {
         availableSlots = timeSlots
             .where((slot) =>
@@ -94,6 +99,66 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       setState(() {
         availableSlots = [];
       });
+    }
+  }
+
+  // Check AcceptedBooking database for booked slots on this date
+  Future<void> _loadBookedSlotsForDate(DateTime date) async {
+    try {
+      final clinicId = widget.clinicId ?? widget.therapistId;
+      if (clinicId == null) return;
+
+      final Set<String> booked = {};
+      
+      // Get day of week for contract checking
+      final dayOfWeek = DateFormat('EEEE').format(date); // e.g., "Monday"
+
+      // Query AcceptedBooking collection
+      final snapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('clinicId', isEqualTo: clinicId)
+          .where('status', isEqualTo: 'confirmed')
+          .get();
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final originalRequestData = data['originalRequestData'];
+        final bookingProcessType = originalRequestData?['bookingProcessType'];
+
+        if (bookingProcessType == 'contract') {
+          // CONTRACT BOOKING - Check if it applies to this day of week
+          final contractInfo = originalRequestData?['contractInfo'];
+          final contractDayOfWeek = contractInfo?['dayOfWeek'];
+          final contractTime = contractInfo?['appointmentTime'];
+
+          if (contractDayOfWeek == dayOfWeek && contractTime != null) {
+            // This contract blocks this time slot every week
+            booked.add(contractTime);
+            print('🔶 Contract blocks $dayOfWeek at $contractTime');
+          }
+        } else {
+          // REGULAR BOOKING - Check if it's on this specific date
+          final appointmentDate = (data['appointmentDate'] as Timestamp?)?.toDate();
+          if (appointmentDate != null &&
+              appointmentDate.year == date.year &&
+              appointmentDate.month == date.month &&
+              appointmentDate.day == date.day) {
+            final time = data['appointmentTime'];
+            if (time != null) {
+              booked.add(time);
+              print('📅 Regular booking blocks ${DateFormat('MMM dd').format(date)} at $time');
+            }
+          }
+        }
+      }
+
+      setState(() {
+        bookedSlotIds = booked;
+      });
+
+      print('✅ Found ${booked.length} booked slots for ${DateFormat('MMM dd, yyyy').format(date)}');
+    } catch (e) {
+      print('❌ Error loading booked slots: $e');
     }
   }
 
@@ -411,16 +476,17 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
     final lastDayOfMonth =
         DateTime(currentMonth.year, currentMonth.month + 1, 0);
     final firstWeekday = firstDayOfMonth.weekday % 7;
+    final daysInMonth = lastDayOfMonth.day;
 
-    List<Widget> calendarItems = [];
+    List<Widget> calendarDays = [];
 
     // Empty cells for days before month starts
     for (int i = 0; i < firstWeekday; i++) {
-      calendarItems.add(Container(width: 30, height: 30));
+      calendarDays.add(const SizedBox(width: 30, height: 30));
     }
 
     // Days of the month
-    for (int day = 1; day <= lastDayOfMonth.day; day++) {
+    for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(currentMonth.year, currentMonth.month, day);
       final isSelected = selectedDate.year == date.year &&
           selectedDate.month == date.month &&
@@ -431,7 +497,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       final isPast =
           date.isBefore(DateTime.now().subtract(const Duration(days: 1)));
 
-      calendarItems.add(
+      calendarDays.add(
         GestureDetector(
           onTap: isPast
               ? null
@@ -471,9 +537,39 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       );
     }
 
-    return Wrap(
-      children: calendarItems,
+    // Build rows with exactly 7 days each
+    return Column(
+      children: [
+        for (int week = 0; week < 6; week++)
+          if (week * 7 < calendarDays.length)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: _getWeekDays(calendarDays, week),
+              ),
+            ),
+      ],
     );
+  }
+
+  // Helper method to get exactly 7 days for each week row
+  List<Widget> _getWeekDays(List<Widget> calendarDays, int week) {
+    final startIndex = week * 7;
+    final endIndex = startIndex + 7;
+    
+    List<Widget> weekDays = [];
+    
+    for (int i = startIndex; i < endIndex; i++) {
+      if (i < calendarDays.length) {
+        weekDays.add(calendarDays[i]);
+      } else {
+        // Add empty cell to fill the row
+        weekDays.add(const SizedBox(width: 30, height: 30));
+      }
+    }
+    
+    return weekDays;
   }
 
   Widget _buildSessionSection(String title, List<Map<String, dynamic>> slots) {
@@ -523,9 +619,12 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
     final timeDisplay = '$startTime - $endTime';
     final slotId = slot['slotId'] as String;
     final isSelected = selectedTimeSlot == slotId;
+    
+    // Check if this time slot is booked
+    final isBooked = bookedSlotIds.contains(timeDisplay);
 
     return GestureDetector(
-      onTap: () {
+      onTap: isBooked ? null : () {
         setState(() {
           selectedTimeSlot = isSelected ? null : slotId;
         });
@@ -533,9 +632,13 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF006A5B) : const Color(0xFF67AFA5),
+          color: isBooked 
+              ? Colors.grey.shade300 
+              : isSelected 
+                  ? const Color(0xFF004D40) // Darker green when selected
+                  : const Color(0xFF00897B), // Much greener color
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
+          boxShadow: isBooked ? [] : [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
               blurRadius: 5,
@@ -543,14 +646,29 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
             ),
           ],
         ),
-        child: Text(
-          timeDisplay,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            fontFamily: 'Poppins',
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isBooked)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Icon(
+                  Icons.lock,
+                  size: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            Text(
+              timeDisplay,
+              style: TextStyle(
+                color: isBooked ? Colors.grey.shade600 : Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Poppins',
+                decoration: isBooked ? TextDecoration.lineThrough : null,
+              ),
+            ),
+          ],
         ),
       ),
     );

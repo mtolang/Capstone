@@ -624,6 +624,22 @@ class BookingRequestService {
       acceptedBookingData['bookingType'] =
           requestData['bookingType'] ?? 'single_session';
 
+      // Transfer booking process type (for recurring/contract bookings)
+      acceptedBookingData['bookingProcessType'] =
+          requestData['bookingProcessType'] ??
+              requestData['requestType'] ??
+              'single';
+
+      // Transfer day of week for contract bookings
+      acceptedBookingData['dayOfWeek'] =
+          requestData['dayOfWeek'] ?? appointmentDetails['dayOfWeek'];
+
+      // Transfer contract dates if available
+      acceptedBookingData['contractStartDate'] =
+          requestData['contractStartDate'] ?? requestData['startDate'];
+      acceptedBookingData['contractEndDate'] =
+          requestData['contractEndDate'] ?? requestData['endDate'];
+
       // System Information
       acceptedBookingData['createdAt'] = FieldValue.serverTimestamp();
       acceptedBookingData['updatedAt'] = FieldValue.serverTimestamp();
