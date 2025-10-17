@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindora/helper/field_helper.dart';
+import 'package:kindora/screens/clinic/clinic_patient_progress_report.dart';
 
 class ClinicPatientListPage extends StatefulWidget {
   const ClinicPatientListPage({Key? key}) : super(key: key);
@@ -744,10 +745,10 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                                 child: ElevatedButton.icon(
                                   onPressed: () {
                                     Navigator.pop(context);
-                                    _showAddProgressForm(patient);
+                                    _navigateToProgressReport(patient);
                                   },
-                                  icon: const Icon(Icons.add_chart, size: 18),
-                                  label: const Text('Add Progress'),
+                                  icon: const Icon(Icons.assessment, size: 18),
+                                  label: const Text('Create OT Assessment'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF006A5B),
                                     foregroundColor: Colors.white,
@@ -878,11 +879,27 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
   }
 
   void _navigateToProgressReport(Map<String, dynamic> patient) {
-    // TODO: Navigate to progress report page
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening progress report for ${patient['childName']}'),
-        backgroundColor: const Color(0xFF006A5B),
+    // Navigate to new OT Assessment form
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClinicPatientProgressReport(
+          patientName: patient['childName'],
+          progressData: {
+            'patientId':
+                patient['id'] ?? patient['patientInfo']?['parentId'] ?? '',
+            'clinicId': _clinicId,
+            'childName': patient['childName'],
+            'parentName': patient['parentName'],
+            'age': patient['age']?.toString() ??
+                patient['patientInfo']?['childAge']?.toString() ??
+                '',
+            'gender': patient['patientInfo']?['childGender'] ??
+                patient['gender'] ??
+                '',
+            'contactNumber': patient['patientInfo']?['parentContact'] ?? '',
+          },
+        ),
       ),
     );
   }

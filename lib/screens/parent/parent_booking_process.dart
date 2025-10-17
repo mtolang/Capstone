@@ -120,135 +120,7 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                 ),
               ),
 
-              // Booking summary card
-              Container(
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Appointment Summary',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF006A5B),
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today,
-                            color: Color(0xFF67AFA5), size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          DateFormat('EEEE, MMMM dd, yyyy')
-                              .format(widget.selectedDate),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time,
-                            color: Color(0xFF67AFA5), size: 16),
-                        const SizedBox(width: 8),
-                        Text(
-                          widget.selectedTime,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Booking Type Information
-              Container(
-                margin: const EdgeInsets.all(20),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: widget.bookingProcessType == 'contract'
-                      ? const Color(0xFF006A5B).withOpacity(0.1)
-                      : Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: widget.bookingProcessType == 'contract'
-                        ? const Color(0xFF006A5B)
-                        : Colors.blue,
-                    width: 1,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          widget.bookingProcessType == 'contract'
-                              ? Icons.repeat
-                              : Icons.event_note,
-                          color: widget.bookingProcessType == 'contract'
-                              ? const Color(0xFF006A5B)
-                              : Colors.blue,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          widget.bookingProcessType == 'contract'
-                              ? 'Contract Booking'
-                              : 'Single Session Booking',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: widget.bookingProcessType == 'contract'
-                                ? const Color(0xFF006A5B)
-                                : Colors.blue,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.bookingProcessType == 'contract'
-                          ? 'This appointment will be reserved for you every ${DateFormat('EEEE').format(widget.selectedDate)} at ${widget.selectedTime} until you choose to end it.'
-                          : 'This is a one-time appointment booking.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: widget.bookingProcessType == 'contract'
-                            ? const Color(0xFF006A5B).withOpacity(0.8)
-                            : Colors.blue.withOpacity(0.8),
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Form content
+              // Form content - now includes all summary info
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -257,7 +129,134 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 10),
+
+                        // Booking summary card - now inside scrollable form
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Appointment Summary',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF006A5B),
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  const Icon(Icons.calendar_today,
+                                      color: Color(0xFF67AFA5), size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    DateFormat('EEEE, MMMM dd, yyyy')
+                                        .format(widget.selectedDate),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.access_time,
+                                      color: Color(0xFF67AFA5), size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.selectedTime,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Booking Type Information - now inside scrollable form
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: widget.bookingProcessType == 'contract'
+                                ? const Color(0xFF006A5B).withOpacity(0.1)
+                                : Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: widget.bookingProcessType == 'contract'
+                                  ? const Color(0xFF006A5B)
+                                  : Colors.blue,
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    widget.bookingProcessType == 'contract'
+                                        ? Icons.repeat
+                                        : Icons.event_note,
+                                    color: widget.bookingProcessType == 'contract'
+                                        ? const Color(0xFF006A5B)
+                                        : Colors.blue,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.bookingProcessType == 'contract'
+                                        ? 'Contract Booking'
+                                        : 'Single Session Booking',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: widget.bookingProcessType == 'contract'
+                                          ? const Color(0xFF006A5B)
+                                          : Colors.blue,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.bookingProcessType == 'contract'
+                                    ? 'This appointment will be reserved for you every ${DateFormat('EEEE').format(widget.selectedDate)} at ${widget.selectedTime} until you choose to end it.'
+                                    : 'This is a one-time appointment booking.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: widget.bookingProcessType == 'contract'
+                                      ? const Color(0xFF006A5B).withOpacity(0.8)
+                                      : Colors.blue.withOpacity(0.8),
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
                         // Parent Information Section
                         _buildSectionHeader('Parent Information'),
@@ -429,53 +428,49 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                           ),
                         ),
 
-                        const SizedBox(
-                            height: 100), // Space for floating button
+                        const SizedBox(height: 20),
+
+                        // Confirm button - now inside scroll view
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _confirmSchedule,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF006A5B),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                              elevation: 5,
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Confirm Schedule',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 30), // Bottom padding for keyboard
                       ],
                     ),
                   ),
                 ),
               ),
             ],
-          ),
-
-          // Floating Action Button
-          Positioned(
-            bottom: 30,
-            left: 20,
-            right: 20,
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _confirmSchedule,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF006A5B),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  elevation: 5,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Confirm Schedule',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-              ),
-            ),
           ),
         ],
       ),
