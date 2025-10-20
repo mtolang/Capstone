@@ -220,9 +220,10 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                                     widget.bookingProcessType == 'contract'
                                         ? Icons.repeat
                                         : Icons.event_note,
-                                    color: widget.bookingProcessType == 'contract'
-                                        ? const Color(0xFF006A5B)
-                                        : Colors.blue,
+                                    color:
+                                        widget.bookingProcessType == 'contract'
+                                            ? const Color(0xFF006A5B)
+                                            : Colors.blue,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
@@ -233,7 +234,8 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
-                                      color: widget.bookingProcessType == 'contract'
+                                      color: widget.bookingProcessType ==
+                                              'contract'
                                           ? const Color(0xFF006A5B)
                                           : Colors.blue,
                                       fontFamily: 'Poppins',
@@ -464,7 +466,8 @@ class _ParentBookingProcessPageState extends State<ParentBookingProcessPage> {
                           ),
                         ),
 
-                        const SizedBox(height: 30), // Bottom padding for keyboard
+                        const SizedBox(
+                            height: 30), // Bottom padding for keyboard
                       ],
                     ),
                   ),

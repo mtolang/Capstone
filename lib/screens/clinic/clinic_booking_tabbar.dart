@@ -96,31 +96,31 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
 
       for (var doc in querySnapshot.docs) {
         final data = doc.data();
-        
+
         // Check if this is a CONTRACT booking
         final originalRequestData = data['originalRequestData'];
         final bookingProcessType = originalRequestData?['bookingProcessType'];
-        
+
         if (bookingProcessType == 'contract') {
           // CONTRACT BOOKING - Generate recurring events for this month
           print('🔶 CONTRACT found: ${doc.id}');
-          
+
           final contractInfo = originalRequestData?['contractInfo'];
           if (contractInfo == null) {
             print('   ⚠️  No contractInfo');
             continue;
           }
-          
+
           final dayOfWeek = contractInfo['dayOfWeek']?.toString();
           final appointmentTime = contractInfo['appointmentTime']?.toString();
-          
+
           print('   Day: $dayOfWeek, Time: $appointmentTime');
-          
+
           if (dayOfWeek == null || appointmentTime == null) {
             print('   ⚠️  Missing data');
             continue;
           }
-          
+
           // Map day names to weekday numbers
           final dayMap = {
             'Monday': 1,
@@ -131,64 +131,68 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
             'Saturday': 6,
             'Sunday': 7,
           };
-          
+
           final targetWeekday = dayMap[dayOfWeek];
           if (targetWeekday == null) {
             print('   ⚠️  Unknown day: $dayOfWeek');
             continue;
           }
-          
+
           // Generate events for every matching day in THIS MONTH
-          final firstDayOfMonth = DateTime(_currentMonth.year, _currentMonth.month, 1);
-          final lastDayOfMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
-          
+          final firstDayOfMonth =
+              DateTime(_currentMonth.year, _currentMonth.month, 1);
+          final lastDayOfMonth =
+              DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
+
           DateTime currentDate = firstDayOfMonth;
           int eventsAdded = 0;
-          
-          while (currentDate.isBefore(lastDayOfMonth.add(const Duration(days: 1)))) {
+
+          while (currentDate
+              .isBefore(lastDayOfMonth.add(const Duration(days: 1)))) {
             if (currentDate.weekday == targetWeekday) {
               final dayOfMonth = currentDate.day;
-              
+
               final childInfo = originalRequestData['childInfo'];
               final appointmentInfo = {
                 'patientName': childInfo?['childName'] ?? 'Contract Client',
                 'appointmentTime': appointmentTime,
-                'appointmentType': contractInfo['appointmentType'] ?? 'Contract Session',
+                'appointmentType':
+                    contractInfo['appointmentType'] ?? 'Contract Session',
                 'isContract': true,
               };
-              
+
               if (groupedAppointments[dayOfMonth] == null) {
                 groupedAppointments[dayOfMonth] = [];
               }
               groupedAppointments[dayOfMonth]!.add(appointmentInfo);
               eventsAdded++;
             }
-            
+
             currentDate = currentDate.add(const Duration(days: 1));
           }
-          
+
           print('   ✅ Added $eventsAdded contract events for this month');
-          
         } else {
           // REGULAR ONE-TIME BOOKING
-          final appointmentDate = (data['appointmentDate'] as Timestamp?)?.toDate();
+          final appointmentDate =
+              (data['appointmentDate'] as Timestamp?)?.toDate();
           if (appointmentDate == null) continue;
-          
+
           // Check if this appointment is in the current month
           if (appointmentDate.year != _currentMonth.year ||
               appointmentDate.month != _currentMonth.month) {
             continue;
           }
-          
+
           final dayOfMonth = appointmentDate.day;
-          
+
           final appointmentInfo = {
             'patientName': data['childName'] ?? data['parentName'] ?? 'Unknown',
             'appointmentTime': data['appointmentTime'] ?? 'Time TBD',
             'appointmentType': data['appointmentType'] ?? 'Therapy Session',
             'isContract': false,
           };
-          
+
           if (groupedAppointments[dayOfMonth] == null) {
             groupedAppointments[dayOfMonth] = [];
           }
@@ -1769,9 +1773,9 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
   List<Widget> _getWeekDays(List<Widget> calendarDays, int week) {
     final startIndex = week * 7;
     final endIndex = startIndex + 7;
-    
+
     List<Widget> weekDays = [];
-    
+
     for (int i = startIndex; i < endIndex; i++) {
       if (i < calendarDays.length) {
         weekDays.add(calendarDays[i]);
@@ -1780,7 +1784,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
         weekDays.add(const SizedBox(width: 35, height: 45));
       }
     }
-    
+
     return weekDays;
   }
 

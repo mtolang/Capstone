@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../helper/field_helper.dart';
 import 'ther_edit_schedule.dart';
+import 'ther_setup_sched.dart';
 
 class TherapistSchedulePage extends StatefulWidget {
   const TherapistSchedulePage({Key? key}) : super(key: key);
@@ -122,10 +123,6 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white),
-            onPressed: _navigateToEditSchedule,
-          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _refreshData,
@@ -292,12 +289,12 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showScheduleOverview,
+        onPressed: _navigateToSetupSchedule,
         backgroundColor: const Color(0xFF006A5B),
-        icon: const Icon(Icons.analytics_outlined, color: Colors.white),
+        icon: const Icon(Icons.edit_calendar, color: Colors.white),
         label: const Text(
-          'Overview',
-          style: TextStyle(color: Colors.white),
+          'Edit Schedule',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -863,6 +860,20 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
       context,
       MaterialPageRoute(
         builder: (context) => const TherapistEditSchedulePage(),
+      ),
+    );
+
+    // Refresh data if schedule was updated
+    if (result == true) {
+      _refreshData();
+    }
+  }
+
+  void _navigateToSetupSchedule() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TherapistSetupSchedulePage(),
       ),
     );
 

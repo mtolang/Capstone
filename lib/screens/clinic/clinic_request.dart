@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ClinicRequestScreen extends StatefulWidget {
   const ClinicRequestScreen({Key? key}) : super(key: key);
@@ -10,8 +11,28 @@ class ClinicRequestScreen extends StatefulWidget {
 }
 
 class _ClinicRequestScreenState extends State<ClinicRequestScreen> {
-  DateTime currentWeek = DateTime.now();
-  String? selectedDay;
+  String? _clinicId;
+
+  @override
+  void initState() {
+    super.initState();
+    _getClinicId();
+  }
+
+  Future<void> _getClinicId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _clinicId = prefs.getString('clinic_id') ??
+          prefs.getString('user_id') ??
+          prefs.getString('therapist_id');
+      print('Clinic ID loaded: $_clinicId');
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error getting clinic ID: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +40,7 @@ class _ClinicRequestScreenState extends State<ClinicRequestScreen> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text(
-          'Booking Requests',
+          'Pending Requests',
           style: TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w600,
@@ -29,387 +50,108 @@ class _ClinicRequestScreenState extends State<ClinicRequestScreen> {
         backgroundColor: const Color(0xFF006A5B),
         elevation: 0,
         centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          _buildWeekNavigator(),
-          _buildWeekTable(),
-          const SizedBox(height: 16),
-          if (selectedDay != null) _buildDayRequestsList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeekNavigator() {
-    final weekStart = _getWeekStart(currentWeek);
-    final weekEnd = weekStart.add(const Duration(days: 6));
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF006A5B),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
+        actions: [
           IconButton(
+            icon: const Icon(Icons.history, color: Colors.white),
             onPressed: () {
-              setState(() {
-                currentWeek = currentWeek.subtract(const Duration(days: 7));
-                selectedDay = null;
-              });
-            },
-            icon: const Icon(Icons.chevron_left, color: Colors.white),
-          ),
-          Text(
-            '${DateFormat('MMM dd').format(weekStart)} - ${DateFormat('MMM dd, yyyy').format(weekEnd)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Poppins',
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                currentWeek = currentWeek.add(const Duration(days: 7));
-                selectedDay = null;
-              });
-            },
-            icon: const Icon(Icons.chevron_right, color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeekTable() {
-    final weekStart = _getWeekStart(currentWeek);
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Header row
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: const BoxDecoration(
-              color: Color(0xFF006A5B),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-            ),
-            child: Row(
-              children: days
-                  .map((day) => Expanded(
-                        child: Center(
-                          child: Text(
-                            day,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ),
-          // Data rows
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('Request')
-                .where('appointmentDetails.requestedDate',
-                    isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
-                .where('appointmentDetails.requestedDate',
-                    isLessThan: Timestamp.fromDate(
-                        weekStart.add(const Duration(days: 7))))
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF006A5B),
-                    ),
+              if (_clinicId != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        RequestHistoryScreen(clinicId: _clinicId!),
                   ),
                 );
               }
-
-              final requests = snapshot.data?.docs ?? [];
-
-              // Group requests by day
-              final Map<String, List<QueryDocumentSnapshot>> requestsByDay = {};
-              for (final request in requests) {
-                final data = request.data() as Map<String, dynamic>;
-                final appointmentDetails =
-                    data['appointmentDetails'] as Map<String, dynamic>? ?? {};
-                final appointmentTimestamp =
-                    appointmentDetails['requestedDate'] as Timestamp?;
-
-                if (appointmentTimestamp != null) {
-                  final appointmentDate = appointmentTimestamp.toDate();
-                  final dayKey =
-                      DateFormat('yyyy-MM-dd').format(appointmentDate);
-
-                  if (!requestsByDay.containsKey(dayKey)) {
-                    requestsByDay[dayKey] = [];
-                  }
-                  requestsByDay[dayKey]!.add(request);
-                }
-              }
-
-              return Container(
-                height: 120,
-                child: Row(
-                  children: List.generate(7, (index) {
-                    final date = weekStart.add(Duration(days: index));
-                    final dayKey = DateFormat('yyyy-MM-dd').format(date);
-                    final dayRequests = requestsByDay[dayKey] ?? [];
-                    final isSelected = selectedDay == dayKey;
-
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            selectedDay = selectedDay == dayKey ? null : dayKey;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFF006A5B).withOpacity(0.1)
-                                : dayRequests.isNotEmpty
-                                    ? Colors.blue.withOpacity(0.05)
-                                    : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xFF006A5B)
-                                  : dayRequests.isNotEmpty
-                                      ? Colors.blue.withOpacity(0.3)
-                                      : Colors.transparent,
-                              width: isSelected ? 2 : 1,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '${date.day}',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected
-                                        ? const Color(0xFF006A5B)
-                                        : Colors.black87,
-                                    fontFamily: 'Poppins',
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: dayRequests.isNotEmpty
-                                        ? const Color(0xFF006A5B)
-                                        : Colors.grey[300],
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '${dayRequests.length}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: dayRequests.isNotEmpty
-                                          ? Colors.white
-                                          : Colors.grey[600],
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                                ),
-                                if (dayRequests.isNotEmpty)
-                                  const SizedBox(height: 4),
-                                if (dayRequests.isNotEmpty)
-                                  const Text(
-                                    'requests',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey,
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-              );
             },
+            tooltip: 'View History',
           ),
         ],
       ),
+      body: _buildPendingRequestsList(),
     );
   }
 
-  Widget _buildDayRequestsList() {
-    final selectedDate = DateTime.parse(selectedDay!);
-    final dayName = DateFormat('EEEE, MMMM dd, yyyy').format(selectedDate);
-
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+  Widget _buildPendingRequestsList() {
+    if (_clinicId == null) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF006A5B),
         ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                color: Color(0xFF006A5B),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              child: Row(
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('Request')
+          .where('serviceProvider.clinicId', isEqualTo: _clinicId)
+          .where('status', isEqualTo: 'pending')
+          .orderBy('appointmentDetails.requestedDate', descending: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFF006A5B),
+            ),
+          );
+        }
+
+        final requests = snapshot.data?.docs ?? [];
+
+        if (requests.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.calendar_today, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      dayName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
-                      ),
+                  Icon(
+                    Icons.inbox_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No Pending Requests',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[600],
+                      fontFamily: 'Poppins',
                     ),
                   ),
-                  IconButton(
-                    onPressed: () {
-                      setState(() {
-                        selectedDay = null;
-                      });
-                    },
-                    icon: const Icon(Icons.close, color: Colors.white),
+                  const SizedBox(height: 8),
+                  Text(
+                    'All caught up! Check history for past requests.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                      fontFamily: 'Poppins',
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('Request')
-                    .where('appointmentDetails.requestedDate',
-                        isGreaterThanOrEqualTo:
-                            Timestamp.fromDate(selectedDate))
-                    .where('appointmentDetails.requestedDate',
-                        isLessThan: Timestamp.fromDate(
-                            selectedDate.add(const Duration(days: 1))))
-                    .orderBy('appointmentDetails.requestedTime')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF006A5B),
-                      ),
-                    );
-                  }
+          );
+        }
 
-                  final requests = snapshot.data?.docs ?? [];
-
-                  if (requests.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.event_busy,
-                              size: 48,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No requests for this day',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: requests.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final request = requests[index];
-                      final data = request.data() as Map<String, dynamic>;
-                      return _buildDayRequestCard(request.id, data);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: requests.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final request = requests[index];
+            final data = request.data() as Map<String, dynamic>;
+            return _buildRequestCard(request.id, data);
+          },
+        );
+      },
     );
   }
 
-  Widget _buildDayRequestCard(String requestId, Map<String, dynamic> data) {
+  Widget _buildRequestCard(String requestId, Map<String, dynamic> data) {
     final parentInfo = data['parentInfo'] as Map<String, dynamic>? ?? {};
     final childInfo = data['childInfo'] as Map<String, dynamic>? ?? {};
     final appointmentDetails =
@@ -419,106 +161,446 @@ class _ClinicRequestScreenState extends State<ClinicRequestScreen> {
     final childName = childInfo['childName'] ?? 'Unknown Child';
     final appointmentTime = appointmentDetails['requestedTime'] ?? 'TBD';
     final appointmentType = appointmentDetails['appointmentType'] ?? 'Therapy';
-    final status = data['status'] ?? 'pending';
+    final appointmentDate = appointmentDetails['requestedDate'] as Timestamp?;
+    final dateStr = appointmentDate != null
+        ? DateFormat('MMM dd, yyyy').format(appointmentDate.toDate())
+        : 'Date TBD';
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: status == 'pending'
-              ? Colors.orange.withOpacity(0.3)
-              : status == 'approved'
-                  ? Colors.green.withOpacity(0.3)
-                  : Colors.red.withOpacity(0.3),
+          color: Colors.orange.withOpacity(0.3),
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: const Color(0xFF006A5B),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                appointmentTime.split(' ')[0], // Show just the time part
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  fontFamily: 'Poppins',
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  parentName,
-                  style: const TextStyle(
-                    fontSize: 16,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.pending_actions,
+                  color: Colors.orange,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      parentName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    Text(
+                      'Child: $childName',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'PENDING',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.orange,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Poppins',
                   ),
                 ),
-                Text(
-                  'for $childName',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF67AFA5),
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                Text(
-                  appointmentType,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: status == 'pending'
-                  ? Colors.orange.withOpacity(0.1)
-                  : status == 'approved'
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              status.toUpperCase(),
-              style: TextStyle(
-                fontSize: 10,
-                color: status == 'pending'
-                    ? Colors.orange
-                    : status == 'approved'
-                        ? Colors.green
-                        : Colors.red,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
               ),
-            ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                dateStr,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Icon(Icons.access_time, size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                appointmentTime,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.medical_services_outlined,
+                  size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                appointmentType,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
 
-  DateTime _getWeekStart(DateTime date) {
-    final weekday = date.weekday;
-    return date.subtract(Duration(days: weekday - 1));
+// History Screen
+class RequestHistoryScreen extends StatefulWidget {
+  final String clinicId;
+
+  const RequestHistoryScreen({Key? key, required this.clinicId})
+      : super(key: key);
+
+  @override
+  State<RequestHistoryScreen> createState() => _RequestHistoryScreenState();
+}
+
+class _RequestHistoryScreenState extends State<RequestHistoryScreen> {
+  String _selectedFilter = 'all'; // all, approved, declined
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text(
+          'Request History',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: const Color(0xFF006A5B),
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Column(
+        children: [
+          _buildFilterChips(),
+          Expanded(child: _buildHistoryList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.white,
+      child: Row(
+        children: [
+          _buildFilterChip('All', 'all'),
+          const SizedBox(width: 8),
+          _buildFilterChip('Approved', 'approved'),
+          const SizedBox(width: 8),
+          _buildFilterChip('Declined', 'declined'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _selectedFilter == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedFilter = value;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF006A5B) : Colors.grey[200],
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey[700],
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Poppins',
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryList() {
+    Query query = FirebaseFirestore.instance
+        .collection('Request')
+        .where('serviceProvider.clinicId', isEqualTo: widget.clinicId);
+
+    if (_selectedFilter == 'approved') {
+      query = query.where('status', isEqualTo: 'approved');
+    } else if (_selectedFilter == 'declined') {
+      query = query.where('status', isEqualTo: 'declined');
+    } else {
+      query = query.where('status', whereIn: ['approved', 'declined']);
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: query
+          .orderBy('appointmentDetails.requestedDate', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFF006A5B),
+            ),
+          );
+        }
+
+        final requests = snapshot.data?.docs ?? [];
+
+        if (requests.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.history_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No History',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[600],
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No ${_selectedFilter == 'all' ? '' : _selectedFilter} requests found.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                      fontFamily: 'Poppins',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: requests.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final request = requests[index];
+            final data = request.data() as Map<String, dynamic>;
+            return _buildHistoryCard(data);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildHistoryCard(Map<String, dynamic> data) {
+    final parentInfo = data['parentInfo'] as Map<String, dynamic>? ?? {};
+    final childInfo = data['childInfo'] as Map<String, dynamic>? ?? {};
+    final appointmentDetails =
+        data['appointmentDetails'] as Map<String, dynamic>? ?? {};
+    final status = data['status'] ?? 'unknown';
+
+    final parentName = parentInfo['parentName'] ?? 'Unknown Parent';
+    final childName = childInfo['childName'] ?? 'Unknown Child';
+    final appointmentTime = appointmentDetails['requestedTime'] ?? 'TBD';
+    final appointmentType = appointmentDetails['appointmentType'] ?? 'Therapy';
+    final appointmentDate = appointmentDetails['requestedDate'] as Timestamp?;
+    final dateStr = appointmentDate != null
+        ? DateFormat('MMM dd, yyyy').format(appointmentDate.toDate())
+        : 'Date TBD';
+
+    final isApproved = status == 'approved';
+    final statusColor = isApproved ? Colors.green : Colors.red;
+    final statusIcon = isApproved ? Icons.check_circle : Icons.cancel;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: statusColor.withOpacity(0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  statusIcon,
+                  color: statusColor,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      parentName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    Text(
+                      'Child: $childName',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                dateStr,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Icon(Icons.access_time, size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                appointmentTime,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.medical_services_outlined,
+                  size: 16, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                appointmentType,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

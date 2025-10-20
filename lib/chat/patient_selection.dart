@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindora/helper/clinic_auth.dart';
+import 'package:kindora/helper/therapist_auth.dart';
 
 class PatientSelectionPage extends StatefulWidget {
   const PatientSelectionPage({super.key});
@@ -15,7 +16,8 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   List<PatientMessage> _allPatients = [];
   List<PatientMessage> _filteredPatients = [];
 
-  String _clinicId = 'CLI01'; // Default fallback
+  String _currentUserId = 'CLI01'; // Default fallback
+  String _userType = 'clinic'; // 'clinic' or 'therapist'
 
   @override
   void initState() {
@@ -23,53 +25,84 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
     _loadUserIdFromStorage();
   }
 
-  // Load current user ID from SharedPreferences
+  // Load current user ID from SharedPreferences (support both clinic and therapist)
   Future<void> _loadUserIdFromStorage() async {
     try {
-      // Use ClinicAuthService to check authentication
-      final isLoggedIn = await ClinicAuthService.isLoggedIn;
-      final clinicId = await ClinicAuthService.getStoredClinicId();
-
       final prefs = await SharedPreferences.getInstance();
       final userType = prefs.getString('user_type');
       final storedIsLoggedIn = prefs.getBool('is_logged_in');
 
-      print('PatientSelection: Debug clinic auth state:');
-      print('  clinic_id from ClinicAuthService: $clinicId');
-      print('  isLoggedIn from ClinicAuthService: $isLoggedIn');
+      print('PatientSelection: Debug auth state:');
       print('  user_type from prefs: $userType');
       print('  is_logged_in from prefs: $storedIsLoggedIn');
 
-      if (clinicId != null && isLoggedIn && userType == 'clinic') {
-        setState(() {
-          _clinicId = clinicId;
-        });
-        print('PatientSelection: Using validated clinic ID: $_clinicId');
-        // Load patients after getting the correct clinic ID
-        _loadPatients();
-      } else {
-        print('PatientSelection: No valid clinic authentication found');
-        print('PatientSelection: User might need to log in as clinic');
-        // Show a message that user needs to log in
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('Please log in as a clinic to view patient messages'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+      if (userType == 'clinic') {
+        // Load clinic authentication
+        final isLoggedIn = await ClinicAuthService.isLoggedIn;
+        final clinicId = await ClinicAuthService.getStoredClinicId();
+
+        print('  clinic_id from ClinicAuthService: $clinicId');
+        print('  isLoggedIn from ClinicAuthService: $isLoggedIn');
+
+        if (clinicId != null && isLoggedIn) {
+          setState(() {
+            _currentUserId = clinicId;
+            _userType = 'clinic';
+          });
+          print('PatientSelection: Using validated clinic ID: $_currentUserId');
+          _loadPatients();
+        } else {
+          print('PatientSelection: No valid clinic authentication found');
+          _showAuthWarning('clinic');
+          print('PatientSelection: Using default clinic ID: $_currentUserId');
+          _loadPatients();
         }
-        // Still load with default ID for testing
-        print('PatientSelection: Using default clinic ID: $_clinicId');
+      } else if (userType == 'therapist') {
+        // Load therapist authentication
+        final isLoggedIn = await TherapistAuthService.isLoggedIn;
+        final therapistId = await TherapistAuthService.getStoredTherapistId();
+
+        print('  therapist_id from TherapistAuthService: $therapistId');
+        print('  isLoggedIn from TherapistAuthService: $isLoggedIn');
+
+        if (therapistId != null && isLoggedIn) {
+          setState(() {
+            _currentUserId = therapistId;
+            _userType = 'therapist';
+          });
+          print(
+              'PatientSelection: Using validated therapist ID: $_currentUserId');
+          _loadPatients();
+        } else {
+          print('PatientSelection: No valid therapist authentication found');
+          _showAuthWarning('therapist');
+          print(
+              'PatientSelection: Using default therapist ID: $_currentUserId');
+          _loadPatients();
+        }
+      } else {
+        print('PatientSelection: Unknown user type, defaulting to clinic');
+        _showAuthWarning('clinic or therapist');
         _loadPatients();
       }
       _filteredPatients = _allPatients;
     } catch (e) {
-      print('PatientSelection: Error loading clinic ID: $e');
+      print('PatientSelection: Error loading user ID: $e');
       // Keep default fallback value and load patients
       _loadPatients();
       _filteredPatients = _allPatients;
+    }
+  }
+
+  void _showAuthWarning(String userType) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Please log in as a $userType to view patient messages'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -77,19 +110,19 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
     // Load conversations from Firestore Message collection
     try {
       print(
-          'PatientSelection: Loading conversations for clinic ID: $_clinicId');
+          'PatientSelection: Loading conversations for $_userType ID: $_currentUserId');
 
       // Check Firebase connection
       print('PatientSelection: Checking Firebase connection...');
 
       final messagesSnapshot = await FirebaseFirestore.instance
           .collection('Message')
-          .where('fromId', isEqualTo: _clinicId)
+          .where('fromId', isEqualTo: _currentUserId)
           .get();
 
       final receivedSnapshot = await FirebaseFirestore.instance
           .collection('Message')
-          .where('toId', isEqualTo: _clinicId)
+          .where('toId', isEqualTo: _currentUserId)
           .get();
 
       print('PatientSelection: Firebase query results:');
@@ -135,10 +168,10 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
         final message = data['message']?.toString() ?? '';
         final timestamp = data['timestamp'];
 
-        // Determine the other party (not the current clinic)
-        final otherPartyId = fromId == _clinicId ? toId : fromId;
+        // Determine the other party (not the current user)
+        final otherPartyId = fromId == _currentUserId ? toId : fromId;
 
-        if (otherPartyId.isNotEmpty && otherPartyId != _clinicId) {
+        if (otherPartyId.isNotEmpty && otherPartyId != _currentUserId) {
           // Only keep the latest message for each contact
           if (!uniqueContacts.containsKey(otherPartyId) ||
               (timestamp != null &&
@@ -150,7 +183,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
               'id': otherPartyId,
               'lastMessage': message,
               'timestamp': timestamp,
-              'isFromMe': fromId == _clinicId,
+              'isFromMe': fromId == _currentUserId,
             };
           }
         }

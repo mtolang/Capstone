@@ -1217,3 +1217,538 @@ class _EmbeddedVideoPlayerState extends State<EmbeddedVideoPlayer> {
     }
   }
 }
+
+// Content-only version (no AppBar, Drawer, or TabBar)
+class MaterialsPageContent extends StatefulWidget {
+  const MaterialsPageContent({super.key});
+
+  @override
+  State<MaterialsPageContent> createState() => _MaterialsPageContentState();
+}
+
+class _MaterialsPageContentState extends State<MaterialsPageContent> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _selectedCategory = 'All';
+
+  static const String _youtubeApiKey =
+      'AIzaSyDQaMiBpfKXc5JlPckBYtQRRkLmrdRv0jo';
+  static const String _youtubeBaseUrl =
+      'https://www.googleapis.com/youtube/v3/search';
+  List<Map<String, dynamic>> _youtubeVideos = [];
+  bool _loadingYouTubeVideos = false;
+
+  final List<String> _therapyCategories = [
+    'All',
+    'Speech Therapy',
+    'Occupational Therapy',
+    'Physical Therapy',
+    'Behavioral Therapy',
+    'Play Therapy',
+    'Sensory Integration',
+    'Social Skills',
+    'Communication',
+    'Motor Skills',
+  ];
+
+  final List<Map<String, dynamic>> materials = [
+    {
+      'title': 'Learning to Read',
+      'description':
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
+      'image': 'asset/images/tiny.png',
+      'color': const Color(0xFF67AFA5),
+    },
+    {
+      'title': 'Motor Skills',
+      'description':
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
+      'image': 'asset/images/tiny.png',
+      'color': const Color(0xFFE8A87C),
+    },
+    {
+      'title': 'Speech Therapy',
+      'description':
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
+      'image': 'asset/images/tiny.png',
+      'color': const Color(0xFFFFA07A),
+    },
+    {
+      'title': 'Math Skills',
+      'description':
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
+      'image': 'asset/images/tiny.png',
+      'color': const Color(0xFF87CEEB),
+    },
+    {
+      'title': 'Phonics Lessons',
+      'description':
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
+      'image': 'asset/images/tiny.png',
+      'color': const Color(0xFF98FB98),
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchYouTubeVideos();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchYouTubeVideos() async {
+    setState(() {
+      _loadingYouTubeVideos = true;
+    });
+
+    try {
+      String searchQuery = 'child development therapy';
+      if (_selectedCategory != 'All') {
+        searchQuery = '$_selectedCategory child development therapy';
+      }
+
+      final response = await http.get(
+        Uri.parse(
+          '$_youtubeBaseUrl?part=snippet&q=${Uri.encodeComponent(searchQuery)}&type=video&maxResults=3&key=$_youtubeApiKey',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data['items'] != null && data['items'].isNotEmpty) {
+          setState(() {
+            _youtubeVideos = List<Map<String, dynamic>>.from(
+              data['items'].map((item) => {
+                    'id': item['id']['videoId'],
+                    'title': item['snippet']['title'],
+                    'description': item['snippet']['description'],
+                    'thumbnail': item['snippet']['thumbnails']['high']['url'],
+                    'channelTitle': item['snippet']['channelTitle'],
+                    'publishedAt': item['snippet']['publishedAt'],
+                  }),
+            );
+            _loadingYouTubeVideos = false;
+          });
+        } else {
+          _loadSampleYouTubeVideos();
+        }
+      } else {
+        _loadSampleYouTubeVideos();
+      }
+    } catch (e) {
+      print('YouTube API Exception: $e');
+      _loadSampleYouTubeVideos();
+    }
+  }
+
+  void _loadSampleYouTubeVideos() {
+    setState(() {
+      _youtubeVideos = [
+        {
+          'id': 'sample1',
+          'title': 'Child Development Therapy Techniques',
+          'description':
+              'Learn effective therapy techniques for child development',
+          'thumbnail':
+              'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'channelTitle': 'Therapy Channel',
+          'publishedAt': '2024-01-01T00:00:00Z',
+        },
+        {
+          'id': 'sample2',
+          'title': 'Speech Therapy for Children',
+          'description': 'Professional speech therapy methods and exercises',
+          'thumbnail':
+              'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'channelTitle': 'Speech Therapy Pro',
+          'publishedAt': '2024-01-01T00:00:00Z',
+        },
+        {
+          'id': 'sample3',
+          'title': 'Occupational Therapy Activities',
+          'description':
+              'Fun and effective occupational therapy activities for kids',
+          'thumbnail':
+              'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'channelTitle': 'OT for Kids',
+          'publishedAt': '2024-01-01T00:00:00Z',
+        },
+      ];
+      _loadingYouTubeVideos = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Size mq = MediaQuery.of(context).size;
+
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: ConstrainedBox(
+            constraints: BoxConstraints.expand(height: mq.height * 0.30),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                ),
+              ),
+              child: Image.asset(
+                'asset/images/Ellipse 1.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container();
+                },
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: ConstrainedBox(
+            constraints: BoxConstraints.expand(height: mq.height * 0.3),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Color(0xFF67AFA5), Colors.white],
+                ),
+              ),
+              child: Image.asset(
+                'asset/images/Ellipse 2.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container();
+                },
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: CustomScrollView(
+            slivers: <Widget>[
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 20),
+              ),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Learning Materials',
+                    style: TextStyle(
+                      color: Color(0xFF67AFA5),
+                      fontSize: 24,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w900,
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20.0),
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.5),
+                        spreadRadius: 2,
+                        blurRadius: 5,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value.toLowerCase();
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search materials...',
+                      border: InputBorder.none,
+                      suffixIcon: IconButton(
+                        icon: const Icon(
+                          Icons.search,
+                          color: Color(0xFF67AFA5),
+                        ),
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 20),
+              ),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Text(
+                    'Therapy Videos',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 10),
+              ),
+              _buildYouTubeVideos(),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 20),
+              ),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Text(
+                    'Educational Resources',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 10),
+              ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final material = materials[index];
+                    if (_searchQuery.isNotEmpty &&
+                        !material['title']
+                            .toLowerCase()
+                            .contains(_searchQuery)) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 8.0),
+                      child: GestureDetector(
+                        onTap: () => _openMaterialViewer(material['title']),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: material['color'].withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: material['color'],
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.asset(
+                                  material['image'],
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      width: 60,
+                                      height: 60,
+                                      color: material['color'],
+                                      child: const Icon(
+                                        Icons.book,
+                                        color: Colors.white,
+                                        size: 30,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      material['title'],
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: material['color'],
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      material['description'],
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                color: material['color'],
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: materials.length,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildYouTubeVideos() {
+    if (_loadingYouTubeVideos) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: CircularProgressIndicator(
+              color: Color(0xFF006A5B),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_youtubeVideos.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Text(
+              'No videos available',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final filteredVideos = _youtubeVideos.take(3).toList();
+
+    return SliverToBoxAdapter(
+      child: Container(
+        height: 200,
+        margin: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: filteredVideos.length,
+          itemBuilder: (context, index) {
+            final video = filteredVideos[index];
+            return Container(
+              width: 300,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.3),
+                    spreadRadius: 2,
+                    blurRadius: 5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Image.network(
+                        video['thumbnail'],
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: const Color(0xFF67AFA5),
+                            child: const Center(
+                              child: Icon(
+                                Icons.play_circle_outline,
+                                size: 50,
+                                color: Colors.white,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        video['title'],
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openMaterialViewer(String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MaterialViewer(materialTitle: title),
+      ),
+    );
+  }
+}

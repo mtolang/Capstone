@@ -62,6 +62,15 @@ class TherapistNavbar extends StatelessWidget {
             isSelected: currentPage == 'booking',
           ),
 
+          // Schedule
+          _buildNavItem(
+            context,
+            icon: Icons.calendar_month,
+            title: 'Schedule',
+            routeName: '/therapistschedule',
+            isSelected: currentPage == 'schedule',
+          ),
+
           // Materials
           _buildNavItem(
             context,

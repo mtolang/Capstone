@@ -27,13 +27,15 @@ import 'package:kindora/screens/registration/clinic_reg.dart';
 import 'package:kindora/screens/registration/parent_reg.dart';
 import 'package:kindora/screens/registration/therapist_reg.dart';
 //parent page imports
-import 'package:kindora/screens/parent/dashboard.dart';
-import 'package:kindora/screens/parent/ther_dash.dart';
-import 'package:kindora/screens/parent/materials.dart';
+import 'package:kindora/screens/parent/dashboard_tabbar.dart';
+import 'package:kindora/screens/parent/dashboard.dart'; // Keep for legacy routes
+import 'package:kindora/screens/parent/ther_dash.dart'; // Keep for legacy routes
+import 'package:kindora/screens/parent/materials.dart'; // Keep for legacy routes
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
 import 'package:kindora/screens/parent/games/cognitive_pattern_master.dart';
 import 'package:kindora/screens/parent/parent_schedule.dart';
+import 'package:kindora/screens/parent/parent_journal.dart';
 //therapist page imports
 import 'package:kindora/screens/therapist/ther_profile.dart';
 import 'package:kindora/screens/therapist/ther_gallery.dart';
@@ -41,6 +43,8 @@ import 'package:kindora/screens/therapist/ther_review.dart';
 import 'package:kindora/screens/therapist/ther_progress.dart';
 import 'package:kindora/screens/therapist/ther_chat_list.dart';
 import 'package:kindora/screens/therapist/ther_patient_selection.dart';
+import 'package:kindora/screens/therapist/ther_schedule.dart';
+import 'package:kindora/screens/therapist/ther_setup_sched.dart';
 //clinic page imports
 import 'package:kindora/screens/clinic/clinic_gallery.dart';
 import 'package:kindora/screens/clinic/clinic_profile.dart';
@@ -243,14 +247,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/therapistreg': (context) => const TherapistRegister(),
 
             //Parent Page Routes
-            '/parentdashboard': (context) => const Dashboard(),
-            '/therdashboard': (context) => const TherapistsDashboard(),
-            '/materials': (context) => const MaterialsPage(),
+            '/parentdashboard': (context) => const DashTab(initialSelectedIndex: 0), // Clinics tab
+            '/therdashboard': (context) => const DashTab(initialSelectedIndex: 1), // Therapists tab
+            '/materials': (context) => const DashTab(initialSelectedIndex: 2), // Materials tab
             '/gamesoption': (context) => const GamesOption(),
             '/talkwithtiles': (context) => const TalkWithTilesGame(),
             '/shapeshifters': (context) => const PatternMasterApp(),
             '/cognitivepatternmaster': (context) => const PatternMasterApp(),
             '/parentschedule': (context) => const ParentSchedulePage(),
+            '/parentjournal': (context) => const ParentJournalPage(),
 
             //Therapist Page Routes
             '/therapistprofile': (context) => const TherapistProfile(),
@@ -262,6 +267,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/therapistgallery': (context) => const TherapistGallery(),
             '/therapistreview': (context) => const TherapistReview(),
             '/therapistprogress': (context) => const TherProgress(),
+            '/therapistschedule': (context) => const TherapistSchedulePage(),
+            '/therapistsetupschedule': (context) => const TherapistSetupSchedulePage(),
             '/therapistpatients': (context) =>
                 const _ComingSoonPage(title: 'Patient List'),
             '/therapiststaff': (context) =>

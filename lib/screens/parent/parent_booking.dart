@@ -41,6 +41,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       });
 
       // Use therapistId if provided, otherwise use clinicId
+      // For therapists, we need to query the schedules collection using ther_id field
       String scheduleId = widget.therapistId ?? widget.clinicId ?? 'CLI01';
 
       final schedule = await ScheduleDatabaseService.loadSchedule(scheduleId);
@@ -105,29 +106,42 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
   // Check AcceptedBooking database for booked slots on this date
   Future<void> _loadBookedSlotsForDate(DateTime date) async {
     try {
-      final clinicId = widget.clinicId ?? widget.therapistId;
-      if (clinicId == null) return;
-
       final Set<String> booked = {};
-      
+
       // Get day of week for contract checking
       final dayOfWeek = DateFormat('EEEE').format(date); // e.g., "Monday"
 
-      // Query AcceptedBooking collection
-      final snapshot = await FirebaseFirestore.instance
-          .collection('AcceptedBooking')
-          .where('clinicId', isEqualTo: clinicId)
-          .where('status', isEqualTo: 'confirmed')
-          .get();
+      // Query AcceptedBooking collection based on whether it's clinic or therapist
+      QuerySnapshot snapshot;
+      
+      if (widget.therapistId != null) {
+        // For therapists, query using serviceProvider.therapistId
+        snapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('serviceProvider.therapistId', isEqualTo: widget.therapistId)
+            .where('status', isEqualTo: 'confirmed')
+            .get();
+      } else if (widget.clinicId != null) {
+        // For clinics, query using clinicId
+        snapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('clinicId', isEqualTo: widget.clinicId)
+            .where('status', isEqualTo: 'confirmed')
+            .get();
+      } else {
+        return;
+      }
 
       for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final originalRequestData = data['originalRequestData'];
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) continue;
+        
+        final originalRequestData = data['originalRequestData'] as Map<String, dynamic>?;
         final bookingProcessType = originalRequestData?['bookingProcessType'];
 
         if (bookingProcessType == 'contract') {
           // CONTRACT BOOKING - Check if it applies to this day of week
-          final contractInfo = originalRequestData?['contractInfo'];
+          final contractInfo = originalRequestData?['contractInfo'] as Map<String, dynamic>?;
           final contractDayOfWeek = contractInfo?['dayOfWeek'];
           final contractTime = contractInfo?['appointmentTime'];
 
@@ -138,7 +152,8 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
           }
         } else {
           // REGULAR BOOKING - Check if it's on this specific date
-          final appointmentDate = (data['appointmentDate'] as Timestamp?)?.toDate();
+          final appointmentDate =
+              (data['appointmentDate'] as Timestamp?)?.toDate();
           if (appointmentDate != null &&
               appointmentDate.year == date.year &&
               appointmentDate.month == date.month &&
@@ -146,7 +161,8 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
             final time = data['appointmentTime'];
             if (time != null) {
               booked.add(time);
-              print('📅 Regular booking blocks ${DateFormat('MMM dd').format(date)} at $time');
+              print(
+                  '📅 Regular booking blocks ${DateFormat('MMM dd').format(date)} at $time');
             }
           }
         }
@@ -156,7 +172,8 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
         bookedSlotIds = booked;
       });
 
-      print('✅ Found ${booked.length} booked slots for ${DateFormat('MMM dd, yyyy').format(date)}');
+      print(
+          '✅ Found ${booked.length} booked slots for ${DateFormat('MMM dd, yyyy').format(date)}');
     } catch (e) {
       print('❌ Error loading booked slots: $e');
     }
@@ -557,9 +574,9 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
   List<Widget> _getWeekDays(List<Widget> calendarDays, int week) {
     final startIndex = week * 7;
     final endIndex = startIndex + 7;
-    
+
     List<Widget> weekDays = [];
-    
+
     for (int i = startIndex; i < endIndex; i++) {
       if (i < calendarDays.length) {
         weekDays.add(calendarDays[i]);
@@ -568,7 +585,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
         weekDays.add(const SizedBox(width: 30, height: 30));
       }
     }
-    
+
     return weekDays;
   }
 
@@ -619,32 +636,36 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
     final timeDisplay = '$startTime - $endTime';
     final slotId = slot['slotId'] as String;
     final isSelected = selectedTimeSlot == slotId;
-    
+
     // Check if this time slot is booked
     final isBooked = bookedSlotIds.contains(timeDisplay);
 
     return GestureDetector(
-      onTap: isBooked ? null : () {
-        setState(() {
-          selectedTimeSlot = isSelected ? null : slotId;
-        });
-      },
+      onTap: isBooked
+          ? null
+          : () {
+              setState(() {
+                selectedTimeSlot = isSelected ? null : slotId;
+              });
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: isBooked 
-              ? Colors.grey.shade300 
-              : isSelected 
+          color: isBooked
+              ? Colors.grey.shade300
+              : isSelected
                   ? const Color(0xFF004D40) // Darker green when selected
                   : const Color(0xFF00897B), // Much greener color
           borderRadius: BorderRadius.circular(20),
-          boxShadow: isBooked ? [] : [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: isBooked
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

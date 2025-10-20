@@ -120,11 +120,7 @@ class ParentNavbar extends StatelessWidget {
             ),
             onTap: () {
               Navigator.pop(context);
-              // Direct navigation instead of named route
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const MaterialsPage()),
-              );
+              Navigator.pushNamed(context, '/materials');
             },
           ),
           ListTile(
@@ -199,10 +195,7 @@ class ParentNavbar extends StatelessWidget {
             ),
             onTap: () {
               Navigator.pop(context);
-              print('Journal tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Journal selected')),
-              );
+              Navigator.pushNamed(context, '/parentjournal');
             },
           ),
           ListTile(

@@ -80,115 +80,64 @@ class _ClinicProgressState extends State<ClinicProgress> {
       print('🚀 Starting data loading with clinic ID: $clinicId');
       final startTime = DateTime.now();
 
-      // TEMPORARY: Load all documents first to debug field names
-      print('🔍 Loading ALL documents to debug field structure...');
+      // Load AcceptedBooking and OTAssessments collections
+      print('🔍 Loading AcceptedBooking and OTAssessments...');
 
       final futures = await Future.wait([
-        FirebaseFirestore.instance.collection('AcceptedBooking').get(),
-        FirebaseFirestore.instance.collection('ClinicProgress').get(),
+        FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('clinicId', isEqualTo: clinicId)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('OTAssessments')
+            .where('clinicId', isEqualTo: clinicId)
+            .get(),
       ]);
 
       final patientsSnapshot = futures[0];
-      final progressSnapshot = futures[1];
+      final assessmentsSnapshot = futures[1];
 
       print(
           '📊 AcceptedBooking query returned: ${patientsSnapshot.docs.length} documents');
       print(
-          '📊 ClinicProgress query returned: ${progressSnapshot.docs.length} documents');
-
-      // If no results, check if collections have any data at all
-      if (patientsSnapshot.docs.isEmpty) {
-        print('🔍 Checking if AcceptedBooking collection has any documents...');
-        final allBookings = await FirebaseFirestore.instance
-            .collection('AcceptedBooking')
-            .limit(3)
-            .get();
-        print('📋 Total AcceptedBooking documents: ${allBookings.docs.length}');
-        if (allBookings.docs.isNotEmpty) {
-          print(
-              '🔬 Sample AcceptedBooking doc: ${allBookings.docs.first.data()}');
-        }
-      }
-
-      if (progressSnapshot.docs.isEmpty) {
-        print('🔍 Checking if ClinicProgress collection has any documents...');
-        final allProgress = await FirebaseFirestore.instance
-            .collection('ClinicProgress')
-            .limit(3)
-            .get();
-        print('📋 Total ClinicProgress documents: ${allProgress.docs.length}');
-        if (allProgress.docs.isNotEmpty) {
-          print(
-              '🔬 Sample ClinicProgress doc: ${allProgress.docs.first.data()}');
-        }
-      }
+          '📊 OTAssessments query returned: ${assessmentsSnapshot.docs.length} documents');
 
       // Debug: Print first few documents to see structure
       if (patientsSnapshot.docs.isNotEmpty) {
         print(
             '🔬 First AcceptedBooking doc: ${patientsSnapshot.docs.first.data()}');
       }
-      if (progressSnapshot.docs.isNotEmpty) {
+      if (assessmentsSnapshot.docs.isNotEmpty) {
         print(
-            '🔬 First ClinicProgress doc: ${progressSnapshot.docs.first.data()}');
+            '🔬 First OTAssessment doc: ${assessmentsSnapshot.docs.first.data()}');
       }
 
-      // Create a map of progress reports by patient ID for O(1) lookup
-      final Map<String, List<Map<String, dynamic>>> progressByPatient = {};
-      final List<Map<String, dynamic>> allProgressReports = [];
-
-      // Filter documents by clinicId (since we loaded all docs)
-      final List<QueryDocumentSnapshot> filteredPatientDocs = [];
-      final List<QueryDocumentSnapshot> filteredProgressDocs = [];
-
-      // Filter AcceptedBooking documents
-      for (var doc in patientsSnapshot.docs) {
-        final data = doc.data();
-        final docClinicId = data['clinicId']?.toString() ??
-            data['clinic_id']?.toString() ??
-            data['ClinicId']?.toString();
-        print(
-            '🔬 AcceptedBooking doc ${doc.id} has clinicId: $docClinicId (looking for: $clinicId)');
-        if (docClinicId == clinicId) {
-          filteredPatientDocs.add(doc);
-        }
-      }
-
-      // Filter ClinicProgress documents
-      for (var doc in progressSnapshot.docs) {
-        final data = doc.data();
-        final docClinicId = data['clinicId']?.toString() ??
-            data['clinic_id']?.toString() ??
-            data['ClinicId']?.toString();
-        print(
-            '🔬 ClinicProgress doc ${doc.id} has clinicId: $docClinicId (looking for: $clinicId)');
-        if (docClinicId == clinicId) {
-          filteredProgressDocs.add(doc);
-        }
-      }
+      // Create a map of OT assessments by patient ID for O(1) lookup
+      final Map<String, List<Map<String, dynamic>>> assessmentsByPatient = {};
+      final List<Map<String, dynamic>> allAssessments = [];
 
       print(
-          '📊 After filtering: ${filteredPatientDocs.length} bookings, ${filteredProgressDocs.length} progress reports');
+          '📊 Processing: ${patientsSnapshot.docs.length} bookings, ${assessmentsSnapshot.docs.length} assessments');
 
-      // Process analytics data with filtered documents
-      _processAnalyticsData(filteredProgressDocs);
+      // Process analytics data with assessment documents
+      _processAnalyticsData(assessmentsSnapshot.docs);
 
-      // Process progress reports with filtered documents
-      for (var doc in filteredProgressDocs) {
+      // Process OT assessments
+      for (var doc in assessmentsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
-        allProgressReports.add(data);
+        allAssessments.add(data);
 
         final patientId = data['patientId']?.toString() ?? '';
         if (patientId.isNotEmpty) {
-          progressByPatient.putIfAbsent(patientId, () => []).add(data);
+          assessmentsByPatient.putIfAbsent(patientId, () => []).add(data);
         }
       }
 
       // Process clients data efficiently
       final List<Map<String, dynamic>> clientsList = [];
 
-      for (var doc in filteredPatientDocs) {
+      for (var doc in patientsSnapshot.docs) {
         final clientData = doc.data() as Map<String, dynamic>;
         final bookingId = doc.id;
         final clientId = clientData['patientId']?.toString() ?? bookingId;
@@ -199,7 +148,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
             clientData['patientInfo']?['childName'] ??
             'Unknown';
 
-        final clientReports = progressByPatient[clientId] ?? [];
+        final clientAssessments = assessmentsByPatient[clientId] ?? [];
 
         clientsList.add({
           'bookingId': bookingId,
@@ -214,10 +163,11 @@ class _ClinicProgressState extends State<ClinicProgress> {
           'status': clientData['status'] ?? 'confirmed',
           'appointmentDate': clientData['appointmentDate'] ?? 'N/A',
           'appointmentTime': clientData['appointmentTime'] ?? 'N/A',
-          'progressReports': clientReports,
-          'totalReports': clientReports.length,
-          'lastReportDate':
-              clientReports.isNotEmpty ? clientReports.first['date'] : null,
+          'progressReports': clientAssessments,
+          'totalReports': clientAssessments.length,
+          'lastReportDate': clientAssessments.isNotEmpty
+              ? clientAssessments.first['createdAt']
+              : null,
         });
       }
 
@@ -226,12 +176,12 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
       setState(() {
         clientsWithProgress = clientsList;
-        progressReports = allProgressReports;
+        progressReports = allAssessments;
         isLoading = false;
       });
 
       print(
-          '✅ Final: ${clientsList.length} clients, ${allProgressReports.length} reports');
+          '✅ Final: ${clientsList.length} clients, ${allAssessments.length} assessments');
     } catch (e) {
       print('❌ Error loading data: $e');
       setState(() {
@@ -240,45 +190,162 @@ class _ClinicProgressState extends State<ClinicProgress> {
     }
   }
 
-  void _processAnalyticsData(List<QueryDocumentSnapshot> progressDocs) {
+  void _processAnalyticsData(List<QueryDocumentSnapshot> assessmentDocs) {
     monthlyReports.clear();
     progressTypeStats.clear();
     weeklyProgressScores.clear();
 
-    for (var doc in progressDocs) {
+    // Map to store daily scores for weekly average calculation
+    Map<int, List<double>> dailyScores = {
+      0: [],
+      1: [],
+      2: [],
+      3: [],
+      4: [],
+      5: [],
+      6: []
+    }; // 0=Mon, 6=Sun
+
+    for (var doc in assessmentDocs) {
       final data = doc.data() as Map<String, dynamic>;
 
-      // Process monthly reports
+      // Process monthly reports using createdAt timestamp
       try {
-        final reportDate = data['date'] != null
-            ? DateTime.parse(data['date'])
-            : DateTime.now();
+        DateTime reportDate;
+        if (data['createdAt'] != null) {
+          reportDate = (data['createdAt'] as Timestamp).toDate();
+        } else {
+          reportDate = DateTime.now();
+        }
         final monthKey =
             '${reportDate.year}-${reportDate.month.toString().padLeft(2, '0')}';
         monthlyReports[monthKey] = (monthlyReports[monthKey] ?? 0) + 1;
+
+        // Add to daily scores for weekly chart
+        final dayOfWeek = (reportDate.weekday - 1) % 7; // Convert to 0-6 range
+        final overallScore = _calculateOverallScore(data);
+        dailyScores[dayOfWeek]?.add(overallScore);
       } catch (e) {
         print('Error parsing date: $e');
       }
 
-      // Process progress types
-      final progressType =
-          data['progressType'] ?? data['category'] ?? 'General';
-      progressTypeStats[progressType] =
-          (progressTypeStats[progressType] ?? 0) + 1;
+      // Process assessment categories as progress types
+      final assessmentType = data['assessmentType'] ?? 'Occupational Therapy';
+      progressTypeStats[assessmentType] =
+          (progressTypeStats[assessmentType] ?? 0) + 1;
 
-      // Generate mock progress scores for demonstration
-      // In real app, you'd extract actual scores from progress data
-      final score = (data['progressScore'] as num?)?.toDouble() ??
-          (50 + (DateTime.now().millisecond % 50)).toDouble();
-      if (weeklyProgressScores.length < 7) {
-        weeklyProgressScores.add(score);
+      // Also count by skill categories
+      if (data['fineMotorSkills'] != null) {
+        progressTypeStats['Fine Motor'] =
+            (progressTypeStats['Fine Motor'] ?? 0) + 1;
+      }
+      if (data['grossMotorSkills'] != null) {
+        progressTypeStats['Gross Motor'] =
+            (progressTypeStats['Gross Motor'] ?? 0) + 1;
+      }
+      if (data['sensoryProcessing'] != null) {
+        progressTypeStats['Sensory Processing'] =
+            (progressTypeStats['Sensory Processing'] ?? 0) + 1;
+      }
+      if (data['cognitiveSkills'] != null) {
+        progressTypeStats['Cognitive'] =
+            (progressTypeStats['Cognitive'] ?? 0) + 1;
       }
     }
 
-    // Fill weekly scores if needed
-    while (weeklyProgressScores.length < 7) {
-      weeklyProgressScores.add(50.0 + (weeklyProgressScores.length * 5));
+    // Calculate weekly average scores for each day
+    for (int day = 0; day < 7; day++) {
+      if (dailyScores[day]!.isNotEmpty) {
+        final average = dailyScores[day]!.reduce((a, b) => a + b) /
+            dailyScores[day]!.length;
+        weeklyProgressScores.add(average);
+      } else {
+        // If no data for this day, use interpolated value or 0
+        weeklyProgressScores.add(0.0);
+      }
     }
+
+    // If no data at all, create a baseline
+    if (weeklyProgressScores.every((score) => score == 0.0) &&
+        assessmentDocs.isNotEmpty) {
+      // Calculate overall average from all assessments
+      double totalScore = 0;
+      for (var doc in assessmentDocs) {
+        final data = doc.data() as Map<String, dynamic>;
+        totalScore += _calculateOverallScore(data);
+      }
+      final avgScore = totalScore / assessmentDocs.length;
+      weeklyProgressScores =
+          List.generate(7, (index) => avgScore + (index - 3) * 2);
+    }
+  }
+
+  // Calculate overall progress score from OT Assessment data
+  double _calculateOverallScore(Map<String, dynamic> assessmentData) {
+    double totalScore = 0;
+    int categoryCount = 0;
+
+    // Fine Motor Skills average
+    if (assessmentData['fineMotorSkills'] != null) {
+      final fineMotor = assessmentData['fineMotorSkills'] as Map;
+      final scores = [
+        fineMotor['pincerGrasp'] ?? 0,
+        fineMotor['handEyeCoordination'] ?? 0,
+        fineMotor['inHandManipulation'] ?? 0,
+        fineMotor['bilateralCoordination'] ?? 0,
+      ];
+      final avg =
+          scores.reduce((a, b) => a + b) / scores.length * 20; // Scale to 100
+      totalScore += avg;
+      categoryCount++;
+    }
+
+    // Gross Motor Skills average
+    if (assessmentData['grossMotorSkills'] != null) {
+      final grossMotor = assessmentData['grossMotorSkills'] as Map;
+      final scores = [
+        grossMotor['balance'] ?? 0,
+        grossMotor['runningJumping'] ?? 0,
+        grossMotor['throwingCatching'] ?? 0,
+        grossMotor['motorPlanning'] ?? 0,
+      ];
+      final avg =
+          scores.reduce((a, b) => a + b) / scores.length * 20; // Scale to 100
+      totalScore += avg;
+      categoryCount++;
+    }
+
+    // Sensory Processing average
+    if (assessmentData['sensoryProcessing'] != null) {
+      final sensory = assessmentData['sensoryProcessing'] as Map;
+      final scores = [
+        sensory['tactileResponse'] ?? 0,
+        sensory['auditoryFiltering'] ?? 0,
+        sensory['vestibularSeeking'] ?? 0,
+        sensory['proprioceptiveAwareness'] ?? 0,
+      ];
+      final avg =
+          scores.reduce((a, b) => a + b) / scores.length * 20; // Scale to 100
+      totalScore += avg;
+      categoryCount++;
+    }
+
+    // Cognitive Skills average
+    if (assessmentData['cognitiveSkills'] != null) {
+      final cognitive = assessmentData['cognitiveSkills'] as Map;
+      final scores = [
+        cognitive['problemSolving'] ?? 0,
+        cognitive['attentionSpan'] ?? 0,
+        cognitive['followingDirections'] ?? 0,
+        cognitive['sequencingTasks'] ?? 0,
+      ];
+      final avg =
+          scores.reduce((a, b) => a + b) / scores.length * 20; // Scale to 100
+      totalScore += avg;
+      categoryCount++;
+    }
+
+    return categoryCount > 0 ? totalScore / categoryCount : 50.0;
   }
 
   int _calculateUpcomingSessions() {
@@ -315,29 +382,48 @@ class _ClinicProgressState extends State<ClinicProgress> {
       final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
       final lastWeekStart = thisWeekStart.subtract(const Duration(days: 7));
 
-      int thisWeekReports = 0;
-      int lastWeekReports = 0;
+      double thisWeekAvgScore = 0;
+      double lastWeekAvgScore = 0;
+      int thisWeekCount = 0;
+      int lastWeekCount = 0;
 
       for (var report in progressReports) {
         try {
-          final reportDate = DateTime.parse(report['date']);
+          DateTime reportDate;
+          if (report['createdAt'] != null) {
+            reportDate = (report['createdAt'] as Timestamp).toDate();
+          } else {
+            continue;
+          }
+
+          final score = _calculateOverallScore(report);
+
           if (reportDate.isAfter(thisWeekStart)) {
-            thisWeekReports++;
+            thisWeekAvgScore += score;
+            thisWeekCount++;
           } else if (reportDate.isAfter(lastWeekStart) &&
               reportDate.isBefore(thisWeekStart)) {
-            lastWeekReports++;
+            lastWeekAvgScore += score;
+            lastWeekCount++;
           }
         } catch (e) {
-          // Skip invalid dates
+          // Skip invalid data
         }
       }
 
-      if (lastWeekReports == 0) {
-        return thisWeekReports > 0 ? '+100%' : '0.0%';
+      if (thisWeekCount == 0 && lastWeekCount == 0) {
+        return '0.0%';
       }
 
+      if (lastWeekCount == 0) {
+        return thisWeekCount > 0 ? '+100%' : '0.0%';
+      }
+
+      thisWeekAvgScore = thisWeekAvgScore / thisWeekCount;
+      lastWeekAvgScore = lastWeekAvgScore / lastWeekCount;
+
       final change =
-          ((thisWeekReports - lastWeekReports) / lastWeekReports * 100);
+          ((thisWeekAvgScore - lastWeekAvgScore) / lastWeekAvgScore * 100);
       return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}%';
     } catch (e) {
       return '0.0%';

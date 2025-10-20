@@ -1,126 +1,180 @@
 import 'package:flutter/material.dart';
+import 'package:kindora/screens/parent/dashboard.dart';
+import 'package:kindora/screens/parent/ther_dash.dart';
+import 'package:kindora/screens/parent/materials.dart';
+import 'package:kindora/screens/parent/parent_navbar.dart';
 
 class DashTab extends StatefulWidget {
-  final Function(int)? onTabChanged; // Add callback for parent widget
-  final int initialSelectedIndex; // Add this parameter
+  final int initialSelectedIndex; // Which tab to show initially
 
   const DashTab({
     super.key,
-    this.onTabChanged,
-    this.initialSelectedIndex = 0, // Default to first tab
+    this.initialSelectedIndex = 0, // Default to Clinics tab
   });
 
   @override
   State<DashTab> createState() => _DashTabState();
 }
 
-class _DashTabState extends State<DashTab> {
-  late int _selectedTabIndex;
+class _DashTabState extends State<DashTab> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _selectedTabIndex =
-        widget.initialSelectedIndex; // Use the passed initial index
-  }
-
-  void _onTabTapped(int index) {
-    setState(() {
-      _selectedTabIndex = index;
-    });
-
-    // Notify parent widget about tab change
-    widget.onTabChanged?.call(index);
-
-    // Handle different actions based on tab index
-    switch (index) {
-      case 0:
-        _onClinicsPressed();
-        break;
-      case 1:
-        _onTherapistsPressed();
-        break;
-      case 2:
-        _onMaterialsPressed();
-        break;
-    }
-  }
-
-  // OnPressed methods for each tab
-  void _onClinicsPressed() {
-    print('Clinics tab pressed');
-    Navigator.pushNamed(context, '/parentdashboard');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Clinics tab selected')),
-    );
-  }
-
-  void _onTherapistsPressed() {
-    print('Therapists tab pressed');
-    Navigator.pushNamed(context, '/therdashboard');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Therapists tab selected')),
-    );
-  }
-
-  void _onMaterialsPressed() {
-    print('Materials tab pressed');
-    Navigator.pushNamed(context, '/materials');
-  }
-
-  Widget buildTab(String label, int index) {
-    final isSelected = _selectedTabIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _onTabTapped(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          height: 40,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: isSelected
-                ? [
-                    const BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected
-                  ? const Color.fromARGB(255, 3, 62, 54)
-                  : Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialSelectedIndex,
     );
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 350,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2), // Restore capsule background
-        shape: BoxShape.rectangle,
-        borderRadius: BorderRadius.circular(20),
+    final size = MediaQuery.sizeOf(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF006A5B),
+        elevation: 0,
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontFamily: 'Poppins',
+          ),
+        ),
+        leading: Builder(
+          builder: (BuildContext context) {
+            return IconButton(
+              icon: const Icon(Icons.menu),
+              color: Colors.white,
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
+              },
+            );
+          },
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      drawer: const ParentNavbar(),
+      body: Stack(
         children: [
-          buildTab('Clinics', 0),
-          buildTab('Therapists', 1),
-          buildTab('Materials', 2),
+          // Top ellipse background
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(height: size.height * 0.30),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 1.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container();
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Bottom ellipse background
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints.expand(height: size.height * 0.30),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xFF67AFA5), Colors.white],
+                  ),
+                ),
+                child: Image.asset(
+                  'asset/images/Ellipse 2.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container();
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Main content with TabBar
+          Column(
+            children: [
+              // TabBar - Beautiful rounded design
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      spreadRadius: 2,
+                      blurRadius: 15,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  indicator: BoxDecoration(
+                    color: const Color(0xFF006A5B),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: const Color(0xFF006A5B),
+                  labelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  tabs: const [
+                    Tab(text: 'Clinics'),
+                    Tab(text: 'Therapists'),
+                    Tab(text: 'Materials'),
+                  ],
+                ),
+              ),
+              // TabBarView with content
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: const [
+                    DashboardContent(), // Clinics page content
+                    TherapistsDashboardContent(), // Therapists page content
+                    MaterialsPageContent(), // Materials page content
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

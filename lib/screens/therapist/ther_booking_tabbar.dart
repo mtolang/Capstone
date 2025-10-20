@@ -325,10 +325,8 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
         backgroundColor: const Color(0xFF006A5B),
         child: const Icon(Icons.calendar_today, color: Colors.white),
         onPressed: () {
-          // Navigate to schedule or add functionality
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Quick calendar access')),
-          );
+          // Navigate to setup schedule page
+          Navigator.pushNamed(context, '/therapistsetupschedule');
         },
       ),
     );
