@@ -1,7 +1,44 @@
 import 'package:flutter/material.dart';
+import '../../helper/clinic_auth.dart';
 
-class ClinicNavBar extends StatelessWidget {
+class ClinicNavBar extends StatefulWidget {
   const ClinicNavBar({Key? key}) : super(key: key);
+
+  @override
+  State<ClinicNavBar> createState() => _ClinicNavBarState();
+}
+
+class _ClinicNavBarState extends State<ClinicNavBar> {
+  String _clinicName = 'Loading...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClinicData();
+  }
+
+  Future<void> _loadClinicData() async {
+    try {
+      final clinicData = await ClinicAuthService.getCurrentClinicData();
+      if (clinicData != null && mounted) {
+        setState(() {
+          // Try different field name variations for clinic name
+          _clinicName = clinicData['Clinic_Name'] ??
+              clinicData['clinic_name'] ??
+              clinicData['clinicName'] ??
+              clinicData['name'] ??
+              'Clinic';
+        });
+      }
+    } catch (e) {
+      print('Error loading clinic data for navbar: $e');
+      if (mounted) {
+        setState(() {
+          _clinicName = 'Clinic';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,9 +71,9 @@ class ClinicNavBar extends StatelessWidget {
                   const SizedBox(width: 8.0),
 
                   // app name
-                  const Text(
-                    "TherapEase",
-                    style: TextStyle(
+                  Text(
+                    _clinicName,
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF006A5B),
                     ),

@@ -1,9 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:kindora/screens/clinic/custom_tabbar.dart';
 import 'package:kindora/screens/clinic/clinic_navbar.dart';
+import '../../helper/clinic_auth.dart';
 
-class ClinicProfile extends StatelessWidget {
+class ClinicProfile extends StatefulWidget {
   const ClinicProfile({super.key});
+
+  @override
+  State<ClinicProfile> createState() => _ClinicProfileState();
+}
+
+class _ClinicProfileState extends State<ClinicProfile> {
+  String _clinicName = 'Loading...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClinicData();
+  }
+
+  Future<void> _loadClinicData() async {
+    try {
+      final clinicData = await ClinicAuthService.getCurrentClinicData();
+      if (clinicData != null && mounted) {
+        setState(() {
+          // Try different field name variations for clinic name
+          _clinicName = clinicData['Clinic_Name'] ??
+              clinicData['clinic_name'] ??
+              clinicData['clinicName'] ??
+              clinicData['name'] ??
+              'Unknown Clinic';
+        });
+      }
+    } catch (e) {
+      print('Error loading clinic data: $e');
+      if (mounted) {
+        setState(() {
+          _clinicName = 'Clinic Profile';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,9 +48,9 @@ class ClinicProfile extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'The Tiny House',
-          style: TextStyle(color: Colors.white),
+        title: Text(
+          _clinicName,
+          style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF006A5B),
         leading: Builder(
@@ -144,9 +181,9 @@ class ClinicProfile extends StatelessWidget {
                         const SizedBox(height: 5),
 
                         // Clinic Name
-                        const Text(
-                          'The Tiny House',
-                          style: TextStyle(
+                        Text(
+                          _clinicName,
+                          style: const TextStyle(
                             color: Color(0xFF67AFA5),
                             fontSize: 20,
                             fontFamily: 'Poppins',

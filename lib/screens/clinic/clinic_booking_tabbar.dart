@@ -232,6 +232,7 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
         // Tab bar section
         Container(
           margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(30),
@@ -248,22 +249,44 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
             controller: _tabController,
             indicator: BoxDecoration(
               color: const Color(0xFF006A5B),
-              borderRadius: BorderRadius.circular(30),
+              borderRadius: BorderRadius.circular(26),
             ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: EdgeInsets.zero,
             labelColor: Colors.white,
             unselectedLabelColor: const Color(0xFF006A5B),
             labelStyle: const TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w600,
+              fontSize: 14,
             ),
             unselectedLabelStyle: const TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w500,
+              fontSize: 14,
             ),
-            tabs: const [
-              Tab(text: 'Today'),
-              Tab(text: 'Schedule'),
-              Tab(text: 'Request'),
+            dividerColor: Colors.transparent,
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
+            splashFactory: NoSplash.splashFactory,
+            tabs: [
+              Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const Text('Today'),
+                ),
+              ),
+              Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const Text('Schedule'),
+                ),
+              ),
+              Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const Text('Request'),
+                ),
+              ),
             ],
           ),
         ),

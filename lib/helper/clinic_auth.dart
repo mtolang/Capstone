@@ -43,15 +43,21 @@ class ClinicAuthService {
     required String password,
   }) async {
     try {
-      // First, try to find clinic with lowercase email field
-      QuerySnapshot clinicQuery = await _firestore
+      QuerySnapshot clinicQuery;
+      String? collectionFound;
+      
+      // Search in ClinicAcc collection first (accepted clinics)
+      print('🔍 Searching for clinic in ClinicAcc collection...');
+      
+      // Try lowercase email field
+      clinicQuery = await _firestore
           .collection('ClinicAcc')
           .where('email', isEqualTo: email.trim())
           .limit(1)
           .get();
 
-      // If not found, try with capitalized Email field
       if (clinicQuery.docs.isEmpty) {
+        // Try capitalized Email field
         clinicQuery = await _firestore
             .collection('ClinicAcc')
             .where('Email', isEqualTo: email.trim())
@@ -59,35 +65,81 @@ class ClinicAuthService {
             .get();
       }
 
+      if (clinicQuery.docs.isNotEmpty) {
+        collectionFound = 'ClinicAcc';
+        print('✅ Found clinic in ClinicAcc collection');
+      } else {
+        // If not found in ClinicAcc, search in ClinicReg collection (pending/registered clinics)
+        print('🔍 Not found in ClinicAcc, searching in ClinicReg collection...');
+        
+        // Try lowercase email field
+        clinicQuery = await _firestore
+            .collection('ClinicReg')
+            .where('email', isEqualTo: email.trim())
+            .limit(1)
+            .get();
+
+        if (clinicQuery.docs.isEmpty) {
+          // Try capitalized Email field
+          clinicQuery = await _firestore
+              .collection('ClinicReg')
+              .where('Email', isEqualTo: email.trim())
+              .limit(1)
+              .get();
+        }
+
+        if (clinicQuery.docs.isNotEmpty) {
+          collectionFound = 'ClinicReg';
+          print('✅ Found clinic in ClinicReg collection');
+        }
+      }
+
       if (clinicQuery.docs.isEmpty) {
-        throw 'No clinic found with this email address.';
+        print('❌ No clinic found with email: $email');
+        throw 'No clinic found with this email address. Please check your email or register first.';
       }
 
       final clinicDoc = clinicQuery.docs.first;
       final clinicData = clinicDoc.data() as Map<String, dynamic>;
-      final documentId = clinicDoc.id; // This will be CLI01, CLI02, CLI03, etc.
+      final documentId = clinicDoc.id;
 
       // Debug: Print the data to verify field names
-      print('Clinic data from Firebase: $clinicData');
-      print('Document ID: $documentId');
+      print('📋 Clinic data from Firebase ($collectionFound): $clinicData');
+      print('📋 Document ID: $documentId');
 
-      // Check password - try both lowercase and capitalized field names
-      String? storedPassword = clinicData['password']?.toString();
-      if (storedPassword == null) {
+      // Check password - try multiple field name variations
+      String? storedPassword;
+      
+      // Try different password field variations
+      if (clinicData.containsKey('password')) {
+        storedPassword = clinicData['password']?.toString();
+      } else if (clinicData.containsKey('Password')) {
         storedPassword = clinicData['Password']?.toString();
+      } else if (clinicData.containsKey('PASSWORD')) {
+        storedPassword = clinicData['PASSWORD']?.toString();
       }
 
-      if (storedPassword == null || storedPassword != password) {
+      print('🔐 Stored password found: ${storedPassword != null}');
+
+      if (storedPassword == null) {
+        print('❌ No password field found in document. Available fields: ${clinicData.keys.toList()}');
+        throw 'Login configuration error. Please contact support.';
+      }
+
+      if (storedPassword != password) {
+        print('❌ Password mismatch');
         throw 'Invalid email or password.';
       }
+
+      print('✅ Password verification successful');
 
       // Store clinic info in local storage
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_clinicIdKey, documentId);
       await prefs.setString(_clinicEmailKey, email.trim());
       await prefs.setBool(_isLoggedInKey, true);
-      await prefs.setString('user_type',
-          'clinic'); // CRITICAL: Set user type for DynamicUserService
+      await prefs.setString('user_type', 'clinic');
+      await prefs.setString('clinic_collection', collectionFound!);
 
       // Try to sign in with Firebase Auth (optional, for session management)
       try {
@@ -95,25 +147,37 @@ class ClinicAuthService {
           email: email.trim(),
           password: password,
         );
+        print('✅ Firebase Auth login successful');
       } on FirebaseAuthException catch (e) {
         if (e.code == 'user-not-found') {
-          // If user doesn't exist in Firebase Auth, create it
-          await _auth.createUserWithEmailAndPassword(
-            email: email.trim(),
-            password: password,
-          );
+          try {
+            // If user doesn't exist in Firebase Auth, create it
+            await _auth.createUserWithEmailAndPassword(
+              email: email.trim(),
+              password: password,
+            );
+            print('✅ Firebase Auth user created');
+          } catch (createError) {
+            print('⚠️ Firebase Auth user creation failed: $createError');
+          }
+        } else {
+          print('⚠️ Firebase Auth login failed: ${e.message}');
         }
         // Continue even if Firebase Auth fails, since we have Firestore data
       }
+
+      print('🎉 Login process completed successfully');
 
       // Return success with clinic data and document ID
       return {
         'success': true,
         'clinicData': clinicData,
         'clinicId': documentId,
+        'collection': collectionFound,
         'message': 'Login successful!',
       };
     } catch (e) {
+      print('💥 Login error: $e');
       throw e.toString();
     }
   } // Register new clinic
