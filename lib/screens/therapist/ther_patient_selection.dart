@@ -5,6 +5,7 @@ import 'package:kindora/helper/therapist_auth.dart';
 import 'package:kindora/helper/field_helper.dart';
 import '../../chat/therapist_chat.dart';
 import 'ther_navbar.dart';
+import 'ther_profile.dart';
 
 class TherapistPatientSelectionPage extends StatefulWidget {
   const TherapistPatientSelectionPage({super.key});
@@ -281,9 +282,14 @@ class _TherapistPatientSelectionPageState
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.menu, color: Colors.white),
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
                           onPressed: () {
-                            Scaffold.of(context).openDrawer();
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const TherapistProfile(),
+                              ),
+                            );
                           },
                         ),
                         const Expanded(

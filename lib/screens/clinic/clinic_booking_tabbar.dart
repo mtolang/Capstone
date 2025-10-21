@@ -262,12 +262,12 @@ class _ClinicBookingTabBarState extends State<ClinicBookingTabBar>
             labelStyle: const TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w600,
-              fontSize: 14,
+              fontSize: 12,
             ),
             unselectedLabelStyle: const TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w500,
-              fontSize: 14,
+              fontSize: 12,
             ),
             dividerColor: Colors.transparent,
             overlayColor: WidgetStateProperty.all(Colors.transparent),

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../helper/field_helper.dart';
 import '../../chat/therapist_chat.dart';
 import 'ther_navbar.dart';
+import 'ther_profile.dart';
 
 class TherapistChatListPage extends StatefulWidget {
   const TherapistChatListPage({Key? key}) : super(key: key);
@@ -196,14 +197,15 @@ class _TherapistChatListPageState extends State<TherapistChatListPage> {
             fontFamily: 'Poppins',
           ),
         ),
-        leading: Builder(
-          builder: (BuildContext context) {
-            return IconButton(
-              icon: const Icon(Icons.menu),
-              color: Colors.white,
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          color: Colors.white,
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const TherapistProfile(),
+              ),
             );
           },
         ),

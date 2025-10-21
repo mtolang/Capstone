@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/accepted_booking_service.dart';
@@ -17,8 +18,9 @@ class TherapistBookingTabBar extends StatefulWidget {
 class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _currentMonth = DateTime.now();
-  Map<int, List<Map<String, dynamic>>> _monthlyAppointments = {};
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  Map<DateTime, List<Map<String, dynamic>>> _appointmentEvents = {};
 
   final List<Map<String, dynamic>> bookings = [
     {
@@ -47,26 +49,17 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadMonthlyAppointments();
+    _selectedDay = DateTime.now();
+    _loadAppointmentEvents();
   }
 
-  // Calendar navigation methods
-  void _navigateToPreviousMonth() {
-    setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
-      _loadMonthlyAppointments();
-    });
+  List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
+    final dateKey = DateTime(day.year, day.month, day.day);
+    return _appointmentEvents[dateKey] ?? [];
   }
 
-  void _navigateToNextMonth() {
-    setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
-      _loadMonthlyAppointments();
-    });
-  }
-
-  // Load monthly appointments from AcceptedBooking collection
-  Future<void> _loadMonthlyAppointments() async {
+  // Load appointment events from AcceptedBooking collection
+  Future<void> _loadAppointmentEvents() async {
     try {
       final therapistId = await _getCurrentTherapistId();
       if (therapistId == null) {
@@ -74,69 +67,49 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
         return;
       }
 
-      // Get the first and last day of the current month
-      final firstDayOfMonth =
-          DateTime(_currentMonth.year, _currentMonth.month, 1);
-      final lastDayOfMonth =
-          DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
+      // Load appointments for the current month and next month
+      final startDate = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
+      final endDate = DateTime(_focusedDay.year, _focusedDay.month + 2, 0);
 
-      print(
-          'Loading appointments for therapist: $therapistId for month: ${DateFormat('MMMM yyyy').format(_currentMonth)}');
+      print('Loading appointments from $startDate to $endDate');
 
-      // Query AcceptedBooking collection for this therapist
       final querySnapshot = await FirebaseFirestore.instance
           .collection('AcceptedBooking')
           .where('serviceProvider.therapistId', isEqualTo: therapistId)
-          .where('status', isEqualTo: 'confirmed')
+          .where('appointmentDate',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('appointmentDate',
+              isLessThanOrEqualTo: Timestamp.fromDate(endDate))
+          .orderBy('appointmentDate')
+          .orderBy('appointmentTime')
           .get();
 
-      // Filter results by date range in memory to avoid complex index requirements
-      final filteredDocs = querySnapshot.docs.where((doc) {
+      final Map<DateTime, List<Map<String, dynamic>>> events = {};
+
+      for (var doc in querySnapshot.docs) {
         final data = doc.data();
-        final appointmentDate = (data['appointmentDate'] as Timestamp).toDate();
-        return appointmentDate
-                .isAfter(firstDayOfMonth.subtract(const Duration(days: 1))) &&
-            appointmentDate
-                .isBefore(lastDayOfMonth.add(const Duration(days: 1)));
-      }).toList();
+        data['id'] = doc.id;
 
-      // Group appointments by day
-      final Map<int, List<Map<String, dynamic>>> groupedAppointments = {};
+        final appointmentTimestamp = data['appointmentDate'] as Timestamp?;
+        if (appointmentTimestamp != null) {
+          final appointmentDate = appointmentTimestamp.toDate();
+          final dateKey = DateTime(
+              appointmentDate.year, appointmentDate.month, appointmentDate.day);
 
-      for (var doc in filteredDocs) {
-        final data = doc.data();
-        final appointmentDate = (data['appointmentDate'] as Timestamp).toDate();
-        final dayOfMonth = appointmentDate.day;
-
-        // Extract patient information using FieldHelper
-        final childInfo = data['childInfo'] as Map<String, dynamic>? ?? {};
-        final parentInfo = data['parentInfo'] as Map<String, dynamic>? ?? {};
-
-        final patientName = FieldHelper.getName(childInfo) ??
-            FieldHelper.getName(parentInfo) ??
-            'Unknown Patient';
-
-        final appointmentInfo = {
-          'patientName': patientName,
-          'appointmentTime': data['appointmentTime'] ?? 'Time TBD',
-          'appointmentType': data['appointmentType'] ?? 'Therapy Session',
-          'childInfo': childInfo,
-          'parentInfo': parentInfo,
-        };
-
-        if (groupedAppointments[dayOfMonth] == null) {
-          groupedAppointments[dayOfMonth] = [];
+          if (!events.containsKey(dateKey)) {
+            events[dateKey] = [];
+          }
+          events[dateKey]!.add(data);
         }
-        groupedAppointments[dayOfMonth]!.add(appointmentInfo);
       }
 
       setState(() {
-        _monthlyAppointments = groupedAppointments;
+        _appointmentEvents = events;
       });
 
-      print('Loaded ${filteredDocs.length} appointments for the month');
+      print('Loaded appointments for ${events.length} days');
     } catch (e) {
-      print('Error loading monthly appointments: $e');
+      print('Error loading appointment events: $e');
     }
   }
 
@@ -274,12 +247,12 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                   labelStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontSize: 12,
                   ),
                   unselectedLabelStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w500,
-                    fontSize: 14,
+                    fontSize: 12,
                   ),
                   dividerColor: Colors.transparent,
                   overlayColor: WidgetStateProperty.all(Colors.transparent),
@@ -536,74 +509,94 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                 ),
               ],
             ),
-            child: Column(
-              children: [
-                // Calendar Header
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: TableCalendar<Map<String, dynamic>>(
+                firstDay: DateTime.utc(2020, 1, 1),
+                lastDay: DateTime.utc(2030, 12, 31),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (day) {
+                  return isSameDay(_selectedDay, day);
+                },
+                eventLoader: _getEventsForDay,
+                calendarFormat: CalendarFormat.month,
+                startingDayOfWeek: StartingDayOfWeek.sunday,
+                daysOfWeekHeight: 40,
+                rowHeight: 45,
+                calendarStyle: const CalendarStyle(
+                  outsideDaysVisible: false,
+                  weekendTextStyle: TextStyle(color: Colors.black87),
+                  defaultTextStyle: TextStyle(color: Colors.black87),
+                  selectedDecoration: BoxDecoration(
                     color: Color(0xFF006A5B),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
+                    shape: BoxShape.circle,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: _navigateToPreviousMonth,
-                        icon:
-                            const Icon(Icons.chevron_left, color: Colors.white),
-                      ),
-                      Text(
-                        DateFormat('MMMM yyyy').format(_currentMonth),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _navigateToNextMonth,
-                        icon: const Icon(Icons.chevron_right,
-                            color: Colors.white),
-                      ),
-                    ],
+                  selectedTextStyle: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  todayDecoration: BoxDecoration(
+                    color: Color(0xFF7FB069),
+                    shape: BoxShape.circle,
+                  ),
+                  todayTextStyle: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  markerDecoration: BoxDecoration(
+                    color: Color(0xFF006A5B),
+                    shape: BoxShape.circle,
+                  ),
+                  markersMaxCount: 3,
+                  markerSize: 6,
+                  canMarkersOverflow: false,
+                  cellMargin: EdgeInsets.all(2),
+                  cellPadding: EdgeInsets.all(0),
+                ),
+                daysOfWeekStyle: const DaysOfWeekStyle(
+                  weekdayStyle: TextStyle(
+                    color: Color(0xFF006A5B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  weekendStyle: TextStyle(
+                    color: Color(0xFF006A5B),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-
-                // Calendar Grid
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Day headers
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children:
-                            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                                .map((day) => SizedBox(
-                                      width: 35,
-                                      child: Text(
-                                        day,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF006A5B),
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                    ))
-                                .toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildCalendarGrid(),
-                    ],
+                headerStyle: const HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                  headerPadding: EdgeInsets.symmetric(vertical: 8),
+                  titleTextStyle: TextStyle(
+                    color: Color(0xFF006A5B),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  leftChevronIcon: Icon(
+                    Icons.chevron_left,
+                    color: Color(0xFF006A5B),
+                    size: 24,
+                  ),
+                  rightChevronIcon: Icon(
+                    Icons.chevron_right,
+                    color: Color(0xFF006A5B),
+                    size: 24,
                   ),
                 ),
-              ],
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    _selectedDay = selectedDay;
+                    _focusedDay = focusedDay;
+                  });
+                  _showDayScheduleDialog(selectedDay);
+                },
+                onPageChanged: (focusedDay) {
+                  setState(() {
+                    _focusedDay = focusedDay;
+                  });
+                  _loadAppointmentEvents(); // Reload data when month changes
+                },
+              ),
             ),
           ),
 
@@ -1305,101 +1298,9 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     );
   }
 
-  Widget _buildCalendarGrid() {
-    final now = DateTime.now();
-    final firstDayOfMonth =
-        DateTime(_currentMonth.year, _currentMonth.month, 1);
-    final lastDayOfMonth =
-        DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
-    final daysInMonth = lastDayOfMonth.day;
-    final startingWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
-
-    List<Widget> calendarDays = [];
-
-    // Add empty cells for days before the first day of the month
-    for (int i = 0; i < startingWeekday; i++) {
-      calendarDays.add(const SizedBox(width: 35, height: 45));
-    }
-
-    // Add days of the month
-    for (int day = 1; day <= daysInMonth; day++) {
-      final isToday = day == now.day &&
-          _currentMonth.year == now.year &&
-          _currentMonth.month == now.month;
-      final hasAppointments = _monthlyAppointments.containsKey(day);
-      final dayAppointments = _monthlyAppointments[day] ?? [];
-
-      calendarDays.add(
-        GestureDetector(
-          onTap: () {
-            _showDaySchedule(day, dayAppointments);
-          },
-          child: Container(
-            width: 35,
-            height: 45,
-            margin: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: isToday
-                  ? const Color(0xFF006A5B)
-                  : hasAppointments
-                      ? const Color(0xFF67AFA5).withOpacity(0.3)
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: hasAppointments
-                  ? Border.all(color: const Color(0xFF67AFA5), width: 1)
-                  : null,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  day.toString(),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: isToday
-                        ? Colors.white
-                        : hasAppointments
-                            ? const Color(0xFF006A5B)
-                            : const Color(0xFF67AFA5),
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                if (hasAppointments)
-                  Container(
-                    width: 4,
-                    height: 4,
-                    margin: const EdgeInsets.only(top: 2),
-                    decoration: BoxDecoration(
-                      color: isToday ? Colors.white : const Color(0xFF006A5B),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        for (int week = 0; week < 6; week++)
-          if (week * 7 < calendarDays.length)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children:
-                    calendarDays.skip(week * 7).take(7).toList().cast<Widget>(),
-              ),
-            ),
-      ],
-    );
-  }
-
-  void _showDaySchedule(int day, List<Map<String, dynamic>> appointments) {
-    final selectedDate = DateTime(_currentMonth.year, _currentMonth.month, day);
-    final formattedDate = DateFormat('MMMM dd, yyyy').format(selectedDate);
+  void _showDayScheduleDialog(DateTime selectedDay) {
+    final dayAppointments = _getEventsForDay(selectedDay);
+    final formattedDate = DateFormat('MMMM dd, yyyy').format(selectedDay);
 
     showDialog(
       context: context,
@@ -1412,7 +1313,7 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
             fontFamily: 'Poppins',
           ),
         ),
-        content: appointments.isEmpty
+        content: dayAppointments.isEmpty
             ? const Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1436,7 +1337,7 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${appointments.length} appointment${appointments.length > 1 ? 's' : ''}:',
+                    '${dayAppointments.length} appointment${dayAppointments.length > 1 ? 's' : ''}:',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontFamily: 'Poppins',
@@ -1444,41 +1345,49 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...appointments.map((appointment) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF006A5B).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: const Color(0xFF006A5B).withOpacity(0.3),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                appointment['patientName'] ?? 'Unknown Patient',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF006A5B),
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${appointment['appointmentTime']} - ${appointment['appointmentType']}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF67AFA5),
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            ],
+                  ...dayAppointments.map((appointment) {
+                    final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
+                    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
+                    final patientName = FieldHelper.getName(childInfo) ??
+                        FieldHelper.getName(parentInfo) ??
+                        'Unknown Patient';
+                    
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF006A5B).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF006A5B).withOpacity(0.3),
                           ),
                         ),
-                      )),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              patientName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF006A5B),
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${appointment['appointmentTime']} - ${appointment['appointmentType'] ?? 'Therapy Session'}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF67AFA5),
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ),
         actions: [

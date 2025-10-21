@@ -27,7 +27,7 @@ android {
         applicationId = "com.example.capstone_2"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdkVersion = 23  // Required for cloud_firestore
+        minSdkVersion = flutter.minSdkVersion  // Required for cloud_firestore
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
