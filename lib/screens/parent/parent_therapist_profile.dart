@@ -13,8 +13,7 @@ class ParentTherapistProfilePage extends StatefulWidget {
       _ParentTherapistProfilePageState();
 }
 
-class _ParentTherapistProfilePageState
-    extends State<ParentTherapistProfilePage>
+class _ParentTherapistProfilePageState extends State<ParentTherapistProfilePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -513,8 +512,7 @@ class _ParentTherapistProfilePageState
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.phone,
-                        color: Color(0xFF006A5B), size: 20),
+                    const Icon(Icons.phone, color: Color(0xFF006A5B), size: 20),
                     const SizedBox(width: 8),
                     Text(
                       therapistData?['Contact_Number'] ?? 'Not provided',
@@ -529,8 +527,7 @@ class _ParentTherapistProfilePageState
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.email,
-                        color: Color(0xFF006A5B), size: 20),
+                    const Icon(Icons.email, color: Color(0xFF006A5B), size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(

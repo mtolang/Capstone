@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'lib/firebase_options.dart';
 
 /// Fix contract bookings by adding missing dayOfWeek field
 /// This script will automatically detect the day from appointmentDate

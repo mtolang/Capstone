@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:kindora/screens/parent/dashboard_tabbar.dart';
+import 'package:kindora/screens/parent/new_dashboard_tabbar.dart';
 import 'package:kindora/screens/parent/parent_navbar.dart';
 import 'package:kindora/screens/parent/parent_therapist_profile.dart';
 import 'package:kindora/widgets/map.dart';
@@ -175,7 +175,7 @@ class _TherapistsDashboardState extends State<TherapistsDashboard> {
                   backgroundColor:
                       Colors.transparent, // Make the background transparent
                   flexibleSpace: FlexibleSpaceBar(
-                    title: DashTab(
+                    title: NewDashboardTabBar(
                         initialSelectedIndex:
                             1), // Set to therapists tab (index 1)
                     centerTitle: true, // Center the title

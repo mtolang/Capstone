@@ -27,10 +27,7 @@ import 'package:kindora/screens/registration/clinic_reg.dart';
 import 'package:kindora/screens/registration/parent_reg.dart';
 import 'package:kindora/screens/registration/therapist_reg.dart';
 //parent page imports
-import 'package:kindora/screens/parent/dashboard_tabbar.dart';
-import 'package:kindora/screens/parent/dashboard.dart'; // Keep for legacy routes
-import 'package:kindora/screens/parent/ther_dash.dart'; // Keep for legacy routes
-import 'package:kindora/screens/parent/materials.dart'; // Keep for legacy routes
+import 'package:kindora/screens/parent/new_dashboard_tabbar.dart';
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
 import 'package:kindora/screens/parent/games/cognitive_pattern_master.dart';
@@ -247,9 +244,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/therapistreg': (context) => const TherapistRegister(),
 
             //Parent Page Routes
-            '/parentdashboard': (context) => const DashTab(initialSelectedIndex: 0), // Clinics tab
-            '/therdashboard': (context) => const DashTab(initialSelectedIndex: 1), // Therapists tab
-            '/materials': (context) => const DashTab(initialSelectedIndex: 2), // Materials tab
+            '/parentdashboard': (context) => const NewDashboardTabBar(
+                initialSelectedIndex: 0), // New Clinics tab
+            '/therdashboard': (context) => const NewDashboardTabBar(
+                initialSelectedIndex: 1), // New Therapists tab
+            '/materials': (context) => const NewDashboardTabBar(
+                initialSelectedIndex: 2), // Materials tab
             '/gamesoption': (context) => const GamesOption(),
             '/talkwithtiles': (context) => const TalkWithTilesGame(),
             '/shapeshifters': (context) => const PatternMasterApp(),
@@ -268,7 +268,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/therapistreview': (context) => const TherapistReview(),
             '/therapistprogress': (context) => const TherProgress(),
             '/therapistschedule': (context) => const TherapistSchedulePage(),
-            '/therapistsetupschedule': (context) => const TherapistSetupSchedulePage(),
+            '/therapistsetupschedule': (context) =>
+                const TherapistSetupSchedulePage(),
             '/therapistpatients': (context) =>
                 const _ComingSoonPage(title: 'Patient List'),
             '/therapiststaff': (context) =>

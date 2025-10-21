@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindora/helper/field_helper.dart';
 import 'package:kindora/screens/clinic/clinic_patient_progress_report.dart';
+import 'package:kindora/screens/clinic/clinic_patient_profile.dart';
 
 class ClinicPatientListPage extends StatefulWidget {
   const ClinicPatientListPage({Key? key}) : super(key: key);
@@ -453,7 +454,7 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _showPatientDetailsPopup(patient),
+          onTap: () => _navigateToPatientProfile(patient),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -876,6 +877,33 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
       default:
         return Colors.green;
     }
+  }
+
+  void _navigateToPatientProfile(Map<String, dynamic> patient) {
+    // Extract the required parameters from the patient data
+    final patientId = patient['patientInfo']?['parentId'] ?? 
+                     patient['parentID'] ?? 
+                     patient['id'] ?? 
+                     patient['documentId'] ?? 
+                     'unknown';
+    
+    final patientName = patient['childName'] ?? 'Unknown Patient';
+    
+    // For now, use empty string for image URL since we don't have profile images
+    final patientImageUrl = patient['patientInfo']?['profileImageUrl'] ?? 
+                           patient['profileImage'] ?? 
+                           '';
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClinicPatientProfile(
+          patientId: patientId,
+          patientName: patientName,
+          patientImageUrl: patientImageUrl,
+        ),
+      ),
+    );
   }
 
   void _navigateToProgressReport(Map<String, dynamic> patient) {

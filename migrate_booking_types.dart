@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'lib/firebase_options.dart';
 
 /// Migration script to add bookingProcessType to existing AcceptedBooking documents
 /// This helps identify which bookings should be treated as recurring contracts

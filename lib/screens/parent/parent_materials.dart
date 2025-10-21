@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kindora/screens/parent/parent_navbar.dart';
-import 'package:kindora/screens/parent/dashboard_tabbar.dart';
+import 'package:kindora/screens/parent/new_dashboard_tabbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -241,7 +241,7 @@ class _ParentMaterialsState extends State<ParentMaterials> {
                   toolbarHeight: 70.0,
                   backgroundColor: Color(0xFF006A5B),
                   flexibleSpace: FlexibleSpaceBar(
-                    title: DashTab(
+                    title: NewDashboardTabBar(
                         initialSelectedIndex: 2), // Set to materials tab
                     centerTitle: true,
                   ),
@@ -743,9 +743,11 @@ class _ParentMaterialsState extends State<ParentMaterials> {
                           video['thumbnail'] ?? '',
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          errorBuilder: (context, error, stackTrace) => Container(
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
                             color: Colors.grey[300],
-                            child: const Icon(Icons.video_library, size: 40, color: Colors.grey),
+                            child: const Icon(Icons.video_library,
+                                size: 40, color: Colors.grey),
                           ),
                         ),
                       ),
@@ -773,7 +775,10 @@ class _ParentMaterialsState extends State<ParentMaterials> {
                               video['channelTitle']?.toString() ?? '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Poppins'),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                  fontFamily: 'Poppins'),
                             ),
                           ],
                         ),

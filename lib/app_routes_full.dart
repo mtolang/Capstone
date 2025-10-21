@@ -13,8 +13,7 @@ import 'package:kindora/screens/registration/parent_reg.dart';
 import 'package:kindora/screens/registration/therapist_reg.dart';
 
 // Parent pages
-import 'package:kindora/screens/parent/dashboard.dart';
-import 'package:kindora/screens/parent/ther_dash.dart';
+import 'package:kindora/screens/parent/new_dashboard_tabbar.dart';
 import 'package:kindora/screens/parent/materials.dart';
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
@@ -52,8 +51,10 @@ final Map<String, WidgetBuilder> routes = {
   '/therapistreg': (context) => const TherapistRegister(),
 
   // Parent pages
-  '/parentdashboard': (context) => const Dashboard(),
-  '/therdashboard': (context) => const TherapistsDashboard(),
+  '/parentdashboard': (context) =>
+      const NewDashboardTabBar(initialSelectedIndex: 0),
+  '/therdashboard': (context) =>
+      const NewDashboardTabBar(initialSelectedIndex: 1),
   '/materials': (context) => const MaterialsPage(),
   '/gamesoption': (context) => const GamesOption(),
   '/talkwithtiles': (context) => const TalkWithTilesGame(),

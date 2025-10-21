@@ -113,7 +113,7 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
 
       // Query AcceptedBooking collection based on whether it's clinic or therapist
       QuerySnapshot snapshot;
-      
+
       if (widget.therapistId != null) {
         // For therapists, query using serviceProvider.therapistId
         snapshot = await FirebaseFirestore.instance
@@ -135,13 +135,15 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
-        
-        final originalRequestData = data['originalRequestData'] as Map<String, dynamic>?;
+
+        final originalRequestData =
+            data['originalRequestData'] as Map<String, dynamic>?;
         final bookingProcessType = originalRequestData?['bookingProcessType'];
 
         if (bookingProcessType == 'contract') {
           // CONTRACT BOOKING - Check if it applies to this day of week
-          final contractInfo = originalRequestData?['contractInfo'] as Map<String, dynamic>?;
+          final contractInfo =
+              originalRequestData?['contractInfo'] as Map<String, dynamic>?;
           final contractDayOfWeek = contractInfo?['dayOfWeek'];
           final contractTime = contractInfo?['appointmentTime'];
 

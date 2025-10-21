@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:kindora/screens/parent/dashboard_tabbar.dart';
 import 'package:kindora/screens/parent/parent_navbar.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -280,18 +279,6 @@ class _MaterialsPageState extends State<MaterialsPage> {
             padding: const EdgeInsets.all(8.0),
             child: CustomScrollView(
               slivers: <Widget>[
-                const SliverAppBar(
-                  automaticallyImplyLeading: false,
-                  pinned: true,
-                  expandedHeight: 70.0,
-                  toolbarHeight: 70.0,
-                  backgroundColor: Color(0xFF006A5B),
-                  flexibleSpace: FlexibleSpaceBar(
-                    title: DashTab(
-                        initialSelectedIndex: 2), // Set to materials tab
-                    centerTitle: true,
-                  ),
-                ),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 30),
                 ),
