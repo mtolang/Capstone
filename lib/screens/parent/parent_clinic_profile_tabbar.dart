@@ -31,9 +31,10 @@ class _ParentClinicProfileTabBarState extends State<ParentClinicProfileTabBar>
         // Tab bar
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
@@ -46,8 +47,10 @@ class _ParentClinicProfileTabBarState extends State<ParentClinicProfileTabBar>
             controller: _tabController,
             indicator: BoxDecoration(
               color: const Color(0xFF006A5B),
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(26),
             ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: EdgeInsets.zero,
             labelColor: Colors.white,
             unselectedLabelColor: const Color(0xFF006A5B),
             labelStyle: const TextStyle(
@@ -60,11 +63,28 @@ class _ParentClinicProfileTabBarState extends State<ParentClinicProfileTabBar>
               fontSize: 14,
               fontFamily: 'Poppins',
             ),
-            indicatorPadding: const EdgeInsets.all(4),
-            tabs: const [
-              Tab(text: 'Profile'),
-              Tab(text: 'Gallery'),
-              Tab(text: 'Reviews'),
+            dividerColor: Colors.transparent,
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
+            splashFactory: NoSplash.splashFactory,
+            tabs: [
+              Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const Text('Profile'),
+                ),
+              ),
+              Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const Text('Gallery'),
+                ),
+              ),
+              Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: const Text('Reviews'),
+                ),
+              ),
             ],
           ),
         ),

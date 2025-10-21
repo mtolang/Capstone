@@ -1,12 +1,304 @@
 import 'package:flutter/material.dart';
-import 'package:kindora/screens/auth/login_as.dart';
 import 'package:kindora/screens/therapist/ther_tab.dart';
 import 'package:kindora/screens/therapist/ther_navbar.dart';
 import 'package:kindora/helper/therapist_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 // import 'package:kindora/calendar.dart';
 
-class TherapistProfile extends StatelessWidget {
+class TherapistProfile extends StatefulWidget {
   const TherapistProfile({Key? key}) : super(key: key);
+
+  @override
+  State<TherapistProfile> createState() => _TherapistProfileState();
+}
+
+class _TherapistProfileState extends State<TherapistProfile> {
+  String _therapistName = 'Loading...';
+  String _aboutText = 'Offers variety of therapy services for your child!';
+  String? _profileImagePath;
+  bool _isLoading = true;
+
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _aboutController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTherapistData();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _aboutController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTherapistData() async {
+    try {
+      final therapistInfo = await TherapistAuthService.getStoredTherapistInfo();
+      final therapistId = therapistInfo['therapist_id'];
+      
+      if (therapistId != null) {
+        // Get fresh data from Firebase
+        final doc = await FirebaseFirestore.instance
+            .collection('TherapistAcc')
+            .doc(therapistId)
+            .get();
+        
+        if (!doc.exists) {
+          // Try TherAcc collection as fallback
+          final therDoc = await FirebaseFirestore.instance
+              .collection('TherAcc')
+              .doc(therapistId)
+              .get();
+          
+          if (therDoc.exists) {
+            final data = therDoc.data() as Map<String, dynamic>;
+            _updateUI(data);
+          }
+        } else {
+          final data = doc.data() as Map<String, dynamic>;
+          _updateUI(data);
+        }
+      } else {
+        // Fallback to stored data
+        setState(() {
+          _therapistName = therapistInfo['therapist_name'] ?? 'Therapist';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading therapist data: $e');
+      setState(() {
+        _therapistName = 'Therapist Profile';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _updateUI(Map<String, dynamic> data) {
+    setState(() {
+      // Try different field name variations
+      _therapistName = data['User_Name'] ?? 
+                     data['Full_Name'] ?? 
+                     data['user_name'] ?? 
+                     data['full_name'] ?? 
+                     data['Name'] ?? 
+                     'Therapist';
+      
+      // Load about text if available
+      _aboutText = data['About'] ?? 
+                   data['about'] ?? 
+                   'Offers variety of therapy services for your child!';
+      
+      _isLoading = false;
+    });
+    
+    // Update controllers
+    _nameController.text = _therapistName;
+    _aboutController.text = _aboutText;
+  }
+
+  // Show edit profile dialog
+  void _showEditProfileDialog() {
+    // Reset controllers with current values
+    _nameController.text = _therapistName;
+    _aboutController.text = _aboutText;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
+                'Edit Profile',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Profile picture section
+                    GestureDetector(
+                      onTap: () => _pickProfileImage(setDialogState),
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _profileImagePath != null
+                                ? FileImage(File(_profileImagePath!))
+                                : const AssetImage('asset/images/ther.jpg') as ImageProvider,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF006A5B),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Name field
+                    TextField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Display Name',
+                        labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                        border: OutlineInputBorder(),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFF006A5B)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // About field
+                    TextField(
+                      controller: _aboutController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'About',
+                        labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                        border: OutlineInputBorder(),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFF006A5B)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () => _saveProfile(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF006A5B),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Pick profile image
+  Future<void> _pickProfileImage(StateSetter setDialogState) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 70,
+      );
+      
+      if (image != null) {
+        setDialogState(() {
+          _profileImagePath = image.path;
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to pick image. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Save profile changes
+  Future<void> _saveProfile() async {
+    try {
+      final therapistInfo = await TherapistAuthService.getStoredTherapistInfo();
+      final therapistId = therapistInfo['therapist_id'];
+      
+      if (therapistId == null) {
+        throw Exception('No therapist ID found');
+      }
+
+      // Update Firebase with new name
+      Map<String, dynamic> updateData = {
+        'User_Name': _nameController.text.trim(),
+        'About': _aboutController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Try TherapistAcc collection first
+      try {
+        await FirebaseFirestore.instance
+            .collection('TherapistAcc')
+            .doc(therapistId)
+            .update(updateData);
+      } catch (e) {
+        // If fails, try TherAcc collection
+        await FirebaseFirestore.instance
+            .collection('TherAcc')
+            .doc(therapistId)
+            .update(updateData);
+      }
+
+      // Update local state
+      setState(() {
+        _therapistName = _nameController.text.trim();
+        _aboutText = _aboutController.text.trim();
+      });
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Color(0xFF006A5B),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,9 +391,28 @@ class TherapistProfile extends StatelessWidget {
                           ),
                           shape: BoxShape.circle,
                         ),
-                        child: const CircleAvatar(
+                        child: CircleAvatar(
                           radius: 70,
-                          backgroundImage: AssetImage('asset/images/ther.jpg'),
+                          backgroundImage: _profileImagePath != null
+                              ? FileImage(File(_profileImagePath!))
+                              : const AssetImage('asset/images/ther.jpg') as ImageProvider,
+                          child: _profileImagePath == null
+                              ? null
+                              : ClipOval(
+                                  child: Image.file(
+                                    File(_profileImagePath!),
+                                    width: 140,
+                                    height: 140,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(
+                                        Icons.person,
+                                        size: 80,
+                                        color: Colors.grey,
+                                      );
+                                    },
+                                  ),
+                                ),
                         ),
                       ),
 
@@ -109,15 +420,19 @@ class TherapistProfile extends StatelessWidget {
                       const SizedBox(height: 5),
 
                       // Therapist Name
-                      const Text(
-                        'Therapist Name',
-                        style: TextStyle(
-                          color: Color(0xFF67AFA5),
-                          fontSize: 20,
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
+                      _isLoading
+                          ? const CircularProgressIndicator(
+                              color: Color(0xFF67AFA5),
+                            )
+                          : Text(
+                              _therapistName,
+                              style: const TextStyle(
+                                color: Color(0xFF67AFA5),
+                                fontSize: 20,
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
 
                       // Spacing between clinic name and 'About Us'
                       const SizedBox(height: 10),
@@ -137,14 +452,17 @@ class TherapistProfile extends StatelessWidget {
                       const SizedBox(height: 5),
 
                       // About Us content
-                      const Text(
-                        'Offers variety of therapy services for your child!',
-                        style: TextStyle(
-                          height: 1.3,
-                          fontSize: 15.0,
-                          fontWeight: FontWeight.bold,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          _aboutText,
+                          style: const TextStyle(
+                            height: 1.3,
+                            fontSize: 15.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -310,28 +628,17 @@ class TherapistProfile extends StatelessWidget {
               ),
             ),
 
-            // Floating Action Button (FAB)
+            // Edit Profile Button (FAB)
             Positioned(
-              bottom: 35, // Adjust the distance from the bottom as needed
-              right: 30, // Adjust the distance from the right as needed
-              child: ClipOval(
-                child: Material(
-                  color: const Color(0xFF006A5B), // Set the background color
-                  child: InkWell(
-                    onTap: () {},
-                    child: SizedBox(
-                      width: 60, // Adjust the size of the circular FAB
-                      height: 60, // Adjust the size of the circular FAB
-                      child: Center(
-                        child: Image.asset(
-                          'asset/icons/calendar (1).png', // Set the image color
-                          height: 30,
-                          color:
-                              Colors.white, // Make the image fit inside the box
-                        ),
-                      ),
-                    ),
-                  ),
+              bottom: 35,
+              right: 30,
+              child: FloatingActionButton(
+                onPressed: _showEditProfileDialog,
+                backgroundColor: const Color(0xFF006A5B),
+                child: const Icon(
+                  Icons.edit,
+                  color: Colors.white,
+                  size: 24,
                 ),
               ),
             ),
