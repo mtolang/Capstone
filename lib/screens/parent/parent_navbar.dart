@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/materials.dart';
 import 'package:kindora/screens/parent/parent_schedule.dart';
+import 'package:kindora/screens/parent/parent_profile.dart';
 import 'package:kindora/screens/auth/login_as.dart';
 import 'package:kindora/helper/parent_auth.dart'; // Add ParentAuthService import
 import 'package:kindora/helper/clinic_auth.dart'; // Add ClinicAuthService import for therapists
@@ -101,8 +102,11 @@ class ParentNavbar extends StatelessWidget {
             onTap: () {
               Navigator.pop(context);
               print('Profile tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profile selected')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ParentProfilePage(),
+                ),
               );
             },
           ),
