@@ -474,8 +474,13 @@ class _TherapistRequestBookingPageState
     final appointmentDetails =
         data['appointmentDetails'] as Map<String, dynamic>? ?? {};
 
-    final parentName = FieldHelper.getName(parentInfo) ?? 'Unknown Parent';
-    final childName = FieldHelper.getName(childInfo) ?? 'Unknown Child';
+    // Debug print to see the actual data structure from Request collection
+    print('🔍 DEBUG Request data: $data');
+    print('🔍 DEBUG parentInfo: $parentInfo');
+    print('🔍 DEBUG childInfo: $childInfo');
+
+    final parentName = FieldHelper.getParentName(data) ?? 'Unknown Parent';
+    final childName = FieldHelper.getChildName(data) ?? 'Unknown Child';
     final appointmentTime = appointmentDetails['requestedTime'] ?? 'TBD';
     final appointmentType = appointmentDetails['appointmentType'] ?? 'Therapy';
     final status = data['status'] ?? 'pending';

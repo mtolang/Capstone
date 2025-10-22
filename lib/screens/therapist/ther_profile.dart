@@ -17,11 +17,20 @@ class TherapistProfile extends StatefulWidget {
 class _TherapistProfileState extends State<TherapistProfile> {
   String _therapistName = 'Loading...';
   String _aboutText = 'Offers variety of therapy services for your child!';
+  String _email = '';
+  String _address = '';
+  String _username = '';
+  String _contactNumber = '';
   String? _profileImagePath;
   bool _isLoading = true;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _aboutController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _contactController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
@@ -34,6 +43,11 @@ class _TherapistProfileState extends State<TherapistProfile> {
   void dispose() {
     _nameController.dispose();
     _aboutController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _addressController.dispose();
+    _usernameController.dispose();
+    _contactController.dispose();
     super.dispose();
   }
 
@@ -95,12 +109,24 @@ class _TherapistProfileState extends State<TherapistProfile> {
                    data['about'] ?? 
                    'Offers variety of therapy services for your child!';
       
+      // Load additional fields
+      _email = data['Email'] ?? data['email'] ?? '';
+      _address = data['Address'] ?? data['address'] ?? '';
+      _username = data['User_Name'] ?? data['user_name'] ?? '';
+      _contactNumber = data['Contact_Number'] ?? data['contact_number'] ?? '';
+      
       _isLoading = false;
     });
     
-    // Update controllers
+    // Update controllers with current values
     _nameController.text = _therapistName;
     _aboutController.text = _aboutText;
+    _emailController.text = _email;
+    _addressController.text = _address;
+    _usernameController.text = _username;
+    _contactController.text = _contactNumber;
+    // Note: We don't populate password for security reasons
+    _passwordController.text = '';
   }
 
   // Show edit profile dialog
@@ -108,6 +134,11 @@ class _TherapistProfileState extends State<TherapistProfile> {
     // Reset controllers with current values
     _nameController.text = _therapistName;
     _aboutController.text = _aboutText;
+    _emailController.text = _email;
+    _addressController.text = _address;
+    _usernameController.text = _username;
+    _contactController.text = _contactNumber;
+    _passwordController.text = ''; // Always empty for security
 
     showDialog(
       context: context,
@@ -123,70 +154,155 @@ class _TherapistProfileState extends State<TherapistProfile> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Profile picture section
-                    GestureDetector(
-                      onTap: () => _pickProfileImage(setDialogState),
-                      child: Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundImage: _profileImagePath != null
-                                ? FileImage(File(_profileImagePath!))
-                                : const AssetImage('asset/images/ther.jpg') as ImageProvider,
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF006A5B),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 20,
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Profile picture section
+                      GestureDetector(
+                        onTap: () => _pickProfileImage(setDialogState),
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundImage: _profileImagePath != null
+                                  ? FileImage(File(_profileImagePath!))
+                                  : const AssetImage('asset/images/ther.jpg') as ImageProvider,
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF006A5B),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Full Name field
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Name',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.person, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    
-                    // Name field
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Display Name',
-                        labelStyle: TextStyle(color: Color(0xFF006A5B)),
-                        border: OutlineInputBorder(),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF006A5B)),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // About field
-                    TextField(
-                      controller: _aboutController,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'About',
-                        labelStyle: TextStyle(color: Color(0xFF006A5B)),
-                        border: OutlineInputBorder(),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF006A5B)),
+                      const SizedBox(height: 16),
+                      
+                      // Username field
+                      TextField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.account_circle, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      
+                      // Email field
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.email, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Contact Number field
+                      TextField(
+                        controller: _contactController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Contact Number',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.phone, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Address field
+                      TextField(
+                        controller: _addressController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Address',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.location_on, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Password field
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'New Password (optional)',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.lock, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
+                          ),
+                          helperText: 'Leave empty to keep current password',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // About field
+                      TextField(
+                        controller: _aboutController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'About',
+                          labelStyle: TextStyle(color: Color(0xFF006A5B)),
+                          prefixIcon: Icon(Icons.info, color: Color(0xFF006A5B)),
+                          border: OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Color(0xFF006A5B)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -244,6 +360,39 @@ class _TherapistProfileState extends State<TherapistProfile> {
   // Save profile changes
   Future<void> _saveProfile() async {
     try {
+      // Validate required fields
+      if (_nameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Full name is required'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      if (_emailController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email is required'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      // Validate email format
+      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+      if (!emailRegex.hasMatch(_emailController.text.trim())) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid email address'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       final therapistInfo = await TherapistAuthService.getStoredTherapistInfo();
       final therapistId = therapistInfo['therapist_id'];
       
@@ -251,48 +400,77 @@ class _TherapistProfileState extends State<TherapistProfile> {
         throw Exception('No therapist ID found');
       }
 
-      // Update Firebase with new name
+      // Prepare update data
       Map<String, dynamic> updateData = {
-        'User_Name': _nameController.text.trim(),
+        'Full_Name': _nameController.text.trim(),
+        'User_Name': _usernameController.text.trim().isEmpty 
+            ? _nameController.text.trim() 
+            : _usernameController.text.trim(),
+        'Email': _emailController.text.trim(),
+        'Contact_Number': _contactController.text.trim(),
+        'Address': _addressController.text.trim(),
         'About': _aboutController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Try TherapistAcc collection first
+      // Only update password if a new one is provided
+      if (_passwordController.text.trim().isNotEmpty) {
+        updateData['Password'] = _passwordController.text.trim();
+      }
+
+      // Try TherapistAcc collection first, then TherAcc as fallback
+      bool updateSuccessful = false;
+      
       try {
         await FirebaseFirestore.instance
             .collection('TherapistAcc')
             .doc(therapistId)
             .update(updateData);
+        updateSuccessful = true;
       } catch (e) {
-        // If fails, try TherAcc collection
-        await FirebaseFirestore.instance
-            .collection('TherAcc')
-            .doc(therapistId)
-            .update(updateData);
+        print('TherapistAcc update failed: $e');
+        try {
+          // If fails, try TherAcc collection
+          await FirebaseFirestore.instance
+              .collection('TherAcc')
+              .doc(therapistId)
+              .update(updateData);
+          updateSuccessful = true;
+        } catch (e2) {
+          print('TherAcc update also failed: $e2');
+          throw Exception('Failed to update profile in database');
+        }
       }
 
-      // Update local state
-      setState(() {
-        _therapistName = _nameController.text.trim();
-        _aboutText = _aboutController.text.trim();
-      });
+      if (updateSuccessful) {
+        // Update local state
+        setState(() {
+          _therapistName = _nameController.text.trim();
+          _aboutText = _aboutController.text.trim();
+          _email = _emailController.text.trim();
+          _address = _addressController.text.trim();
+          _username = _usernameController.text.trim().isEmpty 
+              ? _nameController.text.trim() 
+              : _usernameController.text.trim();
+          _contactNumber = _contactController.text.trim();
+        });
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Color(0xFF006A5B),
-          ),
-        );
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Color(0xFF006A5B),
+            ),
+          );
+        }
       }
     } catch (e) {
       print('Error updating profile: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update profile: $e'),
+            content: Text('Failed to update profile: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -467,8 +645,109 @@ class _TherapistProfileState extends State<TherapistProfile> {
                     ],
                   ),
 
-                  // Spacing between About Us content and "Services offered"
-                  const SizedBox(height: 15),
+                  // Spacing between About Us content and Contact Info
+                  const SizedBox(height: 20),
+
+                  // Contact Information Section
+                  if (!_isLoading && (_email.isNotEmpty || _contactNumber.isNotEmpty || _address.isNotEmpty))
+                    Column(
+                      children: [
+                        const Text(
+                          'CONTACT INFORMATION',
+                          style: TextStyle(
+                            color: Color(0xFF999999),
+                            fontSize: 16,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                spreadRadius: 1,
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              if (_email.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.email, 
+                                          color: Color(0xFF006A5B), size: 18),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          _email,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (_contactNumber.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.phone, 
+                                          color: Color(0xFF006A5B), size: 18),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          _contactNumber,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (_address.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.location_on, 
+                                          color: Color(0xFF006A5B), size: 18),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          _address,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                  // Spacing between Contact Info and "Services offered"
+                  const SizedBox(height: 20),
 
                   // Services Offered
                   const Column(

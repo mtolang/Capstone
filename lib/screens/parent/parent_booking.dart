@@ -40,11 +40,89 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
         isLoading = true;
       });
 
-      // Use therapistId if provided, otherwise use clinicId
-      // For therapists, we need to query the schedules collection using ther_id field
-      String scheduleId = widget.therapistId ?? widget.clinicId ?? 'CLI01';
+      if (widget.therapistId != null) {
+        // Load therapist schedule from schedules collection
+        await _loadTherapistSchedule(widget.therapistId!);
+      } else if (widget.clinicId != null) {
+        // Load clinic schedule using existing method
+        await _loadClinicScheduleData(widget.clinicId!);
+      } else {
+        print('❌ No therapist ID or clinic ID provided');
+        setState(() {
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading schedule: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
-      final schedule = await ScheduleDatabaseService.loadSchedule(scheduleId);
+  // Load therapist schedule from schedules collection
+  Future<void> _loadTherapistSchedule(String therapistId) async {
+    try {
+      print('🔍 Loading therapist schedule for: $therapistId');
+      
+      // Query schedules collection where ther_id matches therapistId
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('schedules')
+          .where('ther_id', isEqualTo: therapistId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final scheduleDoc = querySnapshot.docs.first;
+        final scheduleData = scheduleDoc.data();
+        
+        print('✅ Found therapist schedule: ${scheduleData.keys}');
+        
+        // Convert therapist schedule format to match booking page expectations
+        final convertedSchedule = _convertTherapistScheduleFormat(scheduleData);
+        
+        setState(() {
+          clinicSchedule = convertedSchedule;
+          bookingProcessType = 'single'; // Default for therapists
+          isLoading = false;
+        });
+        
+        _loadAvailableSlotsForDate(selectedDate);
+      } else {
+        print('❌ No schedule found for therapist: $therapistId');
+        setState(() {
+          isLoading = false;
+        });
+        
+        // Show error message to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No schedule found for therapist $therapistId'),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => _loadTherapistSchedule(therapistId),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading therapist schedule: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // Load clinic schedule using existing method
+  Future<void> _loadClinicScheduleData(String clinicId) async {
+    try {
+      print('🔍 Loading clinic schedule for: $clinicId');
+      
+      final schedule = await ScheduleDatabaseService.loadSchedule(clinicId);
 
       if (schedule != null) {
         setState(() {
@@ -66,19 +144,93 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
         setState(() {
           isLoading = false;
         });
+        
+        // Show error message to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No schedule found for clinic $clinicId'),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () => _loadClinicScheduleData(clinicId),
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Error loading clinic schedule: $e');
+      print('❌ Error loading clinic schedule: $e');
       setState(() {
         isLoading = false;
       });
     }
   }
 
+  // Convert therapist schedule format to match booking page expectations
+  Map<String, dynamic> _convertTherapistScheduleFormat(Map<String, dynamic> therapistSchedule) {
+    final selectedDays = therapistSchedule['selectedDays'] as Map<String, dynamic>? ?? {};
+    final slotDurationMinutes = therapistSchedule['slotDurationMinutes'] as int? ?? 60;
+    
+    // Convert selectedDays to weeklySchedule format
+    Map<String, dynamic> weeklySchedule = {};
+    
+    selectedDays.forEach((dayKey, isSelected) {
+      if (isSelected == true) {
+        // Generate time slots for available days
+        weeklySchedule[dayKey.toLowerCase()] = {
+          'isAvailable': true,
+          'timeSlots': _generateTimeSlots(slotDurationMinutes),
+        };
+      }
+    });
+    
+    return {
+      'therapistId': therapistSchedule['ther_id'],
+      'slotDurationMinutes': slotDurationMinutes,
+      'weekendBooking': therapistSchedule['weekendBooking'] ?? false,
+      'weeklySchedule': weeklySchedule,
+      'recurringSettings': {
+        'bookingProcessType': 'single', // Default for therapists
+      },
+    };
+  }
+
+  // Generate time slots for therapist schedule
+  List<Map<String, dynamic>> _generateTimeSlots(int durationMinutes) {
+    List<Map<String, dynamic>> slots = [];
+    
+    // Generate slots from 8:00 AM to 6:00 PM
+    for (int hour = 8; hour < 18; hour++) {
+      final startTime = '${hour.toString().padLeft(2, '0')}:00';
+      final endHour = hour + (durationMinutes ~/ 60);
+      final endMinutes = durationMinutes % 60;
+      final endTime = '${endHour.toString().padLeft(2, '0')}:${endMinutes.toString().padLeft(2, '0')}';
+      
+      slots.add({
+        'slotId': 'slot_${hour}_00',
+        'startTime': startTime,
+        'endTime': endTime,
+        'isAvailable': true,
+        'isBooked': false,
+        'maxPatients': 1,
+        'currentPatients': 0,
+      });
+    }
+    
+    return slots;
+  }
+
   void _loadAvailableSlotsForDate(DateTime date) async {
-    if (clinicSchedule == null) return;
+    if (clinicSchedule == null) {
+      print('❌ No clinic schedule available');
+      return;
+    }
 
     final dayName = _getDayName(date);
+    print('🔍 Loading slots for $dayName (${DateFormat('MMM dd, yyyy').format(date)})');
+    
     final weeklySchedule =
         clinicSchedule!['weeklySchedule'] as Map<String, dynamic>?;
 
@@ -87,16 +239,25 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       final timeSlots =
           List<Map<String, dynamic>>.from(daySchedule['timeSlots'] ?? []);
 
+      print('📅 Found ${timeSlots.length} time slots for $dayName');
+
       // Load booked slots for this date
       await _loadBookedSlotsForDate(date);
 
+      final availableSlotsList = timeSlots
+          .where((slot) =>
+              slot['isAvailable'] == true && 
+              slot['isBooked'] != true &&
+              !bookedSlotIds.contains(slot['startTime'] ?? slot['slotId']))
+          .toList();
+
       setState(() {
-        availableSlots = timeSlots
-            .where((slot) =>
-                slot['isAvailable'] == true && slot['isBooked'] != true)
-            .toList();
+        availableSlots = availableSlotsList;
       });
+
+      print('✅ ${availableSlots.length} available slots after filtering');
     } else {
+      print('❌ No schedule found for $dayName');
       setState(() {
         availableSlots = [];
       });
@@ -246,16 +407,32 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
-                    const Expanded(
-                      child: Text(
-                        'Therapy Clinic Profile',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Poppins',
-                        ),
-                        textAlign: TextAlign.center,
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            widget.therapistId != null 
+                                ? 'Therapist Booking' 
+                                : 'Clinic Booking',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Poppins',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (widget.therapistId != null || widget.clinicId != null)
+                            Text(
+                              'ID: ${widget.therapistId ?? widget.clinicId}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontFamily: 'Poppins',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 40), // For balance
@@ -352,6 +529,11 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Booking Information Section
+                            _buildBookingInfoSection(),
+
+                            const SizedBox(height: 20),
+
                             // Calendar
                             _buildCalendar(),
 
@@ -706,6 +888,121 @@ class _ParentBookingPageState extends State<ParentBookingPage> {
       return '${slot['startTime']} - ${slot['endTime']}';
     }
     return '';
+  }
+
+  Widget _buildBookingInfoSection() {
+    if (clinicSchedule == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange[300]!),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange[700], size: 20),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'No schedule available for this provider.',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Get available days from schedule
+    final weeklySchedule = clinicSchedule!['weeklySchedule'] as Map<String, dynamic>? ?? {};
+    final availableDays = weeklySchedule.keys.where((day) {
+      final daySchedule = weeklySchedule[day] as Map<String, dynamic>?;
+      return daySchedule != null && daySchedule['isAvailable'] == true;
+    }).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF006A5B).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF006A5B).withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                widget.therapistId != null ? Icons.person : Icons.business,
+                color: const Color(0xFF006A5B),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.therapistId != null 
+                    ? 'Therapist Booking' 
+                    : 'Clinic Booking',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (clinicSchedule!['slotDurationMinutes'] != null)
+            Text(
+              'Session Duration: ${clinicSchedule!['slotDurationMinutes']} minutes',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          if (availableDays.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Available Days: ${availableDays.map((day) => _capitalizeFirst(day)).join(', ')}',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ],
+          if (bookingProcessType != 'single') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.blue[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Booking Type: ${_capitalizeFirst(bookingProcessType)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.blue[800],
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _capitalizeFirst(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
   }
 
   void _navigateToBookingForm() {

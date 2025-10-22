@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/accepted_booking_service.dart';
@@ -18,9 +17,6 @@ class TherapistBookingTabBar extends StatefulWidget {
 class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
-  Map<DateTime, List<Map<String, dynamic>>> _appointmentEvents = {};
 
   final List<Map<String, dynamic>> bookings = [
     {
@@ -48,70 +44,12 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _selectedDay = DateTime.now();
-    _loadAppointmentEvents();
+    _tabController = TabController(length: 2, vsync: this);
   }
 
-  List<Map<String, dynamic>> _getEventsForDay(DateTime day) {
-    final dateKey = DateTime(day.year, day.month, day.day);
-    return _appointmentEvents[dateKey] ?? [];
-  }
 
-  // Load appointment events from AcceptedBooking collection
-  Future<void> _loadAppointmentEvents() async {
-    try {
-      final therapistId = await _getCurrentTherapistId();
-      if (therapistId == null) {
-        print('No therapist ID found');
-        return;
-      }
 
-      // Load appointments for the current month and next month
-      final startDate = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
-      final endDate = DateTime(_focusedDay.year, _focusedDay.month + 2, 0);
 
-      print('Loading appointments from $startDate to $endDate');
-
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('AcceptedBooking')
-          .where('serviceProvider.therapistId', isEqualTo: therapistId)
-          .where('appointmentDate',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-          .where('appointmentDate',
-              isLessThanOrEqualTo: Timestamp.fromDate(endDate))
-          .orderBy('appointmentDate')
-          .orderBy('appointmentTime')
-          .get();
-
-      final Map<DateTime, List<Map<String, dynamic>>> events = {};
-
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-
-        final appointmentTimestamp = data['appointmentDate'] as Timestamp?;
-        if (appointmentTimestamp != null) {
-          final appointmentDate = appointmentTimestamp.toDate();
-          final dateKey = DateTime(
-              appointmentDate.year, appointmentDate.month, appointmentDate.day);
-
-          if (!events.containsKey(dateKey)) {
-            events[dateKey] = [];
-          }
-          events[dateKey]!.add(data);
-        }
-      }
-
-      setState(() {
-        _appointmentEvents = events;
-      });
-
-      print('Loaded appointments for ${events.length} days');
-    } catch (e) {
-      print('Error loading appointment events: $e');
-    }
-  }
 
   // Helper method to get current therapist ID
   Future<String?> _getCurrentTherapistId() async {
@@ -267,12 +205,6 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                     Tab(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: const Text('Schedule'),
-                      ),
-                    ),
-                    Tab(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: const Text('Request'),
                       ),
                     ),
@@ -285,7 +217,6 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                   controller: _tabController,
                   children: [
                     _buildTodayTab(today),
-                    _buildScheduleTab(),
                     _buildRequestTab(),
                   ],
                 ),
@@ -462,232 +393,7 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     );
   }
 
-  Widget _buildScheduleTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 30),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Text(
-              'Schedule Overview',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF006A5B),
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
 
-          // Calendar Widget
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: TableCalendar<Map<String, dynamic>>(
-                firstDay: DateTime.utc(2020, 1, 1),
-                lastDay: DateTime.utc(2030, 12, 31),
-                focusedDay: _focusedDay,
-                selectedDayPredicate: (day) {
-                  return isSameDay(_selectedDay, day);
-                },
-                eventLoader: _getEventsForDay,
-                calendarFormat: CalendarFormat.month,
-                startingDayOfWeek: StartingDayOfWeek.sunday,
-                daysOfWeekHeight: 40,
-                rowHeight: 45,
-                calendarStyle: const CalendarStyle(
-                  outsideDaysVisible: false,
-                  weekendTextStyle: TextStyle(color: Colors.black87),
-                  defaultTextStyle: TextStyle(color: Colors.black87),
-                  selectedDecoration: BoxDecoration(
-                    color: Color(0xFF006A5B),
-                    shape: BoxShape.circle,
-                  ),
-                  selectedTextStyle: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  todayDecoration: BoxDecoration(
-                    color: Color(0xFF7FB069),
-                    shape: BoxShape.circle,
-                  ),
-                  todayTextStyle: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  markerDecoration: BoxDecoration(
-                    color: Color(0xFF006A5B),
-                    shape: BoxShape.circle,
-                  ),
-                  markersMaxCount: 3,
-                  markerSize: 6,
-                  canMarkersOverflow: false,
-                  cellMargin: EdgeInsets.all(2),
-                  cellPadding: EdgeInsets.all(0),
-                ),
-                daysOfWeekStyle: const DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(
-                    color: Color(0xFF006A5B),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  weekendStyle: TextStyle(
-                    color: Color(0xFF006A5B),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                headerStyle: const HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                  headerPadding: EdgeInsets.symmetric(vertical: 8),
-                  titleTextStyle: TextStyle(
-                    color: Color(0xFF006A5B),
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  leftChevronIcon: Icon(
-                    Icons.chevron_left,
-                    color: Color(0xFF006A5B),
-                    size: 24,
-                  ),
-                  rightChevronIcon: Icon(
-                    Icons.chevron_right,
-                    color: Color(0xFF006A5B),
-                    size: 24,
-                  ),
-                ),
-                onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                    _focusedDay = focusedDay;
-                  });
-                  _showDayScheduleDialog(selectedDay);
-                },
-                onPageChanged: (focusedDay) {
-                  setState(() {
-                    _focusedDay = focusedDay;
-                  });
-                  _loadAppointmentEvents(); // Reload data when month changes
-                },
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Quick Schedule Actions
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Quick Actions',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF006A5B),
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _tabController.animateTo(0),
-                          icon: const Icon(Icons.today, color: Colors.white),
-                          label: const Text(
-                            'Today\'s Schedule',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF006A5B),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => _tabController.animateTo(2),
-                          icon: const Icon(Icons.schedule, color: Colors.white),
-                          label: const Text(
-                            'View Requests',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF67AFA5),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 100), // Extra space for bottom wave
-        ],
-      ),
-    );
-  }
 
   Widget _buildRequestTab() {
     return SingleChildScrollView(
@@ -1298,113 +1004,7 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
     );
   }
 
-  void _showDayScheduleDialog(DateTime selectedDay) {
-    final dayAppointments = _getEventsForDay(selectedDay);
-    final formattedDate = DateFormat('MMMM dd, yyyy').format(selectedDay);
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          formattedDate,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF006A5B),
-            fontFamily: 'Poppins',
-          ),
-        ),
-        content: dayAppointments.isEmpty
-            ? const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.event_available,
-                    size: 48,
-                    color: Color(0xFF67AFA5),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'No appointments scheduled',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Color(0xFF67AFA5),
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${dayAppointments.length} appointment${dayAppointments.length > 1 ? 's' : ''}:',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Poppins',
-                      color: Color(0xFF006A5B),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...dayAppointments.map((appointment) {
-                    final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
-                    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
-                    final patientName = FieldHelper.getName(childInfo) ??
-                        FieldHelper.getName(parentInfo) ??
-                        'Unknown Patient';
-                    
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF006A5B).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: const Color(0xFF006A5B).withOpacity(0.3),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              patientName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF006A5B),
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${appointment['appointmentTime']} - ${appointment['appointmentType'] ?? 'Therapy Session'}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF67AFA5),
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(
-                color: Color(0xFF006A5B),
-                fontFamily: 'Poppins',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // Helper methods
   Future<List<Map<String, dynamic>>> _getTodayAppointments() async {

@@ -32,7 +32,7 @@ class AcceptedBookingService {
         'updatedAt': FieldValue.serverTimestamp(),
         'bookingType': 'single_session',
 
-        // === PATIENT INFORMATION ===
+        // === PATIENT INFORMATION (Multiple formats for compatibility) ===
         'patientInfo': {
           'parentId': requestData['parentInfo']['parentId'],
           'parentName': requestData['parentInfo']['parentName'],
@@ -42,6 +42,23 @@ class AcceptedBookingService {
           'childAge': requestData['childInfo']['childAge'],
           'childGender': requestData['childInfo']['childGender'],
         },
+
+        // === DIRECT FIELDS FOR THERAPIST SCHEDULE COMPATIBILITY ===
+        'childInfo': {
+          'childName': requestData['childInfo']['childName'],
+          'childAge': requestData['childInfo']['childAge'],
+          'childGender': requestData['childInfo']['childGender'],
+        },
+        'parentInfo': {
+          'parentName': requestData['parentInfo']['parentName'],
+          'parentPhone': requestData['parentInfo']['parentPhone'],
+          'parentEmail': requestData['parentInfo']['parentEmail'],
+        },
+        
+        // Direct parent fields for field helper compatibility
+        'parentName': requestData['parentInfo']['parentName'],
+        'parentPhone': requestData['parentInfo']['parentPhone'],
+        'parentEmail': requestData['parentInfo']['parentEmail'],
 
         // === APPOINTMENT DETAILS ===
         'appointmentDetails': {
@@ -66,6 +83,13 @@ class AcceptedBookingService {
           'specialInstructions': requestData['additionalInfo']['notes'] ?? '',
         },
 
+        // === SERVICE PROVIDER (For therapist schedule compatibility) ===
+        'serviceProvider': {
+          'clinicId': requestData['clinicInfo']['clinicId'],
+          'therapistId': assignedTherapistId ?? requestData['clinicInfo']['therapistId'],
+          'type': 'therapist', // or 'clinic'
+        },
+
         // === BOOKING SOURCE ===
         'bookingSource': {
           'requestedVia': 'mobile_app',
@@ -75,8 +99,7 @@ class AcceptedBookingService {
           'approvedAt': FieldValue.serverTimestamp(),
         },
 
-        // === CONVENIENCE FIELDS FOR QUERYING ===
-        'parentName': requestData['parentInfo']['parentName'],
+        // === CONVENIENCE FIELDS FOR QUERYING & THERAPIST SCHEDULE COMPATIBILITY ===
         'childName': requestData['childInfo']['childName'],
         'appointmentDate': requestData['appointmentDetails']['requestedDate'],
         'appointmentTime': requestData['appointmentDetails']['requestedTime'],

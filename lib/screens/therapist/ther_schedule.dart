@@ -60,17 +60,82 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
       final endDate = DateTime(_focusedDay.year, _focusedDay.month + 2, 0);
 
       print('Loading appointments from $startDate to $endDate');
+      print('🔍 DEBUG: Therapist ID for query: $_therapistId');
 
-      final querySnapshot = await FirebaseFirestore.instance
+      // EMERGENCY DEBUG: Check ALL AcceptedBooking documents to find the appointment
+      print('🚨 EMERGENCY DEBUG: Checking ALL AcceptedBooking documents...');
+      final allDocsQuery = await FirebaseFirestore.instance
           .collection('AcceptedBooking')
-          .where('serviceProvider.therapistId', isEqualTo: _therapistId)
-          .where('appointmentDate',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-          .where('appointmentDate',
-              isLessThanOrEqualTo: Timestamp.fromDate(endDate))
-          .orderBy('appointmentDate')
-          .orderBy('appointmentTime')
+          .limit(10)
           .get();
+      
+      print('🚨 Found ${allDocsQuery.docs.length} total AcceptedBooking documents:');
+      for (var doc in allDocsQuery.docs) {
+        final data = doc.data();
+        print('📄 Document ${doc.id}:');
+        print('  - appointmentDate: ${data['appointmentDate']}');
+        print('  - assignmentInfo.therapistId: ${data['assignmentInfo']?['therapistId']}');
+        print('  - assignmentInfo.assignedBy: ${data['assignmentInfo']?['assignedBy']}');
+        print('  - serviceProvider.therapistId: ${data['serviceProvider']?['therapistId']}');
+        print('  - direct therapistId: ${data['therapistId']}');
+        
+        // Check if this is the Oct 23 appointment
+        final appointmentDate = data['appointmentDate'] as Timestamp?;
+        if (appointmentDate != null) {
+          final date = appointmentDate.toDate();
+          if (date.day == 23 && date.month == 10 && date.year == 2025) {
+            print('🎯 FOUND OCT 23 APPOINTMENT! Document: ${doc.id}');
+            print('    All therapist ID fields: ${data['assignmentInfo']?['therapistId']}, ${data['assignmentInfo']?['assignedBy']}, ${data['serviceProvider']?['therapistId']}, ${data['therapistId']}');
+          }
+        }
+      }
+
+      // QUICK FIX: Try direct therapistId field FIRST (from your Firebase screenshot)
+      var querySnapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('therapistId', isEqualTo: _therapistId)
+          .get();
+
+      print('🔍 DEBUG: Direct therapistId query returned ${querySnapshot.docs.length} documents');
+
+      // If no results, try assignmentInfo.therapistId 
+      if (querySnapshot.docs.isEmpty) {
+        print('🔍 DEBUG: Trying assignmentInfo.therapistId query');
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('assignmentInfo.therapistId', isEqualTo: _therapistId)
+            .get();
+        print('🔍 DEBUG: AssignmentInfo query returned ${querySnapshot.docs.length} documents');
+      }
+
+      // If no results, try assignmentInfo.assignedBy (since that shows "TherAcc03" in your screenshot)
+      if (querySnapshot.docs.isEmpty) {
+        print('🔍 DEBUG: Trying assignmentInfo.assignedBy query');
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('assignmentInfo.assignedBy', isEqualTo: _therapistId)
+            .get();
+        print('🔍 DEBUG: AssignedBy query returned ${querySnapshot.docs.length} documents');
+      }
+
+      // If no results, try other possible structures
+      if (querySnapshot.docs.isEmpty) {
+        print('🔍 DEBUG: Trying serviceProvider.therapistId query');
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('serviceProvider.therapistId', isEqualTo: _therapistId)
+            .get();
+        print('🔍 DEBUG: ServiceProvider query returned ${querySnapshot.docs.length} documents');
+      }
+
+      if (querySnapshot.docs.isEmpty) {
+        print('🔍 DEBUG: Trying direct therapistId field');
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('therapistId', isEqualTo: _therapistId)
+            .get();
+        print('🔍 DEBUG: Direct therapistId query returned ${querySnapshot.docs.length} documents');
+      }
 
       final Map<DateTime, List<Map<String, dynamic>>> events = {};
 
@@ -78,16 +143,38 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
         final data = doc.data();
         data['id'] = doc.id;
 
-        final appointmentTimestamp = data['appointmentDate'] as Timestamp?;
+        // Debug: Print the structure of the appointment data
+        print('🔍 DEBUG: AcceptedBooking document ${doc.id}:');
+        print('  - appointmentDate: ${data['appointmentDate']}');
+        print('  - appointmentTime: ${data['appointmentTime']}');
+        print('  - assignmentInfo.therapistId: ${data['assignmentInfo']?['therapistId']}');
+        print('  - serviceProvider.therapistId: ${data['serviceProvider']?['therapistId']}');
+        print('  - direct therapistId: ${data['therapistId']}');
+
+        // Get appointment date - try different possible fields
+        Timestamp? appointmentTimestamp;
+        if (data['appointmentDate'] is Timestamp) {
+          appointmentTimestamp = data['appointmentDate'] as Timestamp;
+        } else if (data['appointmentDetails'] != null && 
+                   data['appointmentDetails']['appointmentDate'] is Timestamp) {
+          appointmentTimestamp = data['appointmentDetails']['appointmentDate'] as Timestamp;
+        }
+
         if (appointmentTimestamp != null) {
           final appointmentDate = appointmentTimestamp.toDate();
-          final dateKey = DateTime(
-              appointmentDate.year, appointmentDate.month, appointmentDate.day);
+          
+          // Filter by date range
+          if (appointmentDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
+              appointmentDate.isBefore(endDate.add(const Duration(days: 1)))) {
+            
+            final dateKey = DateTime(
+                appointmentDate.year, appointmentDate.month, appointmentDate.day);
 
-          if (!events.containsKey(dateKey)) {
-            events[dateKey] = [];
+            if (!events.containsKey(dateKey)) {
+              events[dateKey] = [];
+            }
+            events[dateKey]!.add(data);
           }
-          events[dateKey]!.add(data);
         }
       }
 
@@ -97,9 +184,30 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
             _getEventsForDay(_selectedDay ?? DateTime.now());
       });
 
-      print('Loaded appointments for ${events.length} days');
+      print('✅ Loaded appointments for ${events.length} days');
+      print('📅 Total appointments found: ${events.values.expand((list) => list).length}');
+      
+      // Show user feedback
+      if (mounted) {
+        final totalAppointments = events.values.expand((list) => list).length;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Loaded $totalAppointments appointments'),
+            backgroundColor: totalAppointments > 0 ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
-      print('Error loading appointment events: $e');
+      print('❌ Error loading appointment events: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading appointments: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -334,10 +442,13 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
 
   Widget _buildAppointmentCard(Map<String, dynamic> appointment) {
     final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
-    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
 
-    final patientName = FieldHelper.getName(childInfo) ??
-        FieldHelper.getName(parentInfo) ??
+    // Debug print to see the actual data structure
+    print('🔍 DEBUG: childInfo = $childInfo');
+    print('🔍 DEBUG: appointment data = $appointment');
+    
+    final patientName = FieldHelper.getChildName(appointment) ??
+        FieldHelper.getParentName(appointment) ??
         'Unknown Patient';
 
     final appointmentTime = appointment['appointmentTime'] ?? '';
@@ -452,7 +563,7 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          'Child: ${FieldHelper.getName(childInfo) ?? 'Unknown'}',
+                          'Child: ${FieldHelper.getChildName(appointment) ?? 'Unknown'}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[500],
@@ -511,7 +622,6 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
 
   void _viewAppointmentDetails(Map<String, dynamic> appointment) {
     final childInfo = appointment['childInfo'] as Map<String, dynamic>? ?? {};
-    final parentInfo = appointment['parentInfo'] as Map<String, dynamic>? ?? {};
 
     showDialog(
       context: context,
@@ -529,13 +639,13 @@ class _TherapistSchedulePageState extends State<TherapistSchedulePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildDetailRow('Patient (Child)',
-                  FieldHelper.getName(childInfo) ?? 'Unknown'),
+                  FieldHelper.getChildName(appointment) ?? 'Unknown'),
               _buildDetailRow('Age', childInfo['childAge']?.toString() ?? ''),
               _buildDetailRow('Parent/Guardian',
-                  FieldHelper.getName(parentInfo) ?? 'Unknown'),
+                  FieldHelper.getParentName(appointment) ?? 'Unknown'),
               _buildDetailRow(
-                  'Contact', FieldHelper.getContactNumber(parentInfo) ?? ''),
-              _buildDetailRow('Email', FieldHelper.getEmail(parentInfo) ?? ''),
+                  'Contact', FieldHelper.getParentContact(appointment) ?? ''),
+              _buildDetailRow('Email', FieldHelper.getParentEmail(appointment) ?? ''),
               _buildDetailRow('Date',
                   _formatAppointmentDate(appointment['appointmentDate'])),
               _buildDetailRow('Time', appointment['appointmentTime'] ?? ''),

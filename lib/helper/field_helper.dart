@@ -17,6 +17,7 @@ class FieldHelper {
 
   /// Common field name variations for names
   static List<String> get nameFields => [
+        'childName',
         'Name',
         'Full_Name',
         'Full Name',
@@ -54,6 +55,7 @@ class FieldHelper {
 
   /// Common field name variations for contact numbers
   static List<String> get contactNumberFields => [
+        'parentPhone',
         'Contact_Number',
         'Contact Number',
         'contactNumber',
@@ -67,6 +69,7 @@ class FieldHelper {
 
   /// Common field name variations for email addresses
   static List<String> get emailFields => [
+        'parentEmail',
         'Email',
         'email',
         'Email_Address',
@@ -130,6 +133,76 @@ class FieldHelper {
   /// Get username from data using username field variations
   static String? getUsername(Map<String, dynamic> data) {
     return getFlexibleValue(data, usernameFields);
+  }
+
+  /// Get child name from childInfo field or fallback to standard name fields
+  static String? getChildName(Map<String, dynamic> data) {
+    // First try to get from patientInfo (your Firebase structure)
+    if (data['patientInfo'] is Map<String, dynamic>) {
+      final patientInfo = data['patientInfo'] as Map<String, dynamic>;
+      if (patientInfo['childName'] != null) {
+        return patientInfo['childName'].toString().trim();
+      }
+    }
+    
+    // Then try to get from childInfo sub-document
+    if (data['childInfo'] is Map<String, dynamic>) {
+      final childInfo = data['childInfo'] as Map<String, dynamic>;
+      if (childInfo['childName'] != null) {
+        return childInfo['childName'].toString().trim();
+      }
+    }
+    
+    // Fallback to direct childName field or standard name fields
+    return getFlexibleValue(data, ['childName', ...nameFields]);
+  }
+
+  /// Get parent name from parentInfo field or fallback to standard name fields  
+  static String? getParentName(Map<String, dynamic> data) {
+    // First try direct parentName field (as shown in Firebase)
+    if (data['parentName'] != null && data['parentName'].toString().trim().isNotEmpty) {
+      return data['parentName'].toString().trim();
+    }
+    
+    // Try to get from patientInfo (your Firebase structure)
+    if (data['patientInfo'] is Map<String, dynamic>) {
+      final patientInfo = data['patientInfo'] as Map<String, dynamic>;
+      if (patientInfo['parentName'] != null) {
+        return patientInfo['parentName'].toString().trim();
+      }
+    }
+    
+    // Try to get from parentInfo sub-document
+    if (data['parentInfo'] is Map<String, dynamic>) {
+      final parentInfo = data['parentInfo'] as Map<String, dynamic>;
+      final parentName = getName(parentInfo);
+      if (parentName != null) return parentName;
+    }
+    
+    // Fallback to other parent field variations
+    return getFlexibleValue(data, ['Parent_Name', 'parent_name', 'guardianName', 'guardian_name', ...nameFields]);
+  }
+
+  /// Get parent contact number specifically
+  static String? getParentContact(Map<String, dynamic> data) {
+    // First try direct parentPhone field
+    if (data['parentPhone'] != null && data['parentPhone'].toString().trim().isNotEmpty) {
+      return data['parentPhone'].toString().trim();
+    }
+    
+    // Fallback to standard contact fields
+    return getContactNumber(data);
+  }
+
+  /// Get parent email specifically
+  static String? getParentEmail(Map<String, dynamic> data) {
+    // First try direct parentEmail field
+    if (data['parentEmail'] != null && data['parentEmail'].toString().trim().isNotEmpty) {
+      return data['parentEmail'].toString().trim();
+    }
+    
+    // Fallback to standard email fields
+    return getEmail(data);
   }
 
   /// Debug method to print all available fields in a document
