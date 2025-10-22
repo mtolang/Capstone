@@ -253,7 +253,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/gamesoption': (context) => const GamesOption(),
             '/talkwithtiles': (context) => const TalkWithTilesGame(),
             '/shapeshifters': (context) => const PatternMasterApp(),
-            '/cognitivepatternmaster': (context) => const PatternMasterApp(),
+            '/cognitivepatternmaster': (context) => const PatternMasterGame(),
             '/parentschedule': (context) => const ParentSchedulePage(),
             '/parentjournal': (context) => const ParentJournalPage(),
 

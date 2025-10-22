@@ -195,6 +195,37 @@ class _PatternMasterGameState extends State<PatternMasterGame>
     }
   }
 
+  /// Reset the current level completely
+  void _resetCurrentLevel() {
+    setState(() {
+      // Clear all game elements and patterns
+      gameElements.clear();
+      targetPattern.clear();
+      activeObstacles.clear();
+      userSequence.clear();
+      sequenceToRemember.clear();
+      
+      // Reset game state
+      showSuccess = false;
+      gameActive = false;
+      memoryPhase = false;
+      
+      // Reset scoring and skills tracking
+      _correctMatches = 0;
+      _totalAttempts = 0;
+      
+      // Cancel any active timers
+      _gameTimer?.cancel();
+      _memoryFlashTimer?.cancel();
+      
+      // Reset session start time
+      _sessionStart = DateTime.now();
+    });
+    
+    // Reload the current level
+    _loadLevel();
+  }
+
   // Level 1: Visual Pattern Memory
   void _loadLevel1() {
     _cognitiveSkillsUsed['visual_memory'] = (_cognitiveSkillsUsed['visual_memory'] ?? 0) + 1;
@@ -1004,6 +1035,7 @@ class _PatternMasterGameState extends State<PatternMasterGame>
                   children: [
                     GestureDetector(
                       onTap: () {
+                        // Navigate back to games page
                         Navigator.of(context).pop();
                       },
                       child: Container(
@@ -1365,6 +1397,17 @@ class _PatternMasterGameState extends State<PatternMasterGame>
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _resetCurrentLevel,
+        backgroundColor: Colors.orange,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.replay),
+        label: const Text(
+          'Reset Level',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 8,
       ),
     );
   }

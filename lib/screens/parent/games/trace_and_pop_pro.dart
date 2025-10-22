@@ -24,7 +24,7 @@ class TraceAndPopProGame extends StatefulWidget {
   State<TraceAndPopProGame> createState() => _TraceAndPopProGameState();
 }
 
-enum _Mode { trace, drawMatch, connectPath, shapeSculptor, rhythmTracer }
+enum _Mode { trace, drawMatch, connectPath, shapeSculptor }
 
 class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     with SingleTickerProviderStateMixin {
@@ -59,9 +59,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
   double _sculptTargetRotation = 0.0;
 
   // Rhythm Tracer
-  int _bpm = 80;
-  Timer? _beatTimer;
-  double _beatT = 0; // 0..1 expected point along the path
+
+
 
   // Metrics
   DateTime _sessionStart = DateTime.now();
@@ -71,6 +70,10 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
   int _speedSamples = 0;
   int _bubblesPoppedCount = 0;
   bool _completed = false;
+  
+  // Shape validation feedback
+  String _shapeValidationMessage = '';
+  bool _showShapeValidation = false;
 
   @override
   void initState() {
@@ -111,7 +114,21 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         DateTime.now().difference(_sessionStart).inSeconds > 10) {
       _saveGameSession();
     }
-    _beatTimer?.cancel();
+    
+    // Properly dispose of all timers to prevent memory leaks
+
+    
+    // Clear collections to help with garbage collection
+    _pathPoints.clear();
+    _bubbles.clear();
+    _pointers.clear();
+    _targetShape.clear();
+    _drawnStroke.clear();
+    _dots.clear();
+    _connections.clear();
+    _sculptBase.clear();
+    _sculptTarget.clear();
+    
     super.dispose();
   }
 
@@ -123,6 +140,45 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     _speedSamples = 0;
     _bubblesPoppedCount = 0;
     _completed = false;
+  }
+
+  /// Reset the current attempt without changing level or generating new content
+  void _resetCurrentAttempt() {
+    setState(() {
+      // Clear all drawing/tracing progress
+      _pointers.clear();
+      _progress = 0;
+      _completed = false;
+      
+      // Reset mode-specific variables
+      _drawnStroke.clear();
+      _nextDotIndex = 0;
+      _connections.clear();
+      
+      // Reset shape validation feedback
+      _shapeValidationMessage = '';
+      _showShapeValidation = false;
+      
+      // Reset sculptor position
+      _sculptPos = Offset.zero;
+      _sculptScale = 1.0;
+      _sculptRotation = 0.0;
+      
+      // Reset metrics for current attempt
+      _onPathSamples = 0;
+      _totalSamples = 0;
+      _sumSpeed = 0;
+      _speedSamples = 0;
+      _bubblesPoppedCount = 0;
+      
+      // Reset bubbles to unpopped state
+      for (var bubble in _bubbles) {
+        bubble.popped = false;
+      }
+      
+      // Start new session timer
+      _sessionStart = DateTime.now();
+    });
   }
 
   /// Save current game session to Firebase
@@ -142,7 +198,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
           'twoHandMode': _twoHandMode,
           'targetSpeed': _targetSpeed,
           'showGuideDots': _showGuideDots,
-          'bpm': _bpm,
+
           'sessionStart': _sessionStart.toIso8601String(),
           'progress': _progress,
           'mode': _mode.name,
@@ -405,15 +461,27 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
 
     // Generate a path based on level: straight -> curve -> complex -> zigzag -> letters
     _pathPoints = _buildPathForLevel(_level, const Size(360, 600));
-    _bubbles = _spawnBubbles(_level);
+    
+    // Only spawn bubbles for trace mode - they're meant for bilateral coordination
+    if (_mode == _Mode.trace) {
+      _bubbles = _spawnBubbles(_level);
+    } else {
+      _bubbles.clear(); // Clear bubbles for other modes
+    }
+    
     _progress = 0;
+    _lastProgressIndex = 0; // Reset progress tracking cache
     _drawnStroke.clear();
     _dots = _buildDotsForLevel(_level);
     _nextDotIndex = 0;
     _connections.clear();
     _targetShape = _buildTargetShape(_level);
     _initSculptTargets();
-    _setupRhythm();
+    
+    // Clear shape validation feedback
+    _showShapeValidation = false;
+    _shapeValidationMessage = '';
+
     _newSession();
     setState(() {});
   }
@@ -464,47 +532,139 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         }
         break;
         
-      case 2: // Gentle wave - like drawing a smile
+      case 2: // Simple L-shaped path - like following a corner
+        final startX = 60.0;
+        final startY = h * 0.3;
+        final cornerX = startX + (w - 120) * 0.6;
+        final endY = startY + h * 0.2;
+        
+        // Create L-shaped path: horizontal then vertical
+        final waypoints = [
+          Offset(startX, startY), // Start left
+          Offset(cornerX, startY), // Go right to corner
+          Offset(cornerX, endY), // Go down to end
+        ];
+        
+        // Interpolate between waypoints
         for (int i = 0; i < segments; i++) {
           final t = i / (segments - 1);
-          final x = 60 + t * (w - 120);
-          // Gentle wave that looks like a happy face
-          final y = h * 0.3 + sin(t * pi) * 60; // Reduced amplitude
-          pts.add(Offset(x, y));
+          final totalDistance = t * (waypoints.length - 1);
+          final segmentIndex = totalDistance.floor().clamp(0, waypoints.length - 2);
+          final segmentT = totalDistance - segmentIndex;
+          
+          final start = waypoints[segmentIndex];
+          final end = waypoints[segmentIndex + 1];
+          
+          pts.add(Offset(
+            start.dx + (end.dx - start.dx) * segmentT,
+            start.dy + (end.dy - start.dy) * segmentT,
+          ));
         }
         break;
         
-      case 3: // Simple shapes - circle (like drawing a sun)
-        final cx = w / 2;
-        final cy = h * 0.35;
-        final r = min(w, h) * 0.15; // Larger, easier circle
+      case 3: // Simple maze path - rectangular path like following walls
+        final startX = 60.0;
+        final startY = h * 0.25;
+        final pathWidth = w - 120;
+        final pathHeight = h * 0.3;
+        
+        // Create a rectangular maze-like path: right -> down -> left -> down -> right
+        final waypoints = [
+          Offset(startX, startY), // Start top-left
+          Offset(startX + pathWidth * 0.7, startY), // Go right
+          Offset(startX + pathWidth * 0.7, startY + pathHeight * 0.3), // Go down
+          Offset(startX + pathWidth * 0.2, startY + pathHeight * 0.3), // Go left
+          Offset(startX + pathWidth * 0.2, startY + pathHeight * 0.6), // Go down
+          Offset(startX + pathWidth * 0.9, startY + pathHeight * 0.6), // Go right (end)
+        ];
+        
+        // Interpolate between waypoints to create smooth path
         for (int i = 0; i < segments; i++) {
-          final a = i / segments * 2 * pi;
-          pts.add(Offset(cx + cos(a) * r, cy + sin(a) * r));
+          final t = i / (segments - 1);
+          final totalDistance = t * (waypoints.length - 1);
+          final segmentIndex = totalDistance.floor().clamp(0, waypoints.length - 2);
+          final segmentT = totalDistance - segmentIndex;
+          
+          final start = waypoints[segmentIndex];
+          final end = waypoints[segmentIndex + 1];
+          
+          pts.add(Offset(
+            start.dx + (end.dx - start.dx) * segmentT,
+            start.dy + (end.dy - start.dy) * segmentT,
+          ));
         }
         break;
         
-      case 4: // Fun zigzag - like drawing lightning
-        final int zig = 6; // Fewer turns, easier to follow
-        for (int z = 0; z <= zig; z++) {
-          final t = z / zig;
-          final x = 60 + t * (w - 120);
-          final y = (z % 2 == 0) ? h * 0.25 : h * 0.45;
-          pts.add(Offset(x, y));
+      case 4: // Stair-step maze pattern - like climbing stairs
+        final startX = 60.0;
+        final startY = h * 0.25;
+        final pathWidth = w - 120;
+        final pathHeight = h * 0.3;
+        
+        // Create stair-step pattern: right-down-right-down-right
+        final waypoints = [
+          Offset(startX, startY), // Start
+          Offset(startX + pathWidth * 0.25, startY), // Right
+          Offset(startX + pathWidth * 0.25, startY + pathHeight * 0.33), // Down
+          Offset(startX + pathWidth * 0.5, startY + pathHeight * 0.33), // Right
+          Offset(startX + pathWidth * 0.5, startY + pathHeight * 0.66), // Down
+          Offset(startX + pathWidth * 0.75, startY + pathHeight * 0.66), // Right
+          Offset(startX + pathWidth * 0.75, startY + pathHeight), // Down
+          Offset(startX + pathWidth, startY + pathHeight), // Right to end
+        ];
+        
+        // Interpolate between waypoints
+        for (int i = 0; i < segments; i++) {
+          final t = i / (segments - 1);
+          final totalDistance = t * (waypoints.length - 1);
+          final segmentIndex = totalDistance.floor().clamp(0, waypoints.length - 2);
+          final segmentT = totalDistance - segmentIndex;
+          
+          final start = waypoints[segmentIndex];
+          final end = waypoints[segmentIndex + 1];
+          
+          pts.add(Offset(
+            start.dx + (end.dx - start.dx) * segmentT,
+            start.dy + (end.dy - start.dy) * segmentT,
+          ));
         }
         break;
         
-      case 5: // Advanced pattern - figure 8 (like drawing infinity)
+      case 5: // Advanced maze pattern - complex path like a real maze
       default:
-        final cx = w / 2;
-        final cy = h * 0.35;
-        final r = min(w, h) * 0.12;
+        final startX = 60.0;
+        final startY = h * 0.2;
+        final pathWidth = w - 120;
+        final pathHeight = h * 0.4;
+        
+        // Create a complex maze-like path with multiple turns
+        final waypoints = [
+          Offset(startX, startY), // Start
+          Offset(startX + pathWidth * 0.6, startY), // Right
+          Offset(startX + pathWidth * 0.6, startY + pathHeight * 0.25), // Down
+          Offset(startX + pathWidth * 0.2, startY + pathHeight * 0.25), // Left
+          Offset(startX + pathWidth * 0.2, startY + pathHeight * 0.5), // Down
+          Offset(startX + pathWidth * 0.8, startY + pathHeight * 0.5), // Right
+          Offset(startX + pathWidth * 0.8, startY + pathHeight * 0.75), // Down
+          Offset(startX + pathWidth * 0.1, startY + pathHeight * 0.75), // Left
+          Offset(startX + pathWidth * 0.1, startY + pathHeight), // Down
+          Offset(startX + pathWidth * 0.9, startY + pathHeight), // Right to end
+        ];
+        
+        // Interpolate between waypoints to create smooth maze path
         for (int i = 0; i < segments; i++) {
-          final t = i / segments * 4 * pi; // Two loops
-          final scale = sin(t / 2).abs(); // Creates figure-8 effect
-          final x = cx + cos(t) * r * scale;
-          final y = cy + sin(t * 2) * r * scale;
-          pts.add(Offset(x, y));
+          final t = i / (segments - 1);
+          final totalDistance = t * (waypoints.length - 1);
+          final segmentIndex = totalDistance.floor().clamp(0, waypoints.length - 2);
+          final segmentT = totalDistance - segmentIndex;
+          
+          final start = waypoints[segmentIndex];
+          final end = waypoints[segmentIndex + 1];
+          
+          pts.add(Offset(
+            start.dx + (end.dx - start.dx) * segmentT,
+            start.dy + (end.dy - start.dy) * segmentT,
+          ));
         }
         break;
     }
@@ -737,19 +897,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
       ..addAll(_trianglePoints(const Offset(0, 0), 100));
   }
 
-  void _setupRhythm() {
-    _beatTimer?.cancel();
-    if (_mode == _Mode.rhythmTracer) {
-      final beatDurMs = (60000 / _bpm).round();
-      _beatTimer = Timer.periodic(
-          Duration(milliseconds: (beatDurMs / 6).round()), (timer) {
-        setState(() {
-          _beatT += 1 / (pathMaxIndex.clamp(1, 100));
-          if (_beatT > 1) _beatT -= 1;
-        });
-      });
-    }
-  }
+
 
   void _onPointerDown(PointerDownEvent e) {
     if (!mounted) return;
@@ -757,9 +905,10 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     _pointers[e.pointer] =
         _PointerSample(position: e.localPosition, time: DateTime.now());
     
+    bool poppedAny = false;
+    
     // Handle single taps for bubble popping in single-hand mode
     if (!_twoHandMode) {
-      bool poppedAny = false;
       for (final b in _bubbles) {
         if (!b.popped && (e.localPosition - b.center).distance <= b.radius) {
           b.popped = true;
@@ -770,15 +919,17 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
       }
       
       // Add challenge: penalty for missing bubbles (clicking empty space)
-      if (!poppedAny && _twoHandMode) {
-        // In two-hand mode, missed clicks reduce score slightly
+      // Only penalize in advanced levels, not for young children
+      if (!poppedAny && _level >= 4) {
+        // Small penalty for missing clicks in higher levels only
         if (_bubblesPoppedCount > 0) {
           _bubblesPoppedCount = max(0, _bubblesPoppedCount - 1);
         }
       }
     }
     
-    if (mounted) {
+    // Only setState if there were actual changes
+    if (mounted && (poppedAny || _twoHandMode)) {
       setState(() {});
     }
   }
@@ -791,7 +942,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     if (prev != null) {
       final dt = now.difference(prev.time).inMicroseconds / 1e6;
       final dist = (e.localPosition - prev.position).distance;
-      final speed = dt > 0 ? dist / dt : 0.0; // px/sec
+      // Prevent division by zero and invalid speeds
+      final speed = dt > 0.001 ? (dist / dt).clamp(0.0, 2000.0) : 0.0; // px/sec with reasonable limits
       _pointers[e.pointer] =
           _PointerSample(position: e.localPosition, time: now, speed: speed);
     } else {
@@ -805,18 +957,36 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         break;
       case _Mode.drawMatch:
         _drawnStroke.add(e.localPosition);
+        // Calculate progress based on drawn stroke length vs target shape length
+        if (_targetShape.isNotEmpty && _drawnStroke.isNotEmpty) {
+          double targetLength = 0;
+          for (int i = 1; i < _targetShape.length; i++) {
+            targetLength += (_targetShape[i] - _targetShape[i-1]).distance;
+          }
+          double drawnLength = 0;
+          for (int i = 1; i < _drawnStroke.length; i++) {
+            drawnLength += (_drawnStroke[i] - _drawnStroke[i-1]).distance;
+          }
+          _progress = targetLength > 0 ? (drawnLength / targetLength).clamp(0.0, 1.0) : 0.0;
+        }
         break;
       case _Mode.connectPath:
         // Allow dragging to connect dots with child-friendly tolerance
         if (_nextDotIndex < _dots.length) {
-          final tolerance = 40 + (5 - _level) * 8; // Easier for beginners
+          final tolerance = 40.0 + (5 - _level) * 8.0; // Easier for beginners
           final d = (e.localPosition - _dots[_nextDotIndex]).distance;
-          if (d < tolerance) {
+          if (d <= tolerance) {
             if (_nextDotIndex > 0) {
               _connections.add(_dots[_nextDotIndex - 1]);
               _connections.add(_dots[_nextDotIndex]);
             }
             _nextDotIndex++;
+            // Calculate progress based on dots connected, not path tracing
+            _progress = _dots.isEmpty ? 0.0 : _nextDotIndex / _dots.length;
+            // Force state update when connecting dots
+            if (mounted) {
+              setState(() {});
+            }
           }
         }
         break;
@@ -825,14 +995,16 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         final center = _sculptPos;
         final delta = e.localPosition - center;
         final distance = delta.distance;
-        if (distance > 20 && distance < 100) {
-          _sculptScale = (distance / 60).clamp(0.5, 2.0);
-          _sculptRotation = delta.direction;
+        if (distance > 10 && distance < 150) {
+          // Prevent extreme scaling values
+          final newScale = (distance / 60).clamp(0.3, 3.0);
+          _sculptScale = newScale;
+          if (distance > 5) { // Prevent direction calculation on tiny distances
+            _sculptRotation = delta.direction;
+          }
         }
         break;
-      case _Mode.rhythmTracer:
-        _progress = _estimateProgress(e.localPosition);
-        break;
+
     }
 
     // Bubble popping with second hand while one hand is tracing (bilateral)
@@ -841,6 +1013,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         if (!b.popped && (e.localPosition - b.center).distance <= b.radius) {
           b.popped = true;
           _bubblesPoppedCount += 1;
+          break; // Only pop one bubble per move to prevent double counting
         }
       }
     }
@@ -848,7 +1021,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     _totalSamples++;
     _sumSpeed += (_pointers[e.pointer]?.speed ?? 0);
     _speedSamples++;
-    if (_mode == _Mode.trace || _mode == _Mode.rhythmTracer) {
+    if (_mode == _Mode.trace) {
       final d = _distanceToPath(e.localPosition);
       // Much more forgiving tolerance for children - adapts to level
       final tolerance = 35 + (5 - _level) * 8; // Level 1: 67px, Level 5: 35px
@@ -880,28 +1053,60 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     }
   }
 
+  int _lastProgressIndex = 0; // Cache for optimization
+  
   double _estimateProgress(Offset current) {
     if (_pathPoints.isEmpty) return 0;
-    // Compute nearest index along path, map index to progress 0..1
-    int bestIdx = 0;
-    double bestDist = double.infinity;
-    for (int i = 0; i < _pathPoints.length; i++) {
+    
+    // Optimize: Start search from last known position (most touches are sequential)
+    int bestIdx = _lastProgressIndex;
+    double bestDist = (_pathPoints[bestIdx] - current).distance;
+    
+    // Search in a small window around last position first
+    int searchRadius = min(10, _pathPoints.length ~/ 4);
+    int startIdx = max(0, _lastProgressIndex - searchRadius);
+    int endIdx = min(_pathPoints.length - 1, _lastProgressIndex + searchRadius);
+    
+    for (int i = startIdx; i <= endIdx; i++) {
       final d = (_pathPoints[i] - current).distance;
       if (d < bestDist) {
         bestDist = d;
         bestIdx = i;
       }
     }
+    
+    // If we didn't find a good match nearby, do full search (rarely needed)
+    if (bestDist > 100) {
+      for (int i = 0; i < _pathPoints.length; i++) {
+        final d = (_pathPoints[i] - current).distance;
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      }
+    }
+    
+    _lastProgressIndex = bestIdx;
     final prog = bestIdx / (_pathPoints.length - 1);
     return prog.clamp(0, 1);
   }
 
   double _distanceToPath(Offset current) {
-    double best = double.infinity;
-    for (final p in _pathPoints) {
-      final d = (p - current).distance;
+    if (_pathPoints.isEmpty) return double.infinity;
+    
+    // Use cached progress index as starting point for efficiency
+    double best = (_pathPoints[_lastProgressIndex] - current).distance;
+    
+    // Check nearby points first (most likely to be closest)
+    int searchRadius = min(15, _pathPoints.length ~/ 3);
+    int startIdx = max(0, _lastProgressIndex - searchRadius);
+    int endIdx = min(_pathPoints.length - 1, _lastProgressIndex + searchRadius);
+    
+    for (int i = startIdx; i <= endIdx; i++) {
+      final d = (_pathPoints[i] - current).distance;
       if (d < best) best = d;
     }
+    
     return best;
   }
 
@@ -917,21 +1122,77 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         final avgSpeed = _speedSamples > 0 ? _sumSpeed / _speedSamples : 0;
         
         // Very lenient completion - focus on completion rather than perfection
-        final progressThreshold = 0.80; // Fixed 80% for all levels
+        final progressThreshold = 0.95; // Fixed 95% for proper completion - still achievable
         final accuracyRatio = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
-        final accuracyThreshold = 0.60; // Fixed 60% for all levels
+        final accuracyThreshold = 0.50; // Fixed 50% for all levels - more forgiving
         
         // Only require reasonable speed, not perfect speed
-        final speedOk = avgSpeed > 50 && avgSpeed < 1000; // Very lenient range
+        final speedOk = avgSpeed > 30 && avgSpeed < 1200; // More lenient range
         
-        return _progress > progressThreshold && 
-               accuracyRatio > accuracyThreshold && 
-               speedOk;
+        // Also check minimum samples to prevent instant completion
+        final minSamples = 20;
+        
+        return _progress >= progressThreshold && 
+               accuracyRatio >= accuracyThreshold && 
+               speedOk &&
+               _totalSamples >= minSamples;
         
       case _Mode.drawMatch:
-        if (_drawnStroke.length < 15) return false;
+        // Require substantial drawing before allowing completion
+        if (_drawnStroke.length < 50) {
+          setState(() {
+            _shapeValidationMessage = 'Keep drawing! Draw more of the shape.';
+            _showShapeValidation = true;
+          });
+          Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _showShapeValidation = false);
+          });
+          return false;
+        }
+        
+        // Also require minimum drawing length to prevent tiny strokes from completing
+        double drawnLength = 0;
+        for (int i = 1; i < _drawnStroke.length; i++) {
+          drawnLength += (_drawnStroke[i] - _drawnStroke[i-1]).distance;
+        }
+        if (drawnLength < 100) {
+          setState(() {
+            _shapeValidationMessage = 'Make your drawing bigger! Trace the shape outline.';
+            _showShapeValidation = true;
+          });
+          Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _showShapeValidation = false);
+          });
+          return false;
+        }
+        
+        // Require reasonable progress (at least 70% of target shape coverage)
+        if (_progress < 0.7) {
+          setState(() {
+            _shapeValidationMessage = 'Follow the shape outline more closely!';
+            _showShapeValidation = true;
+          });
+          Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _showShapeValidation = false);
+          });
+          return false;
+        }
+        
         final score = _matchScore(_drawnStroke, _targetShape);
-        return score < 30; // More forgiving matching
+        if (score >= 12) { // Stricter shape matching - must be more accurate
+          // Get shape name for feedback
+          String shapeName = _getShapeName(_level);
+          setState(() {
+            _shapeValidationMessage = 'Try to draw the $shapeName shape more accurately!';
+            _showShapeValidation = true;
+          });
+          Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _showShapeValidation = false);
+          });
+          return false;
+        }
+        
+        return true; // Shape matches well enough
         
       case _Mode.connectPath:
         return _nextDotIndex >= _dots.length;
@@ -942,9 +1203,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
         final rotOk = (_sculptRotation - _sculptTargetRotation).abs() < pi / 8;
         return posOk && scaleOk && rotOk;
         
-      case _Mode.rhythmTracer:
-        final ratio = _totalSamples > 0 ? _onPathSamples / _totalSamples : 0;
-        return ratio > 0.65; // Fixed threshold
+
     }
   }
   
@@ -970,6 +1229,17 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     }
     d2 /= max(1, b.length);
     return (d1 + d2) / 2;
+  }
+  
+  String _getShapeName(int level) {
+    switch (level) {
+      case 1: return 'circle';
+      case 2: return 'square';
+      case 3: return 'triangle';
+      case 4: return 'star';
+      case 5: return 'heart';
+      default: return 'shape';
+    }
   }
 
   @override
@@ -1060,6 +1330,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
                                 _connections.add(_dots[_nextDotIndex]);
                               }
                               _nextDotIndex++;
+                              // Calculate progress based on dots connected
+                              _progress = _dots.isEmpty ? 0.0 : _nextDotIndex / _dots.length;
                             }
                           }
                         }
@@ -1090,21 +1362,64 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
                           sculptTargetPos: _sculptTargetPos,
                           sculptTargetScale: _sculptTargetScale,
                           sculptTargetRotation: _sculptTargetRotation,
-                          beatT: _mode == _Mode.rhythmTracer ? _beatT : null,
+
                         ),
                         child: Stack(
                           children: [
                             Positioned(
-                              left: 12,
-                              top: 12,
+                              right: 12,
+                              top: 80, // Moved lower to avoid START indicator
                               child: _FriendlyProgressBadge(progress: _progress),
                             ),
                             if (_twoHandMode)
                               Positioned(
-                                right: 12,
-                                top: 12,
+                                left: 12,
+                                top: 80, // Moved to left side to avoid progress badge
                                 child: _BubbleBuddy(
                                     remaining: _bubbles.where((b) => !b.popped).length),
+                              ),
+                            // Shape validation feedback for draw mode
+                            if (_showShapeValidation && _mode == _Mode.drawMatch)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                top: 200,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade100,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: Colors.orange.shade300, width: 2),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.orange.withOpacity(0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            _shapeValidationMessage,
+                                            style: TextStyle(
+                                              color: Colors.orange.shade700,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
                             Positioned(
                               right: 12,
@@ -1189,7 +1504,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildFunModeButton('🏗️ Sculpt', _Mode.shapeSculptor, Icons.architecture),
-                  _buildFunModeButton('🎵 Music', _Mode.rhythmTracer, Icons.music_note),
+
                 ],
               ),
             ],
@@ -1283,6 +1598,32 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
                 Icon(Icons.refresh, size: 20),
                 SizedBox(width: 8),
                 Text('🚀 New Adventure!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Reset Current Attempt Button
+          ElevatedButton(
+            onPressed: () {
+              _resetCurrentAttempt();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.replay, size: 20),
+                SizedBox(width: 8),
+                Text('🔄 Reset Current', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -1526,7 +1867,7 @@ class _TracePainter extends CustomPainter {
   final Offset? sculptTargetPos;
   final double? sculptTargetScale;
   final double? sculptTargetRotation;
-  final double? beatT;
+
 
   _TracePainter({
     required this.mode,
@@ -1549,18 +1890,12 @@ class _TracePainter extends CustomPainter {
     this.sculptTargetPos,
     this.sculptTargetScale,
     this.sculptTargetRotation,
-    this.beatT,
+
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (mode == _Mode.trace || mode == _Mode.rhythmTracer) {
-      // Rainbow guide path that children love to follow
-      final Paint guide = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8 // Thicker for easier following
-        ..strokeCap = StrokeCap.round;
-      
+    if (mode == _Mode.trace) {
       final Path p = Path();
       for (int i = 0; i < path.length; i++) {
         final pt = path[i];
@@ -1571,70 +1906,131 @@ class _TracePainter extends CustomPainter {
         }
       }
       
+      // Draw outline first for better visibility
+      final Paint outline = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 14
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white;
+      canvas.drawPath(p, outline);
+      
+      // Draw main trace path with rainbow gradient
+      final Paint guide = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10 // Thick and easy to follow
+        ..strokeCap = StrokeCap.round;
+      
       // Create rainbow gradient effect
       final rainbow = LinearGradient(
         colors: [
-          Colors.red.shade300,
-          Colors.orange.shade300,
-          Colors.yellow.shade300,
-          Colors.green.shade300,
-          Colors.blue.shade300,
-          Colors.purple.shade300,
+          Colors.red.shade400,
+          Colors.orange.shade400,
+          Colors.yellow.shade400,
+          Colors.green.shade400,
+          Colors.blue.shade400,
+          Colors.purple.shade400,
         ],
       );
       
       guide.shader = rainbow.createShader(Rect.fromLTWH(0, 0, 400, 600));
       canvas.drawPath(p, guide);
       
-      // Add sparkly guide dots that children love
-      if (showGuideDots) {
-        final sparkleColors = [
-          Colors.yellow,
-          Colors.pink,
-          Colors.cyan,
-          Colors.lime,
-          Colors.orange,
-        ];
+      // Add clear start indicator - ONLY for trace mode
+      if (path.isNotEmpty && mode == _Mode.trace) {
+        final startPoint = path.first;
         
-        for (int i = 0; i < path.length; i += max(1, path.length ~/ 20)) {
-          final sparkleColor = sparkleColors[i % sparkleColors.length];
-          final dot = Paint()..color = sparkleColor;
-          canvas.drawCircle(path[i], 6, dot);
-          
-          // Add tiny sparkle effect
-          final sparkle = Paint()..color = Colors.white;
-          canvas.drawCircle(path[i], 2, sparkle);
-        }
-      }
-      
-      // Rhythm mode special indicator
-      if (mode == _Mode.rhythmTracer && beatT != null && path.isNotEmpty) {
-        final idx = (beatT!.clamp(0, 1) * (path.length - 1)).round();
-        final pExp = path[idx];
-        final paintBeat = Paint()
-          ..color = Colors.purple
+        // Bright start circle
+        final Paint startPaint = Paint()
+          ..color = Colors.green.withOpacity(0.9)
           ..style = PaintingStyle.fill;
+        canvas.drawCircle(startPoint, 20, startPaint);
         
-        // Pulsing musical note
-        canvas.drawCircle(pExp, 15, paintBeat);
-        final notePaint = Paint()..color = Colors.white;
-        canvas.drawCircle(pExp, 8, notePaint);
+        // White border
+        final Paint startBorder = Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3;
+        canvas.drawCircle(startPoint, 20, startBorder);
         
-        // Add musical note symbol ♪
+        // "START" text
         final textPainter = TextPainter(
           text: const TextSpan(
-            text: '♪',
+            text: 'START',
             style: TextStyle(
-              color: Colors.purple,
-              fontSize: 16,
+              color: Colors.white,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
           ),
           textDirection: TextDirection.ltr,
         );
         textPainter.layout();
-        textPainter.paint(canvas, Offset(pExp.dx - 8, pExp.dy - 8));
+        textPainter.paint(
+          canvas, 
+          Offset(startPoint.dx - textPainter.width / 2, startPoint.dy - textPainter.height / 2),
+        );
       }
+      
+      // Add clear end indicator - ONLY for trace mode
+      if (path.length > 1 && mode == _Mode.trace) {
+        final startPoint = path.first;
+        final endPoint = path.last;
+        
+        // Check if start and end points are too close
+        final distance = (endPoint - startPoint).distance;
+        final minDistance = 60.0; // Minimum distance for clear separation
+        
+        Offset adjustedEndPoint = endPoint;
+        if (distance < minDistance && path.length > 2) {
+          // Use a point further back from the end for better separation
+          final backSteps = max(1, (path.length * 0.1).round()); // Go 10% back from end
+          adjustedEndPoint = path[path.length - 1 - backSteps];
+        }
+        
+        // End indicator with different color
+        final Paint endPaint = Paint()
+          ..color = Colors.red.withOpacity(0.9)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(adjustedEndPoint, 18, endPaint);
+        
+        // White border
+        final Paint endBorder = Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3;
+        canvas.drawCircle(adjustedEndPoint, 18, endBorder);
+        
+        // "END" text
+        final textPainter = TextPainter(
+          text: const TextSpan(
+            text: 'END',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(
+          canvas, 
+          Offset(adjustedEndPoint.dx - textPainter.width / 2, adjustedEndPoint.dy - textPainter.height / 2),
+        );
+      }
+      
+      // Add guide dots along the path - ONLY for trace mode
+      if (showGuideDots && path.length > 10 && mode == _Mode.trace) {
+        final dotSpacing = max(1, path.length ~/ 15); // Fewer dots, less clutter
+        for (int i = dotSpacing; i < path.length - dotSpacing; i += dotSpacing) {
+          final dot = Paint()
+            ..color = Colors.white.withOpacity(0.6)
+            ..style = PaintingStyle.fill;
+          canvas.drawCircle(path[i], 4, dot);
+        }
+      }
+      
+
     }
 
     if (mode == _Mode.drawMatch) {
@@ -1669,7 +2065,76 @@ class _TracePainter extends CustomPainter {
         for (int i = 0; i < dots!.length; i++) {
           dotPaint.color =
               i < (nextDotIndex ?? 0) ? Colors.green : Colors.orange;
-          canvas.drawCircle(dots![i], 8, dotPaint);
+          canvas.drawCircle(dots![i], 12, dotPaint); // Slightly larger dots
+          
+          // Add white border to dots
+          final borderPaint = Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2;
+          canvas.drawCircle(dots![i], 12, borderPaint);
+          
+          // Add START indicator to first dot
+          if (i == 0) {
+            final startTextPainter = TextPainter(
+              text: const TextSpan(
+                text: 'START',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            startTextPainter.layout();
+            // Position text above the dot
+            startTextPainter.paint(
+              canvas, 
+              Offset(dots![i].dx - startTextPainter.width / 2, dots![i].dy - 25),
+            );
+          }
+          
+          // Add END indicator to last dot
+          if (i == dots!.length - 1) {
+            final endTextPainter = TextPainter(
+              text: const TextSpan(
+                text: 'END',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            endTextPainter.layout();
+            // Position text below the dot
+            endTextPainter.paint(
+              canvas, 
+              Offset(dots![i].dx - endTextPainter.width / 2, dots![i].dy + 20),
+            );
+          }
+          
+          // Add number to each dot for sequence guidance - ONLY in connect mode
+          if (mode == _Mode.connectPath) {
+            final numberPainter = TextPainter(
+              text: TextSpan(
+                text: '${i + 1}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            );
+            numberPainter.layout();
+            numberPainter.paint(
+              canvas, 
+              Offset(dots![i].dx - numberPainter.width / 2, dots![i].dy - numberPainter.height / 2),
+            );
+          }
         }
       }
       if (connections != null && connections!.length >= 2) {
@@ -1711,121 +2176,81 @@ class _TracePainter extends CustomPainter {
       }
     }
 
-    // Draw colorful bubbles for fun popping activity
-    if (twoHandMode) {
-      final bubblePaint = Paint()..style = PaintingStyle.fill;
-      final bubbleStroke = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3;
-      
+    // Draw colorful bubbles for fun popping activity - ONLY for trace mode
+    if (mode == _Mode.trace) {
       for (final b in bubbles) {
-        if (b.popped) {
-          // Popped bubbles show sparkling effect
-          bubblePaint.color = Colors.greenAccent.withOpacity(0.3);
-          bubbleStroke.color = Colors.green;
-          canvas.drawCircle(b.center, b.radius * 0.8, bubblePaint);
-          canvas.drawCircle(b.center, b.radius * 0.8, bubbleStroke);
-          
-          // Add sparkle effects
-          for (int i = 0; i < 6; i++) {
-            final angle = i * pi / 3;
-            final sparkleOffset = Offset(
-              b.center.dx + cos(angle) * (b.radius * 0.6),
-              b.center.dy + sin(angle) * (b.radius * 0.6),
-            );
-            canvas.drawCircle(sparkleOffset, 3, Paint()..color = Colors.yellow);
-          }
-        } else {
-          // Use the bubble's assigned color
-          bubblePaint.color = b.color;
-          bubbleStroke.color = b.color.withOpacity(0.8);
-          
-          // Draw main bubble
-          canvas.drawCircle(b.center, b.radius, bubblePaint);
-          canvas.drawCircle(b.center, b.radius, bubbleStroke);
-          
-          // Add highlight for 3D effect
-          final highlightPaint = Paint()..color = Colors.white.withOpacity(0.4);
-          canvas.drawCircle(
-            Offset(b.center.dx - b.radius * 0.3, b.center.dy - b.radius * 0.3),
-            b.radius * 0.3,
-            highlightPaint,
-          );
-        }
+      if (b.popped) {
+        // Simple popped bubble indicator
+        final poppedPaint = Paint()
+          ..color = Colors.green.withOpacity(0.5)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(b.center, b.radius * 0.6, poppedPaint);
+        
+        // Simple "✓" checkmark
+        final textPainter = TextPainter(
+          text: const TextSpan(
+            text: '✓',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(
+          canvas, 
+          Offset(b.center.dx - textPainter.width / 2, b.center.dy - textPainter.height / 2),
+        );
+      } else {
+        // Simple bubble design
+        final bubblePaint = Paint()
+          ..color = b.color.withOpacity(0.7)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(b.center, b.radius, bubblePaint);
+        
+        // Simple white border
+        final bubbleStroke = Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+        canvas.drawCircle(b.center, b.radius, bubbleStroke);
+      }
       }
     }
 
-    // Draw child-friendly finger tracking with colorful, encouraging feedback
+    // Draw clean finger tracking with simple, clear feedback
     for (final entry in pointers.entries) {
       final sample = entry.value;
       final double speed = sample.speed ?? 0; // px/s
       
-      // Map speed to encouraging colors and effects
+      // Map speed to encouraging colors
       final double t = (speed / targetSpeed).clamp(0.0, 2.0); // 0..2
-      final double baseWidth = 18; // Larger for children
-      final double width = baseWidth + (sin(DateTime.now().millisecondsSinceEpoch / 200) * 3); // Pulsing effect
       
-      // Child-friendly color feedback
+      // Simple color feedback
       Color fingerColor;
-      String encouragement = '';
-      
       if (t <= 0.7) {
-        fingerColor = Colors.green; // Perfect speed - green means go!
-        encouragement = '👍';
+        fingerColor = Colors.green; // Perfect speed
       } else if (t <= 1.3) {
-        fingerColor = Colors.blue; // Good speed - nice and steady
-        encouragement = '😊';
+        fingerColor = Colors.blue; // Good speed
       } else {
-        fingerColor = Colors.orange; // A bit fast - still okay!
-        encouragement = '🚀';
+        fingerColor = Colors.orange; // A bit fast
       }
 
-      // Main finger circle with gradient
+      // Simple finger indicator - just one clean circle
       final Paint touch = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            fingerColor.withOpacity(0.8),
-            fingerColor.withOpacity(0.4),
-          ],
-        ).createShader(Rect.fromCircle(
-          center: sample.position,
-          radius: width,
-        ));
+        ..color = fingerColor.withOpacity(0.7)
+        ..style = PaintingStyle.fill;
       
-      canvas.drawCircle(sample.position, width, touch);
-
-      // Sparkly trail effect for extra fun
-      final trail = Paint()
-        ..color = fingerColor.withOpacity(0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round;
-      canvas.drawCircle(sample.position, width * 1.5, trail);
+      canvas.drawCircle(sample.position, 12, touch);
       
-      // Add encouraging emoji near finger
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: encouragement,
-          style: const TextStyle(fontSize: 20),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas, 
-        Offset(sample.position.dx + 25, sample.position.dy - 25),
-      );
+      // White center for visibility
+      final Paint center = Paint()
+        ..color = Colors.white.withOpacity(0.8)
+        ..style = PaintingStyle.fill;
       
-      // Add tiny stars around finger for magical effect
-      for (int i = 0; i < 4; i++) {
-        final angle = i * pi / 2 + DateTime.now().millisecondsSinceEpoch / 1000;
-        final starOffset = Offset(
-          sample.position.dx + cos(angle) * (width + 15),
-          sample.position.dy + sin(angle) * (width + 15),
-        );
-        final starPaint = Paint()..color = Colors.yellow.withOpacity(0.7);
-        canvas.drawCircle(starOffset, 3, starPaint);
-      }
+      canvas.drawCircle(sample.position, 6, center);
     }
   }
 
@@ -1862,7 +2287,7 @@ class _TracePainter extends CustomPainter {
         oldDelegate.sculptPos != sculptPos ||
         oldDelegate.sculptScale != sculptScale ||
         oldDelegate.sculptRotation != sculptRotation ||
-        oldDelegate.beatT != beatT;
+        false;
   }
 }
 
@@ -2542,8 +2967,7 @@ class StatisticsDialog extends StatelessWidget {
         return 'Connect Dots';
       case 'shapeSculptor':
         return 'Shape Sculptor';
-      case 'rhythmTracer':
-        return 'Rhythm Tracer';
+
       default:
         return mode;
     }
@@ -2559,8 +2983,7 @@ class StatisticsDialog extends StatelessWidget {
         return Icons.connect_without_contact;
       case 'shapeSculptor':
         return Icons.architecture;
-      case 'rhythmTracer':
-        return Icons.music_note;
+
       default:
         return Icons.games;
     }
@@ -2657,8 +3080,8 @@ class _ChallengeProgressIndicator extends StatelessWidget {
     String statusEmoji = '😊';
     String statusText = 'Great!';
     
-    if (mode == _Mode.trace || mode == _Mode.rhythmTracer) {
-      final progressThreshold = 0.75 + (level * 0.03);
+    if (mode == _Mode.trace) {
+      final progressThreshold = 0.95; // Consistent 95% completion requirement
       final accuracyThreshold = 0.65 + (level * 0.05);
       final speedMin = targetSpeed * (0.4 + level * 0.03);
       final speedMax = targetSpeed * (1.8 - level * 0.1);

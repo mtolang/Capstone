@@ -620,6 +620,26 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
     });
   }
 
+  /// Reset the current level completely
+  void _resetCurrentLevel() {
+    setState(() {
+      selectedTiles.clear();
+      showSuccess = false;
+      showEncouragement = false;
+      currentLevelStars = 0;
+      gameScore = 0;
+      
+      // Reset session tracking for current level
+      _sessionStart = DateTime.now();
+      _tilesUsed = 0;
+      _sentencesFormed = 0;
+      
+      // Cancel any pending saves
+      _saveTimer?.cancel();
+      _hasPendingSave = false;
+    });
+  }
+
   void removeTile(int index) {
     setState(() {
       selectedTiles.removeAt(index);
@@ -1041,6 +1061,23 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Reset Level Button
+                          ElevatedButton.icon(
+                            onPressed: _resetCurrentLevel,
+                            icon: const Icon(Icons.replay),
+                            label: const Text('Reset Level'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 12),
+                              textStyle: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ],
                       ),
