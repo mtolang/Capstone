@@ -89,15 +89,6 @@ class TherapistNavbar extends StatelessWidget {
             isSelected: currentPage == 'patients',
           ),
 
-          // Clinic Staff
-          _buildNavItem(
-            context,
-            icon: Icons.groups_2,
-            title: 'Clinic Staff',
-            routeName: '/therapiststaff',
-            isSelected: currentPage == 'staff',
-          ),
-
           // Chat
           _buildNavItem(
             context,

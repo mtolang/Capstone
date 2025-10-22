@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kindora/screens/clinic/custom_tabbar.dart';
 import 'package:kindora/screens/clinic/clinic_navbar.dart';
+import 'package:kindora/screens/clinic/clinic_profile_details.dart';
 import '../../helper/clinic_auth.dart';
 
 class ClinicProfile extends StatefulWidget {
@@ -379,11 +380,35 @@ class _ClinicProfileState extends State<ClinicProfile> {
               ),
             ),
 
+            // View Profile Button (bottom left)
+            Positioned(
+              bottom: 35,
+              left: 30,
+              child: FloatingActionButton(
+                heroTag: "view_profile_fab",
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ClinicProfileDetailsPage(),
+                    ),
+                  );
+                },
+                backgroundColor: const Color(0xFF006A5B),
+                child: const Icon(
+                  Icons.person,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+            ),
+
             // Floating Action Button (FAB) - Calendar/Booking
             Positioned(
               bottom: 35,
               right: 30,
               child: FloatingActionButton(
+                heroTag: "calendar_fab",
                 onPressed: () {
                   print('Calendar/Booking FAB tapped');
                   _showBookingOptions(context);
