@@ -247,12 +247,12 @@ class _TherapistBookingTabBarState extends State<TherapistBookingTabBar>
                   labelStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: 10,
                   ),
                   unselectedLabelStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w500,
-                    fontSize: 12,
+                    fontSize: 10,
                   ),
                   dividerColor: Colors.transparent,
                   overlayColor: WidgetStateProperty.all(Colors.transparent),
