@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../helper/clinic_auth.dart';
+import '../services/email_validation_service.dart';
 
 class RegisterParentUser {
   Future<void> registerParentUser(
@@ -33,6 +34,14 @@ class RegisterParentUser {
 
       if (!ClinicAuthService.isValidEmail(email)) {
         _showErrorDialog(context, 'Please enter a valid email address.');
+        return;
+      }
+
+      // Check if email already exists in any account type
+      if (!await EmailValidationService.isEmailAvailable(email)) {
+        final accountType = await EmailValidationService.getEmailAccountType(email);
+        _showErrorDialog(context, 
+          'This email is already registered with ${accountType ?? 'another account'}. Please use a different email address.');
         return;
       }
 
@@ -178,6 +187,14 @@ class RegisterTherapistUser {
         return;
       }
 
+      // Check if email already exists in any account type
+      if (!await EmailValidationService.isEmailAvailable(email)) {
+        final accountType = await EmailValidationService.getEmailAccountType(email);
+        _showErrorDialog(context, 
+          'This email is already registered with ${accountType ?? 'another account'}. Please use a different email address.');
+        return;
+      }
+
       if (!ClinicAuthService.isValidPassword(password)) {
         _showErrorDialog(
             context, 'Password must be at least 6 characters long.');
@@ -272,6 +289,14 @@ class RegisterClinicUser {
 
       if (!ClinicAuthService.isValidEmail(email)) {
         _showErrorDialog(context, 'Please enter a valid email address.');
+        return;
+      }
+
+      // Check if email already exists in any account type
+      if (!await EmailValidationService.isEmailAvailable(email)) {
+        final accountType = await EmailValidationService.getEmailAccountType(email);
+        _showErrorDialog(context, 
+          'This email is already registered with ${accountType ?? 'another account'}. Please use a different email address.');
         return;
       }
 

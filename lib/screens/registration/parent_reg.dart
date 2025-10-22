@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:kindora/controller/register_controller.dart';
+import 'package:kindora/services/email_validation_service.dart';
 
 class ParentRegister extends StatefulWidget {
   const ParentRegister({super.key});
@@ -20,12 +21,63 @@ class _ParentRegisterState extends State<ParentRegister> {
       TextEditingController();
   RegisterParentUser controller = RegisterParentUser();
   XFile? _attachFile; // Changed from bool to XFile?
+  
+  String? _emailErrorText;
+  bool _isCheckingEmail = false;
 
   // Add image picker functionality
   Future<XFile?> pickImageFromGallery() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     return image;
+  }
+
+  // Validate email availability
+  Future<void> _validateEmail(String email) async {
+    if (email.isEmpty) {
+      setState(() {
+        _emailErrorText = null;
+        _isCheckingEmail = false;
+      });
+      return;
+    }
+
+    if (!EmailValidationService.isValidEmailFormat(email)) {
+      setState(() {
+        _emailErrorText = 'Please enter a valid email address';
+        _isCheckingEmail = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingEmail = true;
+    });
+
+    try {
+      final isAvailable = await EmailValidationService.isEmailAvailable(email);
+      if (mounted) {
+        if (isAvailable) {
+          setState(() {
+            _emailErrorText = null;
+            _isCheckingEmail = false;
+          });
+        } else {
+          final accountType = await EmailValidationService.getEmailAccountType(email);
+          setState(() {
+            _emailErrorText = 'Email already registered with ${accountType ?? 'another account'}';
+            _isCheckingEmail = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _emailErrorText = 'Error checking email availability';
+          _isCheckingEmail = false;
+        });
+      }
+    }
   }
 
   @override
@@ -82,7 +134,7 @@ class _ParentRegisterState extends State<ParentRegister> {
                     const SizedBox(height: 14.0),
                     _buildTextField(userNameController, 'User Name'),
                     const SizedBox(height: 14.0),
-                    _buildTextField(emailController, 'Email'),
+                    _buildEmailField(),
                     const SizedBox(height: 14.0),
                     _buildTextField(contactNumberController, 'Contact Number'),
                     const SizedBox(height: 14.0),
@@ -213,6 +265,74 @@ class _ParentRegisterState extends State<ParentRegister> {
           labelText: label,
           border: InputBorder.none,
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmailField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10.0),
+        border: Border.all(color: _emailErrorText != null ? Colors.red : Colors.white),
+        color: Colors.white,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x3F000000),
+            blurRadius: 4,
+            offset: Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            onChanged: (value) {
+              // Debounce email validation
+              Future.delayed(const Duration(milliseconds: 800), () {
+                if (emailController.text == value) {
+                  _validateEmail(value);
+                }
+              });
+            },
+            decoration: InputDecoration(
+              labelText: 'Email',
+              border: InputBorder.none,
+              suffixIcon: _isCheckingEmail
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF006A5B)),
+                        ),
+                      ),
+                    )
+                  : _emailErrorText == null && emailController.text.isNotEmpty
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : _emailErrorText != null
+                          ? const Icon(Icons.error, color: Colors.red)
+                          : null,
+            ),
+          ),
+          if (_emailErrorText != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                _emailErrorText!,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
