@@ -401,13 +401,13 @@ class _ParentClinicProfilePageState extends State<ParentClinicProfilePage>
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(25),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
                       blurRadius: 10,
-                      offset: const Offset(0, 3),
+                      offset: const Offset(0, 5),
                     ),
                   ],
                 ),
@@ -415,8 +415,11 @@ class _ParentClinicProfilePageState extends State<ParentClinicProfilePage>
                   controller: _tabController,
                   indicator: BoxDecoration(
                     color: const Color(0xFF006A5B),
-                    borderRadius: BorderRadius.circular(25),
+                    borderRadius: BorderRadius.circular(30),
                   ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicatorPadding: const EdgeInsets.all(4),
+                  dividerColor: Colors.transparent,
                   labelColor: Colors.white,
                   unselectedLabelColor: const Color(0xFF006A5B),
                   labelStyle: const TextStyle(
@@ -429,7 +432,6 @@ class _ParentClinicProfilePageState extends State<ParentClinicProfilePage>
                     fontSize: 14,
                     fontFamily: 'Poppins',
                   ),
-                  indicatorPadding: const EdgeInsets.all(4),
                   tabs: const [
                     Tab(text: 'Profile'),
                     Tab(text: 'Gallery'),

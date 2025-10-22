@@ -377,11 +377,20 @@ class _ParentTherapistProfilePageState extends State<ParentTherapistProfilePage>
                     color: const Color(0xFF006A5B),
                     borderRadius: BorderRadius.circular(30),
                   ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicatorPadding: const EdgeInsets.all(4),
+                  dividerColor: Colors.transparent,
                   labelColor: Colors.white,
                   unselectedLabelColor: const Color(0xFF006A5B),
                   labelStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
                   ),
                   tabs: const [
                     Tab(text: 'Profile'),
