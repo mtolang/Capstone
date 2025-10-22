@@ -84,7 +84,7 @@ class _ParentLoginState extends State<ParentLogin> {
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text(
-          'Parent Login',
+          'Carer Login',
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF006A5B),

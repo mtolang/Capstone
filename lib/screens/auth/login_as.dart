@@ -132,7 +132,7 @@ class _LoginAsState extends State<LoginAs> {
                   onPressed: () {
                     Navigator.pushNamed(context, '/parentlogin');
                   },
-                  child: const Text('Login as Parent'),
+                  child: const Text('Login as Carer'),
                 ),
                 const SizedBox(height: 30.0),
                 ElevatedButton(
