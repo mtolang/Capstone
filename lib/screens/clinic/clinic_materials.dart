@@ -225,7 +225,8 @@ class _ClinicMaterialsState extends State<ClinicMaterials> {
       String title, IconData icon, Color color, String subtitle) {
     return StreamBuilder<QuerySnapshot>(
       stream: _clinicId != null
-          ? ClinicMaterialsService.getMaterialsByCategory(_clinicId!, title.toLowerCase())
+          ? ClinicMaterialsService.getMaterialsByCategory(
+              _clinicId!, title.toLowerCase())
           : null,
       builder: (context, snapshot) {
         int materialCount = 0;
@@ -323,11 +324,11 @@ class _ClinicMaterialsState extends State<ClinicMaterials> {
   Widget _buildFloatingAddButton() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF4A90E2), // Solid color instead of gradient
+        color: const Color(0xFF2D5016), // Dark green theme
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4A90E2).withOpacity(0.3),
+            color: const Color(0xFF2D5016).withOpacity(0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -418,7 +419,8 @@ class MaterialFolderView extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: clinicId != null
-            ? ClinicMaterialsService.getMaterialsByCategory(clinicId!, category.toLowerCase())
+            ? ClinicMaterialsService.getMaterialsByCategory(
+                clinicId!, category.toLowerCase())
             : null,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -432,12 +434,17 @@ class MaterialFolderView extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 64, color: Colors.red.shade300),
+                  Icon(Icons.folder_open,
+                      size: 64, color: Colors.grey.shade400),
                   const SizedBox(height: 16),
                   Text(
-                    'Error loading materials',
-                    style: TextStyle(fontSize: 16, color: Colors.red.shade600),
+                    'No materials in this folder yet',
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add some materials to get started',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
                   ),
                 ],
               ),
@@ -651,7 +658,8 @@ class MaterialFolderView extends StatelessWidget {
     return fileName.split('.').last;
   }
 
-  void _openMaterial(BuildContext context, Map<String, dynamic> material) async {
+  void _openMaterial(
+      BuildContext context, Map<String, dynamic> material) async {
     final downloadUrl = material['downloadUrl'] as String?;
     final materialId = material['materialId'] as String?;
     final fileName = material['fileName'] as String?;
@@ -669,7 +677,8 @@ class MaterialFolderView extends StatelessWidget {
     try {
       // Increment download count
       if (materialId != null && clinicId != null) {
-        await ClinicMaterialsService.incrementDownloadCount(clinicId!, materialId);
+        await ClinicMaterialsService.incrementDownloadCount(
+            clinicId!, materialId);
       }
 
       // Show options for different file types
@@ -677,10 +686,12 @@ class MaterialFolderView extends StatelessWidget {
 
       if (isImage) {
         // Show image in a dialog
-        _showImageDialog(context, downloadUrl, material['title'] ?? fileName ?? 'Image');
+        _showImageDialog(
+            context, downloadUrl, material['title'] ?? fileName ?? 'Image');
       } else {
         // For other files, show download/open options
-        _showFileOptionsDialog(context, downloadUrl, material['title'] ?? fileName ?? 'File');
+        _showFileOptionsDialog(
+            context, downloadUrl, material['title'] ?? fileName ?? 'File');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -759,7 +770,8 @@ class MaterialFolderView extends StatelessWidget {
     );
   }
 
-  void _showFileOptionsDialog(BuildContext context, String downloadUrl, String fileName) {
+  void _showFileOptionsDialog(
+      BuildContext context, String downloadUrl, String fileName) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -847,9 +859,7 @@ class MaterialFolderView extends StatelessWidget {
                 try {
                   // Use the new service method for safe deletion
                   final success = await ClinicMaterialsService.deleteMaterial(
-                    clinicId!, 
-                    docId
-                  );
+                      clinicId!, docId);
 
                   if (success) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -949,7 +959,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
             // AppBar for better navigation
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF4A90E2),
+                color: const Color(0xFF2D5016), // Dark green theme
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(20),
                   topRight: Radius.circular(20),
@@ -981,7 +991,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                 ],
               ),
             ),
-            
+
             // Scrollable content
             Expanded(
               child: SingleChildScrollView(
@@ -994,12 +1004,17 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                     TextField(
                       controller: _titleController,
                       decoration: InputDecoration(
-                        labelText: 'Material Title',
+                        labelText:
+                            'Material Title *', // Added asterisk to show required
                         hintText: 'Enter a descriptive title',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         prefixIcon: const Icon(Icons.title),
+                        errorText:
+                            _titleController.text.trim().isEmpty && _isUploading
+                                ? 'Title is required'
+                                : null,
                       ),
                     ),
                     const SizedBox(height: 12), // Reduced from 16
@@ -1032,7 +1047,8 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                     Wrap(
                       spacing: 8,
                       children: _categories.map((category) {
-                        final isSelected = _selectedCategory == category['value'];
+                        final isSelected =
+                            _selectedCategory == category['value'];
                         return FilterChip(
                           selected: isSelected,
                           label: Row(
@@ -1043,7 +1059,8 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                                 size: 16,
                                 color: isSelected
                                     ? Colors.white
-                                    : const Color(0xFF4A90E2),
+                                    : const Color(
+                                        0xFF2D5016), // Dark green theme
                               ),
                               const SizedBox(width: 4),
                               Text(category['label']),
@@ -1054,10 +1071,12 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                               _selectedCategory = category['value'];
                             });
                           },
-                          selectedColor: const Color(0xFF4A90E2),
+                          selectedColor:
+                              const Color(0xFF2D5016), // Dark green theme
                           labelStyle: TextStyle(
-                            color:
-                                isSelected ? Colors.white : const Color(0xFF4A90E2),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF2D5016), // Dark green theme
                           ),
                         );
                       }).toList(),
@@ -1090,7 +1109,8 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                               icon: const Icon(Icons.attach_file),
                               label: const Text('Choose File'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4A90E2),
+                                backgroundColor:
+                                    const Color(0xFF2D5016), // Dark green theme
                                 foregroundColor: Colors.white,
                               ),
                             ),
@@ -1099,12 +1119,14 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                               children: [
                                 Icon(
                                   Icons.insert_drive_file,
-                                  color: const Color(0xFF4A90E2),
+                                  color: const Color(
+                                      0xFF2D5016), // Dark green theme
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         _selectedFile!.name,
@@ -1139,16 +1161,20 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
 
                     // Upload button
                     ElevatedButton(
-                      onPressed: _isUploading || _selectedFile == null
+                      onPressed: _isUploading ||
+                              _selectedFile == null ||
+                              _titleController.text.trim().isEmpty
                           ? null
                           : _uploadMaterial,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4A90E2),
+                        backgroundColor:
+                            const Color(0xFF2D5016), // Dark green theme
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        disabledBackgroundColor: Colors.grey.shade400,
                       ),
                       child: _isUploading
                           ? const Row(
@@ -1159,8 +1185,8 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                                   height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor:
-                                        AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white),
                                   ),
                                 ),
                                 SizedBox(width: 12),
@@ -1168,7 +1194,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
                               ],
                             )
                           : const Text(
-                              'Upload Material',
+                              'Submit Material',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -1218,22 +1244,41 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
   }
 
   Future<void> _uploadMaterial() async {
-    if (_selectedFile == null || widget.clinicId == null) return;
+    if (_selectedFile == null ||
+        widget.clinicId == null ||
+        _titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields and select a file'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isUploading = true;
     });
 
     try {
-      // Get clinic name for metadata
+      // Get clinic and user information
       final prefs = await SharedPreferences.getInstance();
       final clinicName = prefs.getString('clinic_name') ?? 'Unknown Clinic';
       final uploaderName = prefs.getString('therapist_name') ?? 'Unknown User';
+      final uploaderId = prefs.getString('therapist_id') ??
+          prefs.getString('user_id') ??
+          'unknown';
 
-      // Generate unique file name with timestamp
+      // Generate clinic-specific unique file name
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileExtension = _selectedFile!.name.split('.').last;
-      final uniqueFileName = '${timestamp}_${_selectedFile!.name}';
+      final clinicPrefix = widget.clinicId!.length > 8
+          ? widget.clinicId!.substring(0, 8)
+          : widget.clinicId!;
+      final uniqueFileName =
+          'clinic_${clinicPrefix}_${timestamp}_${_selectedCategory}_${_selectedFile!.name}';
+
+      print('Uploading file with unique name: $uniqueFileName'); // Debug log
 
       // Upload file to Firebase Storage with organized structure
       final storageRef = FirebaseStorage.instance.ref().child(
@@ -1245,17 +1290,16 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
 
-      print('File uploaded successfully. Download URL: $downloadUrl'); // Debug log
+      print(
+          'File uploaded successfully. Download URL: $downloadUrl'); // Debug log
 
-      // Create comprehensive metadata for Firestore
+      // Create comprehensive metadata for both collections
       final materialData = {
         // Basic information
-        'title': _titleController.text.trim().isNotEmpty
-            ? _titleController.text.trim()
-            : _selectedFile!.name.split('.').first,
+        'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'category': _selectedCategory,
-        
+
         // File information
         'fileName': _selectedFile!.name,
         'originalFileName': _selectedFile!.name,
@@ -1263,66 +1307,91 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
         'fileSize': _selectedFile!.size,
         'fileExtension': fileExtension,
         'mimeType': _getFileMimeType(fileExtension),
-        
+
         // Storage information
         'downloadUrl': downloadUrl,
         'storagePath': storageRef.fullPath,
-        
+
         // Clinic and user information
         'clinicId': widget.clinicId,
         'clinicName': clinicName,
         'uploadedBy': uploaderName,
-        'uploadedById': prefs.getString('therapist_id') ?? prefs.getString('user_id'),
-        
+        'uploadedById': uploaderId,
+
         // Timestamps
         'uploadedAt': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
         'lastModified': FieldValue.serverTimestamp(),
-        
+
         // Status and metadata
         'isActive': true,
-        'isPublic': false, // Can be used for sharing settings
+        'isPublic': false,
         'downloadCount': 0,
         'tags': _generateTags(_selectedCategory, _titleController.text.trim()),
-        
+
         // Additional metadata based on file type
         if (_isImageFile(fileExtension)) ...{
           'isImage': true,
-          'thumbnailUrl': downloadUrl, // For images, use the same URL as thumbnail
+          'thumbnailUrl': downloadUrl,
         },
         if (_isVideoFile(fileExtension)) ...{
           'isVideo': true,
-          'duration': null, // Can be added later if needed
+          'duration': null,
         },
         if (_isDocumentFile(fileExtension)) ...{
           'isDocument': true,
-          'pageCount': null, // Can be added later if needed
+          'pageCount': null,
         },
       };
 
-      print('Saving material data to Firestore: $materialData'); // Debug log
+      print(
+          'Saving material data to both collections: $materialData'); // Debug log
 
-      // Save material info to Firestore
-      final docRef = await FirebaseFirestore.instance
-          .collection('ClinicMaterials')
-          .add(materialData);
+      // Save to both collections simultaneously
+      final batch = FirebaseFirestore.instance.batch();
 
-      print('Material saved to Firestore with ID: ${docRef.id}'); // Debug log
+      // Save to ClinicMaterials collection (clinic-specific)
+      final clinicMaterialRef =
+          FirebaseFirestore.instance.collection('ClinicMaterials').doc();
+      batch.set(clinicMaterialRef, {
+        ...materialData,
+        'materialId': clinicMaterialRef.id,
+      });
+
+      // Save to Materials collection (global, with clinic reference)
+      final materialRef =
+          FirebaseFirestore.instance.collection('Materials').doc();
+      batch.set(materialRef, {
+        ...materialData,
+        'materialId': materialRef.id,
+        'clinicMaterialId':
+            clinicMaterialRef.id, // Reference to clinic-specific document
+        'isClinicMaterial': true,
+      });
+
+      // Execute batch write
+      await batch.commit();
+
+      print(
+          'Material saved to both Firestore collections successfully'); // Debug log
+      print('ClinicMaterials ID: ${clinicMaterialRef.id}'); // Debug log
+      print('Materials ID: ${materialRef.id}'); // Debug log
 
       Navigator.pop(context);
       widget.onMaterialAdded();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Material uploaded successfully!'),
-          backgroundColor: Color(0xFF48BB78),
+          content: Text(
+              'Material submitted successfully to both database and storage!'),
+          backgroundColor: Color(0xFF2D5016), // Dark green theme
         ),
       );
     } catch (e) {
       print('Error uploading material: $e'); // Debug log
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error uploading material: $e'),
+          content: Text('Error submitting material: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -1359,33 +1428,37 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
   }
 
   bool _isImageFile(String extension) {
-    return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(extension.toLowerCase());
+    return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+        .contains(extension.toLowerCase());
   }
 
   bool _isVideoFile(String extension) {
-    return ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'].contains(extension.toLowerCase());
+    return ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm']
+        .contains(extension.toLowerCase());
   }
 
   bool _isDocumentFile(String extension) {
-    return ['pdf', 'doc', 'docx', 'txt', 'rtf'].contains(extension.toLowerCase());
+    return ['pdf', 'doc', 'docx', 'txt', 'rtf']
+        .contains(extension.toLowerCase());
   }
 
   List<String> _generateTags(String category, String title) {
     final tags = <String>[category];
-    
+
     // Add tags based on title words
     if (title.isNotEmpty) {
       final titleWords = title.toLowerCase().split(' ');
       tags.addAll(titleWords.where((word) => word.length > 2));
     }
-    
+
     // Add category-specific tags
     switch (category) {
       case 'motor':
         tags.addAll(['fine motor', 'gross motor', 'movement', 'coordination']);
         break;
       case 'speech':
-        tags.addAll(['language', 'communication', 'articulation', 'vocabulary']);
+        tags.addAll(
+            ['language', 'communication', 'articulation', 'vocabulary']);
         break;
       case 'cognitive':
         tags.addAll(['thinking', 'memory', 'problem solving', 'attention']);
@@ -1394,7 +1467,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
         tags.addAll(['therapy', 'general', 'resources']);
         break;
     }
-    
+
     return tags.toSet().toList(); // Remove duplicates
   }
 }
@@ -1416,7 +1489,8 @@ class ClinicMaterialsService {
   }
 
   // Get materials by category for a specific clinic
-  static Stream<QuerySnapshot> getMaterialsByCategory(String clinicId, String category) {
+  static Stream<QuerySnapshot> getMaterialsByCategory(
+      String clinicId, String category) {
     return _firestore
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
@@ -1427,7 +1501,8 @@ class ClinicMaterialsService {
   }
 
   // Get materials by file type for a specific clinic
-  static Stream<QuerySnapshot> getMaterialsByFileType(String clinicId, String fileType) {
+  static Stream<QuerySnapshot> getMaterialsByFileType(
+      String clinicId, String fileType) {
     String fieldName = '';
     switch (fileType.toLowerCase()) {
       case 'image':
@@ -1453,7 +1528,8 @@ class ClinicMaterialsService {
   }
 
   // Search materials by title or description for a specific clinic
-  static Stream<QuerySnapshot> searchMaterials(String clinicId, String searchTerm) {
+  static Stream<QuerySnapshot> searchMaterials(
+      String clinicId, String searchTerm) {
     return _firestore
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
@@ -1464,7 +1540,8 @@ class ClinicMaterialsService {
   }
 
   // Get material count for each category for a specific clinic
-  static Future<Map<String, int>> getMaterialCountsByCategory(String clinicId) async {
+  static Future<Map<String, int>> getMaterialCountsByCategory(
+      String clinicId) async {
     final categories = ['motor', 'speech', 'cognitive', 'general'];
     final Map<String, int> counts = {};
 
@@ -1482,9 +1559,11 @@ class ClinicMaterialsService {
   }
 
   // Get material by ID for a specific clinic
-  static Future<DocumentSnapshot?> getMaterialById(String clinicId, String materialId) async {
+  static Future<DocumentSnapshot?> getMaterialById(
+      String clinicId, String materialId) async {
     try {
-      final doc = await _firestore.collection(_collection).doc(materialId).get();
+      final doc =
+          await _firestore.collection(_collection).doc(materialId).get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
         if (data['clinicId'] == clinicId && data['isActive'] == true) {
@@ -1499,7 +1578,8 @@ class ClinicMaterialsService {
   }
 
   // Update material metadata
-  static Future<bool> updateMaterial(String clinicId, String materialId, Map<String, dynamic> updates) async {
+  static Future<bool> updateMaterial(
+      String clinicId, String materialId, Map<String, dynamic> updates) async {
     try {
       // Verify the material belongs to the clinic
       final doc = await getMaterialById(clinicId, materialId);
@@ -1536,7 +1616,8 @@ class ClinicMaterialsService {
   }
 
   // Permanently delete material from both Firestore and Storage
-  static Future<bool> permanentlyDeleteMaterial(String clinicId, String materialId) async {
+  static Future<bool> permanentlyDeleteMaterial(
+      String clinicId, String materialId) async {
     try {
       // Get the material document first
       final doc = await getMaterialById(clinicId, materialId);
@@ -1551,7 +1632,8 @@ class ClinicMaterialsService {
           await _storage.ref(storagePath).delete();
           print('File deleted from Storage: $storagePath');
         } catch (storageError) {
-          print('Error deleting from Storage (file may not exist): $storageError');
+          print(
+              'Error deleting from Storage (file may not exist): $storageError');
           // Continue with Firestore deletion even if Storage deletion fails
         }
       }
@@ -1567,7 +1649,8 @@ class ClinicMaterialsService {
   }
 
   // Increment download count
-  static Future<void> incrementDownloadCount(String clinicId, String materialId) async {
+  static Future<void> incrementDownloadCount(
+      String clinicId, String materialId) async {
     try {
       final doc = await getMaterialById(clinicId, materialId);
       if (doc != null) {
@@ -1582,7 +1665,8 @@ class ClinicMaterialsService {
   }
 
   // Get recently uploaded materials for a specific clinic
-  static Stream<QuerySnapshot> getRecentMaterials(String clinicId, {int limit = 10}) {
+  static Stream<QuerySnapshot> getRecentMaterials(String clinicId,
+      {int limit = 10}) {
     return _firestore
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
@@ -1593,7 +1677,8 @@ class ClinicMaterialsService {
   }
 
   // Get most downloaded materials for a specific clinic
-  static Stream<QuerySnapshot> getPopularMaterials(String clinicId, {int limit = 10}) {
+  static Stream<QuerySnapshot> getPopularMaterials(String clinicId,
+      {int limit = 10}) {
     return _firestore
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
@@ -1604,7 +1689,8 @@ class ClinicMaterialsService {
   }
 
   // Get materials uploaded by a specific user in a clinic
-  static Stream<QuerySnapshot> getMaterialsByUploader(String clinicId, String uploaderId) {
+  static Stream<QuerySnapshot> getMaterialsByUploader(
+      String clinicId, String uploaderId) {
     return _firestore
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
@@ -1615,10 +1701,11 @@ class ClinicMaterialsService {
   }
 
   // Batch operations for multiple materials
-  static Future<bool> batchDeleteMaterials(String clinicId, List<String> materialIds) async {
+  static Future<bool> batchDeleteMaterials(
+      String clinicId, List<String> materialIds) async {
     try {
       final batch = _firestore.batch();
-      
+
       for (final materialId in materialIds) {
         // Verify each material belongs to the clinic
         final doc = await getMaterialById(clinicId, materialId);
@@ -1630,7 +1717,7 @@ class ClinicMaterialsService {
           });
         }
       }
-      
+
       await batch.commit();
       return true;
     } catch (e) {
@@ -1650,17 +1737,27 @@ class ClinicMaterialsService {
 
       int totalFiles = 0;
       int totalSize = 0;
-      Map<String, int> categoryCounts = {'motor': 0, 'speech': 0, 'cognitive': 0, 'general': 0};
-      Map<String, int> fileTypeCounts = {'images': 0, 'videos': 0, 'documents': 0, 'others': 0};
+      Map<String, int> categoryCounts = {
+        'motor': 0,
+        'speech': 0,
+        'cognitive': 0,
+        'general': 0
+      };
+      Map<String, int> fileTypeCounts = {
+        'images': 0,
+        'videos': 0,
+        'documents': 0,
+        'others': 0
+      };
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         totalFiles++;
         totalSize += (data['fileSize'] as int? ?? 0);
-        
+
         final category = data['category'] as String? ?? 'general';
         categoryCounts[category] = (categoryCounts[category] ?? 0) + 1;
-        
+
         if (data['isImage'] == true) {
           fileTypeCounts['images'] = fileTypeCounts['images']! + 1;
         } else if (data['isVideo'] == true) {
@@ -1719,7 +1816,8 @@ class _SearchMaterialsDialogState extends State<SearchMaterialsDialog> {
           children: [
             Row(
               children: [
-                const Icon(Icons.search, color: Color(0xFF4A90E2)),
+                const Icon(Icons.search,
+                    color: Color(0xFF2D5016)), // Dark green theme
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
@@ -1823,7 +1921,7 @@ class _SearchMaterialsDialogState extends State<SearchMaterialsDialog> {
                         return ListTile(
                           leading: Icon(
                             Icons.insert_drive_file,
-                            color: const Color(0xFF4A90E2),
+                            color: const Color(0xFF2D5016), // Dark green theme
                           ),
                           title: Text(material['title'] ?? 'Untitled'),
                           subtitle: Text(

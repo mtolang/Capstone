@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:kindora/helper/field_helper.dart';
-import 'package:kindora/screens/clinic/clinic_patient_progress_report.dart';
 import 'package:kindora/screens/clinic/clinic_patient_profile.dart';
 
 class ClinicPatientListPage extends StatefulWidget {
@@ -80,28 +78,21 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Top ellipse background
+          // Top ellipse background (no gradient)
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: ConstrainedBox(
               constraints: BoxConstraints.expand(height: size.height * 0.30),
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
-                  ),
-                ),
-                child: Image.asset(
-                  'asset/images/Ellipse 1.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(); // Gradient fallback
-                  },
-                ),
+              child: Image.asset(
+                'asset/images/Ellipse 1.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: const Color(0xFF006A5B), // Fallback color
+                  );
+                },
               ),
             ),
           ),
@@ -159,6 +150,13 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                                 fontFamily: 'Poppins',
                               ),
                             ),
+                          ),
+                          // Status Legend Info Button
+                          IconButton(
+                            onPressed: () => _showStatusLegend(),
+                            icon: const Icon(Icons.info_outline,
+                                color: Colors.white),
+                            tooltip: 'Status Legend',
                           ),
                           // Debug button to check SharedPreferences
                           IconButton(
@@ -430,10 +428,6 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
         patient['gender'] ??
         'Not specified';
 
-    final lastAppointment = patient['appointmentDate'] != null
-        ? (patient['appointmentDate'] as Timestamp).toDate()
-        : DateTime.now();
-
     print('🎨 Rendering card for: $childName (Parent: $parentName)');
 
     return Container(
@@ -509,52 +503,201 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                           fontFamily: 'Poppins',
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.schedule,
-                            size: 14,
-                            color: Colors.grey[500],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Last visit: ${_formatDate(lastAppointment)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
 
-                // Status indicator
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(patient['status'] ?? 'confirmed')
-                        .withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _getStatusText(patient['status'] ?? 'confirmed'),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: _getStatusColor(patient['status'] ?? 'confirmed'),
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
+                // Dynamic Status indicator with FutureBuilder
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _calculateDynamicStatus(patient),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.grey),
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      print('❌ Status calculation error: ${snapshot.error}');
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Active',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.green,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      );
+                    }
+
+                    final statusData = snapshot.data!;
+                    final statusColor = statusData['statusColor'] as Color;
+                    final statusText = statusData['statusText'] as String;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: statusColor,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showStatusLegend() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.info_outline, color: Color(0xFF006A5B)),
+              SizedBox(width: 8),
+              Text(
+                'Status Legend',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Patient status based on weekly schedule (Mon-Sun) and OT assessments:',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildStatusLegendItem('Upcoming', Colors.orange,
+                    'Appointment day hasn\'t arrived yet this week'),
+                _buildStatusLegendItem('Today', Colors.orange[600]!,
+                    'Appointment is scheduled for today'),
+                _buildStatusLegendItem('In Session', Colors.green[600]!,
+                    'Currently attending therapy session'),
+                _buildStatusLegendItem('Active', Colors.green,
+                    'Appointment day passed but no assessment yet'),
+                _buildStatusLegendItem('Needs Assessment', Colors.red[400]!,
+                    'Session ended today but OT assessment pending'),
+                _buildStatusLegendItem('Completed', Colors.blue,
+                    'Session completed with OT assessment'),
+                const SizedBox(height: 16),
+                Text(
+                  'Status resets weekly based on contract schedule',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusLegendItem(
+      String status, Color color, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -680,11 +823,30 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                               : 'No appointments yet',
                           Icons.schedule,
                         ),
-                        _buildDetailRow(
-                          'Status',
-                          _getStatusText(patient['status'] ?? 'confirmed'),
-                          Icons.info,
+                        // Dynamic Status with FutureBuilder
+                        FutureBuilder<Map<String, dynamic>>(
+                          future: _calculateDynamicStatus(patient),
+                          builder: (context, snapshot) {
+                            String statusText = 'Active';
+                            if (snapshot.hasData) {
+                              statusText =
+                                  snapshot.data!['statusText'] as String;
+                            }
+                            return _buildDetailRow(
+                              'Status',
+                              statusText,
+                              Icons.info,
+                            );
+                          },
                         ),
+                        // Weekly Schedule Information
+                        if (patient['contractInfo']?['dayOfWeek'] != null &&
+                            patient['appointmentTime'] != null)
+                          _buildDetailRow(
+                            'Weekly Schedule',
+                            '${patient['contractInfo']['dayOfWeek']} at ${patient['appointmentTime']}',
+                            Icons.calendar_today,
+                          ),
                         if (patient['assignmentInfo']?['specialInstructions'] !=
                                 null &&
                             patient['assignmentInfo']['specialInstructions']
@@ -849,16 +1011,219 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  // New dynamic status calculation based on contract schedule and OT assessments
+  Future<Map<String, dynamic>> _calculateDynamicStatus(
+      Map<String, dynamic> patient) async {
+    try {
+      final now = DateTime.now();
+
+      // Extract contract information
+      final contractInfo = patient['contractInfo'] as Map<String, dynamic>?;
+      final appointmentTime = patient['appointmentTime'] as String?;
+      final dayOfWeek = contractInfo?['dayOfWeek'] as String?;
+      final patientId =
+          patient['parentInfo']?['parentId'] ?? patient['parentId'] ?? '';
+      final childName = patient['childName'] ?? patient['patientName'] ?? '';
+
+      print('🔍 Calculating status for: $childName');
+      print('   Contract day: $dayOfWeek');
+      print('   Appointment time: $appointmentTime');
+      print('   Patient ID: $patientId');
+
+      // Check if there's an OT Assessment completed for this patient
+      // Try multiple approaches to match the assessment data
+      bool hasCompletedAssessment = false;
+      try {
+        // First, try matching by childName and clinicId (most reliable for this case)
+        final nameQuery = await FirebaseFirestore.instance
+            .collection('OTAssessments')
+            .where('childName', isEqualTo: childName)
+            .where('clinicId', isEqualTo: _clinicId)
+            .get();
+
+        if (nameQuery.docs.isNotEmpty) {
+          hasCompletedAssessment = true;
+          print('   Found OT Assessment by childName: $childName');
+        } else {
+          // Fallback: try by patientId
+          final idQuery = await FirebaseFirestore.instance
+              .collection('OTAssessments')
+              .where('patientId', isEqualTo: patientId)
+              .where('clinicId', isEqualTo: _clinicId)
+              .get();
+
+          hasCompletedAssessment = idQuery.docs.isNotEmpty;
+          print('   Found OT Assessment by patientId: $hasCompletedAssessment');
+        }
+
+        print('   Final Assessment Status: $hasCompletedAssessment');
+      } catch (e) {
+        print('   Error checking OT Assessment: $e');
+      }
+
+      // If no contract info, use fallback logic
+      if (contractInfo == null ||
+          dayOfWeek == null ||
+          appointmentTime == null) {
+        return {
+          'status': hasCompletedAssessment ? 'completed' : 'active',
+          'statusText': hasCompletedAssessment ? 'Completed' : 'Active',
+          'statusColor': hasCompletedAssessment ? Colors.blue : Colors.green,
+        };
+      }
+
+      // Parse appointment time to get start time
+      final timeMatch =
+          RegExp(r'(\d{1,2}):(\d{2})').firstMatch(appointmentTime);
+      if (timeMatch == null) {
+        return {
+          'status': hasCompletedAssessment ? 'completed' : 'active',
+          'statusText': hasCompletedAssessment ? 'Completed' : 'Active',
+          'statusColor': hasCompletedAssessment ? Colors.blue : Colors.green,
+        };
+      }
+
+      final appointmentHour = int.parse(timeMatch.group(1)!);
+      final appointmentMinute = int.parse(timeMatch.group(2)!);
+
+      // Get current week's appointment date based on contract schedule
+      final currentWeekStart = now
+          .subtract(Duration(days: now.weekday - 1)); // Monday of current week
+      final appointmentDayNumber = _getDayNumber(dayOfWeek);
+      final thisWeekAppointment =
+          currentWeekStart.add(Duration(days: appointmentDayNumber - 1));
+      final appointmentDateTime = DateTime(
+        thisWeekAppointment.year,
+        thisWeekAppointment.month,
+        thisWeekAppointment.day,
+        appointmentHour,
+        appointmentMinute,
+      );
+
+      print('   This week appointment: ${appointmentDateTime.toString()}');
+      print('   Current time: ${now.toString()}');
+      print('   Current weekday: ${now.weekday} (1=Monday, 7=Sunday)');
+      print('   Appointment weekday: $appointmentDayNumber');
+
+      // Weekly Schedule Logic:
+      // - If appointment day hasn't arrived yet this week: "Upcoming"
+      // - If appointment day has passed and has assessment: "Completed"
+      // - If appointment day has passed but no assessment: "Active"
+      // - Status resets every week
+
+      final currentDayOfWeek = now.weekday; // 1=Monday, 7=Sunday
+
+      if (currentDayOfWeek < appointmentDayNumber) {
+        // Appointment day is still upcoming this week (e.g., today is Thu, appointment is Fri)
+        return {
+          'status': 'upcoming',
+          'statusText': 'Upcoming',
+          'statusColor': Colors.orange,
+        };
+      } else if (currentDayOfWeek == appointmentDayNumber) {
+        // Today is the appointment day
+        final sessionEndTime =
+            appointmentDateTime.add(const Duration(hours: 1));
+
+        if (now.isBefore(appointmentDateTime)) {
+          // Appointment hasn't started yet today
+          return {
+            'status': 'upcoming',
+            'statusText': 'Today',
+            'statusColor': Colors.orange[600],
+          };
+        } else if (now.isBefore(sessionEndTime)) {
+          // Currently in session
+          return {
+            'status': 'in_session',
+            'statusText': 'In Session',
+            'statusColor': Colors.green[600],
+          };
+        } else {
+          // Session ended today
+          if (hasCompletedAssessment) {
+            return {
+              'status': 'completed',
+              'statusText': 'Completed',
+              'statusColor': Colors.blue,
+            };
+          } else {
+            return {
+              'status': 'pending_assessment',
+              'statusText': 'Needs Assessment',
+              'statusColor': Colors.red[400],
+            };
+          }
+        }
+      } else {
+        // Appointment day has already passed this week (e.g., today is Wed, appointment was Mon/Tue)
+        if (hasCompletedAssessment) {
+          return {
+            'status': 'completed',
+            'statusText': 'Completed',
+            'statusColor': Colors.blue,
+          };
+        } else {
+          // Past appointment day but no assessment - still show as active
+          return {
+            'status': 'active',
+            'statusText': 'Active',
+            'statusColor': Colors.green,
+          };
+        }
+      }
+    } catch (e) {
+      print('❌ Error calculating dynamic status: $e');
+      return {
+        'status': 'active',
+        'statusText': 'Active',
+        'statusColor': Colors.green,
+      };
+    }
+  }
+
+  int _getDayNumber(String dayOfWeek) {
+    switch (dayOfWeek.toLowerCase()) {
+      case 'monday':
+        return 1;
+      case 'tuesday':
+        return 2;
+      case 'wednesday':
+        return 3;
+      case 'thursday':
+        return 4;
+      case 'friday':
+        return 5;
+      case 'saturday':
+        return 6;
+      case 'sunday':
+        return 7;
+      default:
+        return 1;
+    }
+  }
+
   String _getStatusText(String status) {
     switch (status.toLowerCase()) {
+      case 'upcoming':
+        return 'Upcoming';
+      case 'today':
+        return 'Today';
+      case 'active':
       case 'confirmed':
         return 'Active';
+      case 'in_session':
+        return 'In Session';
       case 'completed':
         return 'Completed';
+      case 'pending_assessment':
+        return 'Needs Assessment';
       case 'cancelled':
         return 'Cancelled';
       case 'rescheduled':
         return 'Rescheduled';
+      case 'scheduled':
+        return 'Scheduled';
       default:
         return 'Active';
     }
@@ -866,14 +1231,25 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
+      case 'upcoming':
+        return Colors.orange;
+      case 'today':
+        return Colors.orange[600]!;
+      case 'active':
       case 'confirmed':
         return Colors.green;
+      case 'in_session':
+        return Colors.green[600]!;
       case 'completed':
         return Colors.blue;
+      case 'pending_assessment':
+        return Colors.red[400]!;
       case 'cancelled':
         return Colors.red;
       case 'rescheduled':
         return Colors.orange;
+      case 'scheduled':
+        return Colors.grey[600]!;
       default:
         return Colors.green;
     }
@@ -881,18 +1257,23 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
 
   void _navigateToPatientProfile(Map<String, dynamic> patient) {
     // Extract the required parameters from the patient data
-    final patientId = patient['patientInfo']?['parentId'] ?? 
-                     patient['parentID'] ?? 
-                     patient['id'] ?? 
-                     patient['documentId'] ?? 
-                     'unknown';
-    
+    final patientId = patient['patientInfo']?['parentId'] ??
+        patient['parentID'] ??
+        patient['id'] ??
+        patient['documentId'] ??
+        'unknown';
+
     final patientName = patient['childName'] ?? 'Unknown Patient';
-    
+
     // For now, use empty string for image URL since we don't have profile images
-    final patientImageUrl = patient['patientInfo']?['profileImageUrl'] ?? 
-                           patient['profileImage'] ?? 
-                           '';
+    final patientImageUrl = patient['patientInfo']?['profileImageUrl'] ??
+        patient['profileImage'] ??
+        '';
+
+    print('🚀 Navigating to profile with:');
+    print('   Patient ID: $patientId');
+    print('   Patient Name: $patientName');
+    print('   Patient Data: ${patient.toString()}');
 
     Navigator.push(
       context,
@@ -901,34 +1282,44 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
           patientId: patientId,
           patientName: patientName,
           patientImageUrl: patientImageUrl,
+          patientData: patient, // Pass the full patient data
         ),
       ),
     );
   }
 
   void _navigateToProgressReport(Map<String, dynamic> patient) {
-    // Navigate to new OT Assessment form
-    Navigator.push(
+    // Prepare progress data for the assessment form
+    final progressData = {
+      'patientId': patient['id'] ?? patient['patientInfo']?['parentId'] ?? '',
+      'clinicId': _clinicId,
+      'childName': patient['childName'],
+      'patientName': patient['childName'],
+      'parentName': patient['parentName'],
+      'age': patient['age']?.toString() ??
+          patient['patientInfo']?['childAge']?.toString() ??
+          '',
+      'childAge': patient['age']?.toString() ??
+          patient['patientInfo']?['childAge']?.toString() ??
+          '',
+      'gender':
+          patient['patientInfo']?['childGender'] ?? patient['gender'] ?? '',
+      'childGender':
+          patient['patientInfo']?['childGender'] ?? patient['gender'] ?? '',
+      'contactNumber': patient['patientInfo']?['parentContact'] ?? '',
+      'appointmentType': patient['appointmentType'] ?? 'Therapy',
+    };
+
+    print('🚀 Patient List: Navigating to assessment with data: $progressData');
+
+    // Use named route navigation like other pages in the app
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (context) => ClinicPatientProgressReport(
-          patientName: patient['childName'],
-          progressData: {
-            'patientId':
-                patient['id'] ?? patient['patientInfo']?['parentId'] ?? '',
-            'clinicId': _clinicId,
-            'childName': patient['childName'],
-            'parentName': patient['parentName'],
-            'age': patient['age']?.toString() ??
-                patient['patientInfo']?['childAge']?.toString() ??
-                '',
-            'gender': patient['patientInfo']?['childGender'] ??
-                patient['gender'] ??
-                '',
-            'contactNumber': patient['patientInfo']?['parentContact'] ?? '',
-          },
-        ),
-      ),
+      '/clinicassessment',
+      arguments: {
+        'patientName': patient['childName'] ?? 'Unknown Patient',
+        'progressData': progressData,
+      },
     );
   }
 

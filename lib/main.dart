@@ -50,6 +50,7 @@ import 'package:kindora/screens/clinic/clinic_schedule.dart';
 import 'package:kindora/screens/clinic/clinic_edit_schedule.dart';
 import 'package:kindora/screens/clinic/clinic_patientlist.dart';
 import 'package:kindora/screens/clinic/clinic_progress.dart';
+import 'package:kindora/screens/clinic/clinic_patient_progress_report.dart';
 //chat page imports
 import 'package:kindora/chat/patient_selection.dart';
 import 'package:kindora/chat/therapist_chat.dart';
@@ -304,6 +305,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/cliniceditschedule': (context) => const ClinicEditSchedulePage(),
             '/clinicpatientlist': (context) => const ClinicPatientListPage(),
             '/clinicprogress': (context) => const ClinicProgress(),
+            '/clinicassessment': (context) {
+              final args = ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?;
+              return ClinicPatientProgressReport(
+                patientName: args?['patientName'] as String? ?? '',
+                progressData:
+                    args?['progressData'] as Map<String, dynamic>? ?? {},
+              );
+            },
 
             // Add routes from the routes module
             ...routes.routes,

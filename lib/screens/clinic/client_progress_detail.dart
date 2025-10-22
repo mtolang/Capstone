@@ -29,23 +29,181 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
 
   Future<void> _loadAssessments() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('OTAssessments')
-          .where('patientId', isEqualTo: widget.clientData['clientId'])
-          .where('clinicId', isEqualTo: widget.clinicId)
-          .orderBy('createdAt', descending: true)
-          .get();
+      print('🔍 Loading assessments for client: ${widget.clientData}');
+
+      final clientId = widget.clientData['clientId']?.toString();
+      final patientName = widget.clientData['childName']?.toString() ??
+          widget.clientData['patientName']?.toString();
+      final bookingId = widget.clientData['bookingId']?.toString();
+
+      print(
+          '🔍 Searching with - clientId: $clientId, patientName: $patientName, bookingId: $bookingId');
+      print('🔍 Clinic ID: ${widget.clinicId}');
+
+      List<QueryDocumentSnapshot> foundDocs = [];
+
+      // Strategy 1: Query by clientId (patientId)
+      if (clientId != null && clientId.isNotEmpty) {
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('OTAssessments')
+              .where('patientId', isEqualTo: clientId)
+              .where('clinicId', isEqualTo: widget.clinicId)
+              .get();
+
+          print(
+              '🔍 Strategy 1 (patientId = $clientId): ${snapshot.docs.length} documents');
+          foundDocs.addAll(snapshot.docs);
+        } catch (e) {
+          print('❌ Strategy 1 failed: $e');
+        }
+      }
+
+      // Strategy 2: Query by childName if no results from strategy 1
+      if (foundDocs.isEmpty && patientName != null && patientName.isNotEmpty) {
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('OTAssessments')
+              .where('childName', isEqualTo: patientName)
+              .where('clinicId', isEqualTo: widget.clinicId)
+              .get();
+
+          print(
+              '🔍 Strategy 2 (childName = $patientName): ${snapshot.docs.length} documents');
+          foundDocs.addAll(snapshot.docs);
+        } catch (e) {
+          print('❌ Strategy 2 failed: $e');
+        }
+      }
+
+      // Strategy 3: Query all for clinic and filter manually
+      if (foundDocs.isEmpty) {
+        try {
+          print(
+              '🔍 Strategy 3: Querying all clinic assessments for manual filtering');
+          final snapshot = await FirebaseFirestore.instance
+              .collection('OTAssessments')
+              .where('clinicId', isEqualTo: widget.clinicId)
+              .get();
+
+          print(
+              '🔍 Strategy 3: Got ${snapshot.docs.length} total clinic assessments');
+
+          // Print all available assessments for debugging
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            print(
+                '🔍 Available assessment: patientId=${data['patientId']}, childName=${data['childName']}, parentName=${data['parentName']}');
+          }
+
+          // Filter manually with various matching strategies
+          final filteredDocs = snapshot.docs.where((doc) {
+            final data = doc.data();
+            final docPatientId = data['patientId']?.toString().toLowerCase();
+            final docChildName = data['childName']?.toString().toLowerCase();
+
+            final searchClientId = clientId?.toLowerCase();
+            final searchPatientName = patientName?.toLowerCase();
+
+            // Try various matching approaches
+            bool matches = false;
+
+            // Exact matches
+            if (docPatientId == searchClientId) {
+              print('🔍 Match found: patientId exact match');
+              matches = true;
+            } else if (docChildName == searchPatientName) {
+              print('🔍 Match found: childName exact match');
+              matches = true;
+            }
+            // Partial matches
+            else if (searchClientId != null &&
+                docPatientId != null &&
+                (docPatientId.contains(searchClientId) ||
+                    searchClientId.contains(docPatientId))) {
+              print('🔍 Match found: patientId partial match');
+              matches = true;
+            } else if (searchPatientName != null &&
+                docChildName != null &&
+                (docChildName.contains(searchPatientName) ||
+                    searchPatientName.contains(docChildName))) {
+              print('🔍 Match found: childName partial match');
+              matches = true;
+            }
+
+            if (matches) {
+              print('🔍 Matched document: ${doc.id} with data: $data');
+            }
+
+            return matches;
+          }).toList();
+
+          print(
+              '🔍 Strategy 3: Manual filtering found ${filteredDocs.length} matching documents');
+          foundDocs.addAll(filteredDocs);
+        } catch (e) {
+          print('❌ Strategy 3 failed: $e');
+        }
+      }
+
+      // Sort by creation date (newest first)
+      foundDocs.sort((a, b) {
+        try {
+          final aData = a.data() as Map<String, dynamic>?;
+          final bData = b.data() as Map<String, dynamic>?;
+          final aTime =
+              (aData?['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          final bTime =
+              (bData?['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+          return bTime.compareTo(aTime);
+        } catch (e) {
+          return 0;
+        }
+      });
 
       setState(() {
-        assessments =
-            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+        assessments = foundDocs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return <String, dynamic>{'id': doc.id, ...data};
+        }).toList();
         isLoading = false;
       });
+
+      print('🔍 Final result: ${assessments.length} assessments loaded');
+      if (assessments.isNotEmpty) {
+        print('🔍 First assessment sample: ${assessments.first}');
+      }
     } catch (e) {
-      print('Error loading assessments: $e');
+      print('❌ Error loading assessments: $e');
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _testDirectQuery() async {
+    print('🧪 Running test direct query for all clinic assessments...');
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('clinicId', isEqualTo: widget.clinicId)
+          .get();
+
+      print(
+          '🧪 Test query found ${snapshot.docs.length} total assessments for clinic ${widget.clinicId}');
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        print('🧪 Assessment ID: ${doc.id}');
+        print('🧪   - patientId: ${data['patientId']}');
+        print('🧪   - childName: ${data['childName']}');
+        print('🧪   - parentName: ${data['parentName']}');
+        print('🧪   - clinicId: ${data['clinicId']}');
+        print('🧪   - createdAt: ${data['createdAt']}');
+        print('🧪   ---');
+      }
+    } catch (e) {
+      print('🧪 Test query error: $e');
     }
   }
 
@@ -229,6 +387,10 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
 
                       // Assessment History
                       _buildAssessmentHistory(),
+                      const SizedBox(height: 20),
+
+                      // Detailed Assessment Table
+                      _buildDetailedAssessmentTable(),
                     ],
                   ),
                 ),
@@ -236,39 +398,164 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.assessment_outlined,
-              size: 80,
-              color: Colors.grey[300],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.assessment_outlined,
+            size: 80,
+            color: Colors.grey[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Assessments Found',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+              fontFamily: 'Poppins',
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No Assessments Yet',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No assessments were found for this client.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+              fontFamily: 'Poppins',
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+
+          // Retry button
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                isLoading = true;
+              });
+              _loadAssessments();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Retry Loading',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Test query button
+          ElevatedButton(
+            onPressed: () => _testDirectQuery(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Test Direct Query',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          // Debug information card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Debug Information',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildDebugInfo('Client ID',
+                    widget.clientData['clientId']?.toString() ?? 'null'),
+                _buildDebugInfo('Child Name',
+                    widget.clientData['childName']?.toString() ?? 'null'),
+                _buildDebugInfo('Patient Name',
+                    widget.clientData['patientName']?.toString() ?? 'null'),
+                _buildDebugInfo('Clinic ID', widget.clinicId),
+                _buildDebugInfo('Booking ID',
+                    widget.clientData['bookingId']?.toString() ?? 'null'),
+                const SizedBox(height: 12),
+                const Text(
+                  'Client Data:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    widget.clientData.toString(),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDebugInfo(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 fontFamily: 'Poppins',
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Assessments for this client will appear here.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
                 fontFamily: 'Poppins',
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -820,6 +1107,548 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
             Icons.chevron_right,
             color: Colors.grey[400],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailedAssessmentTable() {
+    if (assessments.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Text(
+            'No assessment data available',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+              fontFamily: 'Poppins',
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.table_chart,
+                color: Color(0xFF006A5B),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Detailed Assessment Data',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2C3E50),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF006A5B).withOpacity(0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Assessment Date',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Fine Motor',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Gross Motor',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Sensory',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Cognitive',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Table Rows
+          ...assessments.asMap().entries.map((entry) {
+            final index = entry.key;
+            final assessment = entry.value;
+            return _buildTableRow(assessment, index);
+          }).toList(),
+
+          const SizedBox(height: 20),
+
+          // Expandable detailed view for each assessment
+          ...assessments.asMap().entries.map((entry) {
+            final index = entry.key;
+            final assessment = entry.value;
+            return _buildExpandableAssessmentCard(assessment, index);
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableRow(Map<String, dynamic> assessment, int index) {
+    String dateStr = 'Unknown';
+    try {
+      final timestamp = assessment['createdAt'] as Timestamp?;
+      if (timestamp != null) {
+        final date = timestamp.toDate();
+        dateStr = '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      // Use default
+    }
+
+    // Calculate average scores for each category
+    double fineMotorAvg =
+        _calculateCategoryAverage(assessment['fineMotorSkills']);
+    double grossMotorAvg =
+        _calculateCategoryAverage(assessment['grossMotorSkills']);
+    double sensoryAvg =
+        _calculateCategoryAverage(assessment['sensoryProcessing']);
+    double cognitiveAvg =
+        _calculateCategoryAverage(assessment['cognitiveSkills']);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: index % 2 == 0 ? Colors.grey[50] : Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey[200]!),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              dateStr,
+              style: const TextStyle(
+                fontSize: 12,
+                fontFamily: 'Poppins',
+                color: Color(0xFF2C3E50),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _buildScoreCell(fineMotorAvg),
+          ),
+          Expanded(
+            child: _buildScoreCell(grossMotorAvg),
+          ),
+          Expanded(
+            child: _buildScoreCell(sensoryAvg),
+          ),
+          Expanded(
+            child: _buildScoreCell(cognitiveAvg),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreCell(double score) {
+    Color scoreColor = _getScoreColor(score);
+
+    return Container(
+      alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: scoreColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: scoreColor.withOpacity(0.3)),
+        ),
+        child: Text(
+          score.toStringAsFixed(1),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: scoreColor,
+            fontFamily: 'Poppins',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getScoreColor(double score) {
+    if (score >= 4.0) return Colors.green;
+    if (score >= 3.0) return Colors.orange;
+    if (score >= 2.0) return Colors.deepOrange;
+    return Colors.red;
+  }
+
+  double _calculateCategoryAverage(dynamic categoryData) {
+    if (categoryData == null) return 0.0;
+
+    final Map<String, dynamic> category = categoryData as Map<String, dynamic>;
+    List<double> scores = [];
+
+    category.forEach((key, value) {
+      if (key != 'notes' && value is num) {
+        scores.add(value.toDouble());
+      }
+    });
+
+    if (scores.isEmpty) return 0.0;
+    return scores.reduce((a, b) => a + b) / scores.length;
+  }
+
+  Widget _buildExpandableAssessmentCard(
+      Map<String, dynamic> assessment, int index) {
+    String dateStr = 'Unknown';
+    try {
+      final timestamp = assessment['createdAt'] as Timestamp?;
+      if (timestamp != null) {
+        final date = timestamp.toDate();
+        dateStr = '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      // Use default
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ExpansionTile(
+        backgroundColor: Colors.grey[50],
+        collapsedBackgroundColor: Colors.white,
+        title: Text(
+          'Assessment ${assessments.length - index} - $dateStr',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2C3E50),
+            fontFamily: 'Poppins',
+          ),
+        ),
+        subtitle: Text(
+          'Type: ${assessment['assessmentType'] ?? 'Occupational Therapy'}',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontFamily: 'Poppins',
+          ),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Fine Motor Skills
+                _buildSkillSection(
+                  'Fine Motor Skills',
+                  assessment['fineMotorSkills'],
+                  [
+                    'Pincer Grasp',
+                    'Hand-Eye Coordination',
+                    'In-Hand Manipulation',
+                    'Bilateral Coordination'
+                  ],
+                  [
+                    'pincerGrasp',
+                    'handEyeCoordination',
+                    'inHandManipulation',
+                    'bilateralCoordination'
+                  ],
+                  const Color(0xFF006A5B),
+                ),
+                const SizedBox(height: 16),
+
+                // Gross Motor Skills
+                _buildSkillSection(
+                  'Gross Motor Skills',
+                  assessment['grossMotorSkills'],
+                  [
+                    'Balance',
+                    'Running/Jumping',
+                    'Throwing/Catching',
+                    'Motor Planning'
+                  ],
+                  [
+                    'balance',
+                    'runningJumping',
+                    'throwingCatching',
+                    'motorPlanning'
+                  ],
+                  const Color(0xFF67AFA5),
+                ),
+                const SizedBox(height: 16),
+
+                // Sensory Processing
+                _buildSkillSection(
+                  'Sensory Processing',
+                  assessment['sensoryProcessing'],
+                  [
+                    'Tactile Response',
+                    'Auditory Filtering',
+                    'Vestibular Seeking',
+                    'Proprioceptive Awareness'
+                  ],
+                  [
+                    'tactileResponse',
+                    'auditoryFiltering',
+                    'vestibularSeeking',
+                    'proprioceptiveAwareness'
+                  ],
+                  Colors.orange,
+                ),
+                const SizedBox(height: 16),
+
+                // Cognitive Skills
+                _buildSkillSection(
+                  'Cognitive Skills',
+                  assessment['cognitiveSkills'],
+                  [
+                    'Problem Solving',
+                    'Attention Span',
+                    'Following Directions',
+                    'Sequencing Tasks'
+                  ],
+                  [
+                    'problemSolving',
+                    'attentionSpan',
+                    'followingDirections',
+                    'sequencingTasks'
+                  ],
+                  Colors.purple,
+                ),
+
+                // Additional Information
+                if (assessment['primaryConcerns'] != null &&
+                    assessment['primaryConcerns'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Primary Concerns',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          assessment['primaryConcerns'].toString(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkillSection(
+    String title,
+    dynamic skillData,
+    List<String> skillNames,
+    List<String> skillKeys,
+    Color color,
+  ) {
+    if (skillData == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '$title: No data available',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontFamily: 'Poppins',
+          ),
+        ),
+      );
+    }
+
+    final Map<String, dynamic> skills = skillData as Map<String, dynamic>;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...skillNames.asMap().entries.map((entry) {
+            final index = entry.key;
+            final skillName = entry.value;
+            final skillKey = skillKeys[index];
+            final score = skills[skillKey] ?? 0;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    skillName,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getScoreColor(score.toDouble()),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      score.toString(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+
+          // Notes if available
+          if (skills['notes'] != null &&
+              skills['notes'].toString().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Notes: ${skills['notes']}',
+              style: TextStyle(
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey[600],
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ],
         ],
       ),
     );

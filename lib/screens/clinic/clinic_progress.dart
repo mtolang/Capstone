@@ -22,6 +22,19 @@ class _ClinicProgressState extends State<ClinicProgress> {
   Map<String, int> progressTypeStats = {};
   List<double> weeklyProgressScores = [];
 
+  // Therapy-specific analytics
+  Map<String, List<double>> therapyProgressData = {
+    'Motor': [],
+    'Speech': [],
+    'Cognitive': [],
+  };
+  Map<String, double> therapyAverageScores = {
+    'Motor': 0.0,
+    'Speech': 0.0,
+    'Cognitive': 0.0,
+  };
+  List<Map<String, dynamic>> gamesData = [];
+
   @override
   void initState() {
     super.initState();
@@ -80,8 +93,8 @@ class _ClinicProgressState extends State<ClinicProgress> {
       print('🚀 Starting data loading with clinic ID: $clinicId');
       final startTime = DateTime.now();
 
-      // Load AcceptedBooking and OTAssessments collections
-      print('🔍 Loading AcceptedBooking and OTAssessments...');
+      // Load AcceptedBooking, OTAssessments, and Games collections
+      print('🔍 Loading AcceptedBooking, OTAssessments, and Games...');
 
       final futures = await Future.wait([
         FirebaseFirestore.instance
@@ -92,15 +105,20 @@ class _ClinicProgressState extends State<ClinicProgress> {
             .collection('OTAssessments')
             .where('clinicId', isEqualTo: clinicId)
             .get(),
+        FirebaseFirestore.instance
+            .collection('Games')
+            .get(), // Get all games data to analyze by therapy type
       ]);
 
       final patientsSnapshot = futures[0];
       final assessmentsSnapshot = futures[1];
+      final gamesSnapshot = futures[2];
 
       print(
           '📊 AcceptedBooking query returned: ${patientsSnapshot.docs.length} documents');
       print(
           '📊 OTAssessments query returned: ${assessmentsSnapshot.docs.length} documents');
+      print('📊 Games query returned: ${gamesSnapshot.docs.length} documents');
 
       // Debug: Print first few documents to see structure
       if (patientsSnapshot.docs.isNotEmpty) {
@@ -121,6 +139,12 @@ class _ClinicProgressState extends State<ClinicProgress> {
 
       // Process analytics data with assessment documents
       _processAnalyticsData(assessmentsSnapshot.docs);
+
+      // Process therapy-specific analytics
+      _processTherapyAnalytics(assessmentsSnapshot.docs, patientsSnapshot.docs);
+
+      // Process games data
+      _processGamesData(gamesSnapshot.docs);
 
       // Process OT assessments
       for (var doc in assessmentsSnapshot.docs) {
@@ -348,6 +372,354 @@ class _ClinicProgressState extends State<ClinicProgress> {
     return categoryCount > 0 ? totalScore / categoryCount : 50.0;
   }
 
+  void _processTherapyAnalytics(List<QueryDocumentSnapshot> assessmentDocs,
+      List<QueryDocumentSnapshot> bookingDocs) {
+    // Reset therapy data
+    therapyProgressData = {
+      'Motor': [],
+      'Speech': [],
+      'Cognitive': [],
+    };
+    therapyAverageScores = {
+      'Motor': 0.0,
+      'Speech': 0.0,
+      'Cognitive': 0.0,
+    };
+
+    // Create a map of appointment types from AcceptedBooking
+    Map<String, String> patientTherapyTypes = {};
+    for (var doc in bookingDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final patientId = data['patientId']?.toString() ??
+          data['patientName']?.toString() ??
+          '';
+      final appointmentType = data['appointmentType']?.toString() ?? '';
+
+      if (patientId.isNotEmpty && appointmentType.isNotEmpty) {
+        patientTherapyTypes[patientId] = appointmentType;
+      }
+    }
+
+    // Process assessments and categorize by therapy type
+    Map<String, List<double>> therapyScores = {
+      'Motor': [],
+      'Speech': [],
+      'Cognitive': [],
+    };
+
+    for (var doc in assessmentDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final patientId = data['patientId']?.toString() ?? '';
+      final overallScore = _calculateOverallScore(data);
+
+      // Determine therapy type from appointment booking
+      String therapyType =
+          _mapTherapyType(patientTherapyTypes[patientId] ?? '');
+
+      // Also consider specific skill assessments
+      if (data['fineMotorSkills'] != null || data['grossMotorSkills'] != null) {
+        final motorScore = _calculateMotorScore(data);
+        therapyScores['Motor']!.add(motorScore);
+      }
+
+      if (data['cognitiveSkills'] != null) {
+        final cognitiveScore = _calculateCognitiveScore(data);
+        therapyScores['Cognitive']!.add(cognitiveScore);
+      }
+
+      // For speech therapy, we'll use overall score or specific speech assessments
+      if (therapyType == 'Speech' ||
+          patientTherapyTypes[patientId]?.toLowerCase().contains('speech') ==
+              true) {
+        therapyScores['Speech']!.add(overallScore);
+      }
+    }
+
+    // Calculate averages and set progress data
+    for (String therapy in therapyScores.keys) {
+      if (therapyScores[therapy]!.isNotEmpty) {
+        therapyProgressData[therapy] = therapyScores[therapy]!;
+        therapyAverageScores[therapy] =
+            therapyScores[therapy]!.reduce((a, b) => a + b) /
+                therapyScores[therapy]!.length;
+      }
+    }
+  }
+
+  String _mapTherapyType(String appointmentType) {
+    final type = appointmentType.toLowerCase();
+    if (type.contains('speech') || type.contains('language')) {
+      return 'Speech';
+    } else if (type.contains('occupational') ||
+        type.contains('motor') ||
+        type.contains('physical')) {
+      return 'Motor';
+    } else if (type.contains('cognitive') || type.contains('behavioral')) {
+      return 'Cognitive';
+    }
+    return 'Motor'; // Default fallback
+  }
+
+  double _calculateMotorScore(Map<String, dynamic> assessmentData) {
+    double totalScore = 0;
+    int categoryCount = 0;
+
+    if (assessmentData['fineMotorSkills'] != null) {
+      final fineMotor = assessmentData['fineMotorSkills'] as Map;
+      final scores = [
+        fineMotor['pincerGrasp'] ?? 0,
+        fineMotor['handEyeCoordination'] ?? 0,
+        fineMotor['inHandManipulation'] ?? 0,
+        fineMotor['bilateralCoordination'] ?? 0,
+      ];
+      final avg = scores.reduce((a, b) => a + b) / scores.length * 20;
+      totalScore += avg;
+      categoryCount++;
+    }
+
+    if (assessmentData['grossMotorSkills'] != null) {
+      final grossMotor = assessmentData['grossMotorSkills'] as Map;
+      final scores = [
+        grossMotor['balance'] ?? 0,
+        grossMotor['runningJumping'] ?? 0,
+        grossMotor['throwingCatching'] ?? 0,
+        grossMotor['motorPlanning'] ?? 0,
+      ];
+      final avg = scores.reduce((a, b) => a + b) / scores.length * 20;
+      totalScore += avg;
+      categoryCount++;
+    }
+
+    return categoryCount > 0 ? totalScore / categoryCount : 50.0;
+  }
+
+  double _calculateCognitiveScore(Map<String, dynamic> assessmentData) {
+    if (assessmentData['cognitiveSkills'] != null) {
+      final cognitive = assessmentData['cognitiveSkills'] as Map;
+      final scores = [
+        cognitive['problemSolving'] ?? 0,
+        cognitive['attentionSpan'] ?? 0,
+        cognitive['followingDirections'] ?? 0,
+        cognitive['sequencingTasks'] ?? 0,
+      ];
+      return scores.reduce((a, b) => a + b) / scores.length * 20;
+    }
+    return 50.0;
+  }
+
+  void _processGamesData(List<QueryDocumentSnapshot> gamesDocs) {
+    gamesData.clear();
+
+    for (var doc in gamesDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final gameName = data['name']?.toString() ?? '';
+      final gameType = _getGameTherapyType(gameName);
+
+      gamesData.add({
+        'id': doc.id,
+        'name': gameName,
+        'therapyType': gameType,
+        'level': data['level'] ?? 1,
+        'score': data['score'] ?? 0,
+        'completedAt': data['completedAt'] ?? data['timestamp'],
+        'patientId': data['patientId'] ?? data['userId'],
+        ...data,
+      });
+    }
+  }
+
+  String _getGameTherapyType(String gameName) {
+    final name = gameName.toLowerCase();
+    if (name.contains('talk') ||
+        name.contains('tiles') ||
+        name.contains('speech')) {
+      return 'Speech';
+    } else if (name.contains('pattern') ||
+        name.contains('master') ||
+        name.contains('cognitive')) {
+      return 'Cognitive';
+    } else if (name.contains('trace') ||
+        name.contains('motor') ||
+        name.contains('draw')) {
+      return 'Motor';
+    }
+    return 'Motor'; // Default fallback
+  }
+
+  // Dynamic progress calculation methods
+  double _calculateProgressPercentage(String therapyType) {
+    double score = 0;
+    switch (therapyType.toLowerCase()) {
+      case 'motor':
+        score = therapyAverageScores['Motor'] ?? 0.0;
+        break;
+      case 'speech':
+        score = therapyAverageScores['Speech'] ?? 0.0;
+        break;
+      case 'cognitive':
+        score = therapyAverageScores['Cognitive'] ?? 0.0;
+        break;
+      case 'socio-emotional':
+        score = _calculateSocioEmotionalScore();
+        break;
+    }
+    // Convert from 0-100 scale to 0-1 scale for progress indicators
+    return score / 100.0;
+  }
+
+  String _calculateWeeklyChange(String therapyType) {
+    return _calculateWeeklyChangeByTherapy(therapyType);
+  }
+
+  double _calculateSocioEmotionalScore() {
+    if (progressReports.isEmpty) return 0.0;
+
+    double totalScore = 0;
+    int count = 0;
+
+    for (var report in progressReports) {
+      if (report['sensoryProcessing'] != null) {
+        final sensory = report['sensoryProcessing'] as Map;
+        final score = ((sensory['tactileResponse'] ?? 0) +
+                (sensory['auditoryFiltering'] ?? 0) +
+                (sensory['vestibularSeeking'] ?? 0) +
+                (sensory['proprioceptiveAwareness'] ?? 0)) /
+            4 *
+            20;
+        totalScore += score;
+        count++;
+      }
+    }
+
+    return count > 0 ? totalScore / count : 0.0;
+  }
+
+  String _calculateWeeklyChangeByTherapy(String therapyType) {
+    if (progressReports.isEmpty) return '0.0%';
+
+    try {
+      final now = DateTime.now();
+      final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
+      final lastWeekStart = thisWeekStart.subtract(const Duration(days: 7));
+
+      double thisWeekAvgScore = 0;
+      double lastWeekAvgScore = 0;
+      int thisWeekCount = 0;
+      int lastWeekCount = 0;
+
+      for (var report in progressReports) {
+        try {
+          DateTime reportDate;
+          if (report['createdAt'] != null) {
+            reportDate = (report['createdAt'] as Timestamp).toDate();
+          } else {
+            continue;
+          }
+
+          double score = 0;
+          switch (therapyType.toLowerCase()) {
+            case 'motor':
+              score = _calculateMotorScore(report);
+              break;
+            case 'speech':
+              score = _calculateOverallScore(report); // Use overall for speech
+              break;
+            case 'cognitive':
+              score = _calculateCognitiveScore(report);
+              break;
+            case 'socio-emotional':
+              if (report['sensoryProcessing'] != null) {
+                final sensory = report['sensoryProcessing'] as Map;
+                score = ((sensory['tactileResponse'] ?? 0) +
+                        (sensory['auditoryFiltering'] ?? 0) +
+                        (sensory['vestibularSeeking'] ?? 0) +
+                        (sensory['proprioceptiveAwareness'] ?? 0)) /
+                    4 *
+                    20;
+              }
+              break;
+          }
+
+          if (score > 0) {
+            if (reportDate.isAfter(thisWeekStart)) {
+              thisWeekAvgScore += score;
+              thisWeekCount++;
+            } else if (reportDate.isAfter(lastWeekStart) &&
+                reportDate.isBefore(thisWeekStart)) {
+              lastWeekAvgScore += score;
+              lastWeekCount++;
+            }
+          }
+        } catch (e) {
+          // Skip invalid data
+        }
+      }
+
+      if (thisWeekCount == 0 && lastWeekCount == 0) {
+        return '0.0%';
+      }
+
+      if (lastWeekCount == 0) {
+        return thisWeekCount > 0 ? '+100%' : '0.0%';
+      }
+
+      thisWeekAvgScore = thisWeekAvgScore / thisWeekCount;
+      lastWeekAvgScore = lastWeekAvgScore / lastWeekCount;
+
+      final change =
+          ((thisWeekAvgScore - lastWeekAvgScore) / lastWeekAvgScore * 100);
+      return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}% over last 7 days';
+    } catch (e) {
+      return '0.0%';
+    }
+  }
+
+  String _getProgressStatus(String therapyType) {
+    double score = 0;
+    switch (therapyType.toLowerCase()) {
+      case 'motor':
+        score = therapyAverageScores['Motor'] ?? 0.0;
+        break;
+      case 'speech':
+        score = therapyAverageScores['Speech'] ?? 0.0;
+        break;
+      case 'cognitive':
+        score = therapyAverageScores['Cognitive'] ?? 0.0;
+        break;
+      case 'socio-emotional':
+        score = _calculateSocioEmotionalScore();
+        break;
+    }
+
+    if (score >= 80) return 'Excellent';
+    if (score >= 65) return 'On Track';
+    if (score >= 50) return 'Progressing';
+    return 'Needs Attention';
+  }
+
+  Color _getStatusColor(String therapyType) {
+    double score = 0;
+    switch (therapyType.toLowerCase()) {
+      case 'motor':
+        score = therapyAverageScores['Motor'] ?? 0.0;
+        break;
+      case 'speech':
+        score = therapyAverageScores['Speech'] ?? 0.0;
+        break;
+      case 'cognitive':
+        score = therapyAverageScores['Cognitive'] ?? 0.0;
+        break;
+      case 'socio-emotional':
+        score = _calculateSocioEmotionalScore();
+        break;
+    }
+
+    if (score >= 80) return Colors.green;
+    if (score >= 65) return const Color(0xFF006A5B);
+    if (score >= 50) return Colors.orange;
+    return Colors.red;
+  }
+
   int _calculateUpcomingSessions() {
     if (clientsWithProgress.isEmpty) return 0;
 
@@ -374,7 +746,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
     return upcomingCount;
   }
 
-  String _calculateWeeklyChange() {
+  String _calculateOverallWeeklyChange() {
     if (progressReports.isEmpty) return '0.0%';
 
     try {
@@ -594,7 +966,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                                   Expanded(
                                     child: _buildStatCard(
                                       title: 'Avg Weekly Change',
-                                      value: _calculateWeeklyChange(),
+                                      value: _calculateOverallWeeklyChange(),
                                       icon: Icons.trending_up,
                                       color: Colors.white,
                                       textColor: const Color(0xFF006A5B),
@@ -647,12 +1019,15 @@ class _ClinicProgressState extends State<ClinicProgress> {
                                       Expanded(
                                         child: _buildProgressCategory(
                                           title: 'Motor',
-                                          progress: 0.11,
-                                          daysOverview: '+11% over last 7 days',
-                                          status: 'On Track',
-                                          statusColor: const Color(0xFF006A5B),
+                                          progress:
+                                              _calculateProgressPercentage(
+                                                  'Motor'),
+                                          daysOverview:
+                                              _calculateWeeklyChange('Motor'),
+                                          status: _getProgressStatus('Motor'),
+                                          statusColor: _getStatusColor('Motor'),
                                           progressColor:
-                                              const Color(0xFF006A5B),
+                                              _getStatusColor('Motor'),
                                         ),
                                       ),
                                       const SizedBox(width: 15),
@@ -660,12 +1035,16 @@ class _ClinicProgressState extends State<ClinicProgress> {
                                       Expanded(
                                         child: _buildProgressCategory(
                                           title: 'Speech',
-                                          progress: 0.18,
-                                          daysOverview: '+18% over last 7 days',
-                                          status: 'On Track',
-                                          statusColor: const Color(0xFF006A5B),
+                                          progress:
+                                              _calculateProgressPercentage(
+                                                  'Speech'),
+                                          daysOverview:
+                                              _calculateWeeklyChange('Speech'),
+                                          status: _getProgressStatus('Speech'),
+                                          statusColor:
+                                              _getStatusColor('Speech'),
                                           progressColor:
-                                              const Color(0xFF67AFA5),
+                                              _getStatusColor('Speech'),
                                         ),
                                       ),
                                     ],
@@ -677,24 +1056,17 @@ class _ClinicProgressState extends State<ClinicProgress> {
                                       Expanded(
                                         child: _buildProgressCategory(
                                           title: 'Cognitive',
-                                          progress: 0.11,
-                                          daysOverview: '+11% over last 7 days',
-                                          status: 'Needs Attention',
-                                          statusColor: Colors.orange,
-                                          progressColor: Colors.orange,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 15),
-                                      // Socio-emotional Progress
-                                      Expanded(
-                                        child: _buildProgressCategory(
-                                          title: 'Socio-emotional',
-                                          progress: 0.27,
-                                          daysOverview: '+27% over last 7 days',
-                                          status: 'On Track',
-                                          statusColor: const Color(0xFF006A5B),
+                                          progress:
+                                              _calculateProgressPercentage(
+                                                  'Cognitive'),
+                                          daysOverview: _calculateWeeklyChange(
+                                              'Cognitive'),
+                                          status:
+                                              _getProgressStatus('Cognitive'),
+                                          statusColor:
+                                              _getStatusColor('Cognitive'),
                                           progressColor:
-                                              const Color(0xFF006A5B),
+                                              _getStatusColor('Cognitive'),
                                         ),
                                       ),
                                     ],
@@ -760,6 +1132,11 @@ class _ClinicProgressState extends State<ClinicProgress> {
                             ),
                           ),
                         ),
+
+                        const SizedBox(height: 20),
+
+                        // Therapy Progress Analytics Section
+                        _buildTherapyAnalyticsSection(),
 
                         const SizedBox(height: 20),
 
@@ -1077,19 +1454,36 @@ class _ClinicProgressState extends State<ClinicProgress> {
   Future<int> _getOTAssessmentsCount(String? clientId) async {
     if (clientId == null) return 0;
     try {
+      print(
+          '🔍 Getting OT assessments count for clientId: $clientId, clinicId: $clinicId');
+
       final snapshot = await FirebaseFirestore.instance
           .collection('OTAssessments')
           .where('patientId', isEqualTo: clientId)
           .where('clinicId', isEqualTo: clinicId)
           .get();
+
+      print(
+          '🔍 OT assessments count query returned: ${snapshot.docs.length} documents');
+
+      if (snapshot.docs.isNotEmpty) {
+        print('🔍 First assessment doc: ${snapshot.docs.first.data()}');
+      }
+
       return snapshot.docs.length;
     } catch (e) {
-      print('Error getting OT assessments count: $e');
+      print('❌ Error getting OT assessments count: $e');
       return 0;
     }
   }
 
   void _viewClientProgress(Map<String, dynamic> client) async {
+    // Debug: Print client data being passed
+    print('🔍 Navigating to client progress with data: $client');
+    print('🔍 Client ID: ${client['clientId']}');
+    print('🔍 Child Name: ${client['childName']}');
+    print('🔍 Clinic ID: $clinicId');
+
     // Navigate to individual client progress page
     Navigator.push(
       context,
@@ -1562,5 +1956,321 @@ class _ClinicProgressState extends State<ClinicProgress> {
       // Handle parsing errors
     }
     return 'N/A';
+  }
+
+  Widget _buildTherapyAnalyticsSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF006A5B).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.analytics,
+                  color: Color(0xFF006A5B),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Text(
+                'Therapy Progress Analytics',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Therapy type cards
+          Row(
+            children: [
+              Expanded(
+                child: _buildTherapyCard(
+                  'Motor',
+                  therapyAverageScores['Motor'] ?? 0.0,
+                  therapyProgressData['Motor'] ?? [],
+                  const Color(0xFF006A5B),
+                  Icons.accessibility_new,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTherapyCard(
+                  'Speech',
+                  therapyAverageScores['Speech'] ?? 0.0,
+                  therapyProgressData['Speech'] ?? [],
+                  const Color(0xFF67AFA5),
+                  Icons.record_voice_over,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTherapyCard(
+                  'Cognitive',
+                  therapyAverageScores['Cognitive'] ?? 0.0,
+                  therapyProgressData['Cognitive'] ?? [],
+                  Colors.orange,
+                  Icons.psychology,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Therapy progress chart
+          Container(
+            height: 250,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Therapy Progress Comparison',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _buildTherapyComparisonChart(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTherapyCard(String therapyType, double averageScore,
+      List<double> progressData, Color color, IconData icon) {
+    final progressCount = progressData.length;
+    final progressText =
+        progressCount > 0 ? '$progressCount reports' : 'No data';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: color, size: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${averageScore.toStringAsFixed(1)}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            therapyType,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: color,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            progressText,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontFamily: 'Poppins',
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Mini progress bar
+          Container(
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: (averageScore / 100).clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTherapyComparisonChart() {
+    final hasData = therapyProgressData.values.any((data) => data.isNotEmpty);
+
+    if (!hasData) {
+      return const Center(
+        child: Text(
+          'No therapy data available yet.\nStart conducting assessments to see progress.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.grey,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+          ),
+        ),
+      );
+    }
+
+    // Create bar chart data
+    final therapyTypes = ['Motor', 'Speech', 'Cognitive'];
+    final colors = [
+      const Color(0xFF006A5B),
+      const Color(0xFF67AFA5),
+      Colors.orange,
+    ];
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: 100,
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => Colors.grey[800]!,
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              return BarTooltipItem(
+                '${therapyTypes[group.x.toInt()]}\n${rod.toY.toStringAsFixed(1)}%',
+                const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Poppins',
+                ),
+              );
+            },
+          ),
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (double value, TitleMeta meta) {
+                const style = TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  fontFamily: 'Poppins',
+                );
+                if (value.toInt() < therapyTypes.length) {
+                  return Text(therapyTypes[value.toInt()], style: style);
+                }
+                return const Text('', style: style);
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (double value, TitleMeta meta) {
+                return Text(
+                  '${value.toInt()}%',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 10,
+                    fontFamily: 'Poppins',
+                  ),
+                );
+              },
+            ),
+          ),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 20,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: Colors.grey[300],
+              strokeWidth: 1,
+            );
+          },
+        ),
+        barGroups: therapyTypes.asMap().entries.map((entry) {
+          final index = entry.key;
+          final therapy = entry.value;
+          final score = therapyAverageScores[therapy] ?? 0.0;
+
+          return BarChartGroupData(
+            x: index,
+            barRods: [
+              BarChartRodData(
+                toY: score,
+                color: colors[index],
+                width: 30,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(6),
+                  topRight: Radius.circular(6),
+                ),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
   }
 }
