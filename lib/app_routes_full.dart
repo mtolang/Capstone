@@ -30,6 +30,7 @@ import 'package:kindora/screens/therapist/therapist_progress_tracking.dart';
 // Clinic pages
 import 'package:kindora/screens/clinic/clinic_gallery.dart';
 import 'package:kindora/screens/clinic/clinic_profile.dart';
+import 'package:kindora/screens/clinic/clinic_materials.dart';
 
 // Chat
 import 'package:kindora/chat/patient_selection.dart';
@@ -88,4 +89,5 @@ final Map<String, WidgetBuilder> routes = {
   // Clinic pages
   '/clinicgallery': (context) => const ClinicGallery(),
   '/clinicprofile': (context) => const ClinicProfile(),
+  '/clinicmaterials': (context) => const ClinicMaterials(),
 };

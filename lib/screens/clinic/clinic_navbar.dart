@@ -138,9 +138,7 @@ class _ClinicNavBarState extends State<ClinicNavBar> {
             onTap: () {
               Navigator.pop(context);
               print('Materials tapped');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Materials selected')),
-              );
+              Navigator.pushNamed(context, '/clinicmaterials');
             },
           ),
           ListTile(
