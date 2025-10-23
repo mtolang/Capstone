@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 
 class ClinicMaterials extends StatefulWidget {
   const ClinicMaterials({Key? key}) : super(key: key);
@@ -1213,6 +1214,8 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
 
   Future<void> _pickFile() async {
     try {
+      print('🔍 Starting file picker...'); // Debug log
+      
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
@@ -1226,20 +1229,49 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
           'mp3',
           'wav'
         ],
+        withData: true, // Ensure bytes are loaded
       );
 
-      if (result != null) {
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        print('📁 File selected: ${file.name}'); // Debug log
+        print('📏 File size: ${file.size} bytes'); // Debug log
+        print('🔗 Has bytes: ${file.bytes != null}'); // Debug log
+        print('📂 Has path: ${file.path != null}'); // Debug log
+        
+        // Validate file
+        if (file.size <= 0) {
+          throw Exception('Selected file is empty');
+        }
+        
+        if (file.bytes == null && file.path == null) {
+          throw Exception('Cannot access file data');
+        }
+        
         setState(() {
-          _selectedFile = result.files.first;
+          _selectedFile = file;
         });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File selected: ${file.name}'),
+            backgroundColor: const Color(0xFF2D5016),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        print('❌ No file selected or result is null'); // Debug log
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking file: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('❌ Error picking file: $e'); // Debug log
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -1256,11 +1288,28 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
       return;
     }
 
+    // Additional validation: Check if file has data
+    if (_selectedFile!.bytes == null && _selectedFile!.path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected file has no data. Please try selecting the file again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isUploading = true;
     });
 
     try {
+      print('🚀 Starting material upload process...'); // Debug log
+      print('📁 File name: ${_selectedFile!.name}'); // Debug log
+      print('📏 File size: ${_selectedFile!.size} bytes'); // Debug log
+      print('🔗 Has bytes: ${_selectedFile!.bytes != null}'); // Debug log
+      print('📂 Has path: ${_selectedFile!.path != null}'); // Debug log
+
       // Get clinic and user information
       final prefs = await SharedPreferences.getInstance();
       final clinicName = prefs.getString('clinic_name') ?? 'Unknown Clinic';
@@ -1286,7 +1335,19 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
 
       print('Uploading file to Storage: ${storageRef.fullPath}'); // Debug log
 
-      final uploadTask = storageRef.putData(_selectedFile!.bytes!);
+      // Check if bytes are available, if not try to read from path
+      UploadTask uploadTask;
+      if (_selectedFile!.bytes != null) {
+        print('Uploading using bytes data'); // Debug log
+        uploadTask = storageRef.putData(_selectedFile!.bytes!);
+      } else if (_selectedFile!.path != null) {
+        print('Uploading using file path: ${_selectedFile!.path}'); // Debug log
+        final file = File(_selectedFile!.path!);
+        uploadTask = storageRef.putFile(file);
+      } else {
+        throw Exception('No file data available - neither bytes nor path');
+      }
+
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
 
@@ -1388,17 +1449,21 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
         ),
       );
     } catch (e) {
-      print('Error uploading material: $e'); // Debug log
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error submitting material: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('❌ Error uploading material: $e'); // Debug log
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting material: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isUploading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 

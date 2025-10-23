@@ -4,6 +4,86 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+// Materials Service for parent access to clinic materials
+class ParentMaterialsService {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _collection = 'Materials';
+
+  // Get all public materials (accessible to parents)
+  static Stream<QuerySnapshot> getAllPublicMaterials() {
+    return _firestore
+        .collection(_collection)
+        .where('isActive', isEqualTo: true)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('uploadedAt', descending: true)
+        .snapshots();
+  }
+
+  // Get materials by category (for all clinics, public materials only)
+  static Stream<QuerySnapshot> getMaterialsByCategory(String category) {
+    return _firestore
+        .collection(_collection)
+        .where('category', isEqualTo: category.toLowerCase())
+        .where('isActive', isEqualTo: true)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('uploadedAt', descending: true)
+        .snapshots();
+  }
+
+  // Get material count for each category
+  static Future<Map<String, int>> getMaterialCountsByCategory() async {
+    final categories = ['motor', 'speech', 'cognitive', 'general'];
+    final Map<String, int> counts = {};
+
+    for (final category in categories) {
+      final snapshot = await _firestore
+          .collection(_collection)
+          .where('category', isEqualTo: category)
+          .where('isActive', isEqualTo: true)
+          .where('isPublic', isEqualTo: true)
+          .get();
+      counts[category] = snapshot.docs.length;
+    }
+
+    return counts;
+  }
+
+  // Search materials by title or tags
+  static Stream<QuerySnapshot> searchMaterials(String searchTerm) {
+    return _firestore
+        .collection(_collection)
+        .where('tags', arrayContains: searchTerm.toLowerCase())
+        .where('isActive', isEqualTo: true)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('uploadedAt', descending: true)
+        .snapshots();
+  }
+
+  // Increment download count
+  static Future<void> incrementDownloadCount(String materialId) async {
+    try {
+      await _firestore.collection(_collection).doc(materialId).update({
+        'downloadCount': FieldValue.increment(1),
+        'lastDownloaded': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error incrementing download count: $e');
+    }
+  }
+
+  // Get recently uploaded materials
+  static Stream<QuerySnapshot> getRecentMaterials({int limit = 10}) {
+    return _firestore
+        .collection(_collection)
+        .where('isActive', isEqualTo: true)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('uploadedAt', descending: true)
+        .limit(limit)
+        .snapshots();
+  }
+}
 
 class MaterialsPage extends StatefulWidget {
   const MaterialsPage({super.key});
@@ -25,56 +105,42 @@ class _MaterialsPageState extends State<MaterialsPage> {
   List<Map<String, dynamic>> _youtubeVideos = [];
   bool _loadingYouTubeVideos = false;
 
-  // Therapy categories for filtering
+  // Therapy categories for filtering (reduced to 3 as requested)
   final List<String> _therapyCategories = [
     'All',
-    'Speech Therapy',
-    'Occupational Therapy',
-    'Physical Therapy',
-    'Behavioral Therapy',
-    'Play Therapy',
-    'Sensory Integration',
-    'Social Skills',
-    'Communication',
-    'Motor Skills',
+    'Motor',
+    'Cognitive', 
+    'Speech',
   ];
 
-  final List<Map<String, dynamic>> materials = [
+  // Dynamic material categories
+  final List<Map<String, dynamic>> materialCategories = [
     {
-      'title': 'Learning to Read',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png', // Replace with actual reading image
-      'color': const Color(0xFF67AFA5),
-    },
-    {
+      'value': 'motor',
       'title': 'Motor Skills',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image':
-          'asset/images/tiny.png', // Replace with actual motor skills image
+      'description': 'Physical development and motor coordination activities',
+      'icon': Icons.accessibility_new,
       'color': const Color(0xFFE8A87C),
     },
     {
+      'value': 'speech',
       'title': 'Speech Therapy',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image':
-          'asset/images/tiny.png', // Replace with actual speech therapy image
+      'description': 'Language development and communication tools',
+      'icon': Icons.record_voice_over,
       'color': const Color(0xFFFFA07A),
     },
     {
-      'title': 'Math Skills',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png', // Replace with actual math image
+      'value': 'cognitive',
+      'title': 'Cognitive Development',
+      'description': 'Thinking skills and cognitive enhancement materials',
+      'icon': Icons.psychology,
       'color': const Color(0xFF87CEEB),
     },
     {
-      'title': 'Phonics Lessons',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png', // Replace with actual phonics image
+      'value': 'general',
+      'title': 'General Resources',
+      'description': 'Comprehensive therapy resources and materials',
+      'icon': Icons.folder_open,
       'color': const Color(0xFF98FB98),
     },
   ];
@@ -190,6 +256,117 @@ class _MaterialsPageState extends State<MaterialsPage> {
     }
   }
 
+  Widget _buildMaterialFolder(
+      String title, IconData icon, Color color, String subtitle, String category) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: ParentMaterialsService.getMaterialsByCategory(category),
+      builder: (context, snapshot) {
+        int materialCount = 0;
+        if (snapshot.hasData) {
+          materialCount = snapshot.data!.docs.length;
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.2),
+                spreadRadius: 2,
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(15),
+              onTap: () => _openMaterialFolder(category, color, title),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 30,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                        fontFamily: 'Poppins',
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontFamily: 'Poppins',
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$materialCount files',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: color,
+                          fontWeight: FontWeight.w500,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openMaterialFolder(String category, Color color, String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ParentMaterialFolderView(
+          category: category,
+          categoryColor: color,
+          title: title,
+        ),
+      ),
+    );
+  }
+
   void _openMaterialViewer(String title) {
     // TODO: Replace this with actual PDF viewer or content viewer
     Navigator.push(
@@ -238,7 +415,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                    colors: [Color.fromARGB(255, 255, 255, 255), Color.fromARGB(255, 255, 255, 255)],
                   ),
                 ),
                 child: Image.asset(
@@ -399,7 +576,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
                     ),
                   ),
                 ),
-                // Materials grid
+                // Materials folders grid
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   sliver: SliverGrid(
@@ -408,125 +585,37 @@ class _MaterialsPageState extends State<MaterialsPage> {
                       crossAxisCount: 2,
                       mainAxisSpacing: 16.0,
                       crossAxisSpacing: 16.0,
-                      childAspectRatio: 0.75,
+                      childAspectRatio: 0.85,
                     ),
                     delegate: SliverChildBuilderDelegate(
                       (BuildContext context, int index) {
-                        // Filter materials based on search query and category
-                        final filteredMaterials = materials.where((material) {
-                          final title =
-                              material['title'].toString().toLowerCase();
+                        // Filter categories based on search query
+                        final filteredCategories = materialCategories.where((category) {
+                          final title = category['title'].toString().toLowerCase();
                           final matchesSearch = _searchQuery.isEmpty ||
                               title.contains(_searchQuery);
                           final matchesCategory = _selectedCategory == 'All' ||
-                              material['title']
-                                  .toString()
-                                  .contains(_selectedCategory.split(' ')[0]);
+                              category['title'].toString().contains(_selectedCategory);
                           return matchesSearch && matchesCategory;
                         }).toList();
 
-                        if (index >= filteredMaterials.length) return null;
+                        if (index >= filteredCategories.length) return null;
 
-                        final material = filteredMaterials[index];
-                        return GestureDetector(
-                          onTap: () => _openMaterialViewer(material['title']),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(15.0),
-                              color: Colors.white,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.3),
-                                  spreadRadius: 2,
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Image container
-                                Container(
-                                  height: 120,
-                                  decoration: BoxDecoration(
-                                    color: material['color'].withOpacity(0.1),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(15),
-                                      topRight: Radius.circular(15),
-                                    ),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(15),
-                                      topRight: Radius.circular(15),
-                                    ),
-                                    child: Image.asset(
-                                      material['image'],
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                        return Container(
-                                          color: material['color']
-                                              .withOpacity(0.2),
-                                          child: Icon(
-                                            Icons.book,
-                                            size: 50,
-                                            color: material['color'],
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                // Content
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12.0),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          material['title'],
-                                          style: TextStyle(
-                                            fontSize: 16.0,
-                                            fontWeight: FontWeight.bold,
-                                            color: material['color'],
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Expanded(
-                                          child: Text(
-                                            material['description'],
-                                            style: const TextStyle(
-                                              fontSize: 12.0,
-                                              color: Colors.grey,
-                                            ),
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                        final category = filteredCategories[index];
+                        return _buildMaterialFolder(
+                          category['title'],
+                          category['icon'],
+                          category['color'],
+                          category['description'],
+                          category['value'],
                         );
                       },
-                      childCount: materials.where((material) {
-                        final title =
-                            material['title'].toString().toLowerCase();
+                      childCount: materialCategories.where((category) {
+                        final title = category['title'].toString().toLowerCase();
                         final matchesSearch = _searchQuery.isEmpty ||
                             title.contains(_searchQuery);
                         final matchesCategory = _selectedCategory == 'All' ||
-                            material['title']
-                                .toString()
-                                .contains(_selectedCategory.split(' ')[0]);
+                            category['title'].toString().contains(_selectedCategory);
                         return matchesSearch && matchesCategory;
                       }).length,
                     ),
@@ -1205,6 +1294,420 @@ class _EmbeddedVideoPlayerState extends State<EmbeddedVideoPlayer> {
   }
 }
 
+// Parent Material Folder View Page
+class ParentMaterialFolderView extends StatelessWidget {
+  final String category;
+  final Color categoryColor;
+  final String title;
+
+  const ParentMaterialFolderView({
+    Key? key,
+    required this.category,
+    required this.categoryColor,
+    required this.title,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        backgroundColor: categoryColor,
+        title: Text(
+          '$title Materials',
+          style: const TextStyle(color: Colors.white),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: ParentMaterialsService.getMaterialsByCategory(category),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: CircularProgressIndicator(color: categoryColor),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading materials',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey.shade600,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please try again later',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.folder_open_outlined,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No materials found',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey.shade600,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No materials available in this category',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final doc = snapshot.data!.docs[index];
+              final material = doc.data() as Map<String, dynamic>;
+              return _buildMaterialCard(context, material, doc.id, categoryColor);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMaterialCard(BuildContext context, Map<String, dynamic> material, String docId, Color categoryColor) {
+    final uploadedAt = material['uploadedAt'] as Timestamp?;
+    final dateStr = uploadedAt != null
+        ? '${uploadedAt.toDate().day}/${uploadedAt.toDate().month}/${uploadedAt.toDate().year}'
+        : 'Unknown date';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => _openMaterial(context, material),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // File icon
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: categoryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _getFileIcon(material['fileName'] ?? ''),
+                    size: 28,
+                    color: categoryColor,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Material info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        material['title'] ?? 'Untitled',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: categoryColor,
+                          fontFamily: 'Poppins',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      if (material['description'] != null && material['description'].toString().isNotEmpty)
+                        Text(
+                          material['description'],
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                            fontFamily: 'Poppins',
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 14,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            dateStr,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Icon(
+                            Icons.download_outlined,
+                            size: 14,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${material['downloadCount'] ?? 0}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Arrow icon
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey.shade400,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _getFileIcon(String fileName) {
+    final extension = _getFileExtension(fileName).toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+        return Icons.image;
+      case 'mp4':
+      case 'avi':
+        return Icons.video_file;
+      case 'mp3':
+      case 'wav':
+        return Icons.audio_file;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  String _getFileExtension(String fileName) {
+    return fileName.split('.').last;
+  }
+
+  void _openMaterial(BuildContext context, Map<String, dynamic> material) async {
+    final downloadUrl = material['downloadUrl'] as String?;
+    final materialId = material['materialId'] as String?;
+    final fileName = material['fileName'] as String?;
+
+    if (downloadUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Download URL not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Increment download count
+      if (materialId != null) {
+        await ParentMaterialsService.incrementDownloadCount(materialId);
+      }
+
+      // Show options for different file types
+      final isImage = material['isImage'] == true;
+
+      if (isImage) {
+        // Show image in a dialog
+        _showImageDialog(context, downloadUrl, material['title'] ?? fileName ?? 'Image');
+      } else {
+        // For other files, show download/open options
+        _showFileOptionsDialog(context, downloadUrl, fileName ?? 'file');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening material: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showImageDialog(BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppBar(
+                title: Text(
+                  title,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+                backgroundColor: categoryColor,
+                iconTheme: const IconThemeData(color: Colors.white),
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Expanded(
+                child: InteractiveViewer(
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: categoryColor,
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 64,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            const Text('Failed to load image'),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFileOptionsDialog(BuildContext context, String downloadUrl, String fileName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Open $fileName'),
+        content: const Text('Choose how you want to open this file:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                if (await canLaunch(downloadUrl)) {
+                  await launch(downloadUrl, forceWebView: false, enableJavaScript: true);
+                } else {
+                  throw 'Could not launch file';
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Could not open file: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: categoryColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Open'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // Content-only version (no AppBar, Drawer, or TabBar)
 class MaterialsPageContent extends StatefulWidget {
   const MaterialsPageContent({super.key});
@@ -1225,53 +1728,33 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
   List<Map<String, dynamic>> _youtubeVideos = [];
   bool _loadingYouTubeVideos = false;
 
-  final List<String> _therapyCategories = [
-    'All',
-    'Speech Therapy',
-    'Occupational Therapy',
-    'Physical Therapy',
-    'Behavioral Therapy',
-    'Play Therapy',
-    'Sensory Integration',
-    'Social Skills',
-    'Communication',
-    'Motor Skills',
-  ];
-
-  final List<Map<String, dynamic>> materials = [
+  final List<Map<String, dynamic>> materialCategories = [
     {
-      'title': 'Learning to Read',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png',
-      'color': const Color(0xFF67AFA5),
-    },
-    {
+      'value': 'motor',
       'title': 'Motor Skills',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png',
+      'description': 'Physical development and motor coordination activities',
+      'icon': Icons.accessibility_new,
       'color': const Color(0xFFE8A87C),
     },
     {
+      'value': 'speech',
       'title': 'Speech Therapy',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png',
+      'description': 'Language development and communication tools',
+      'icon': Icons.record_voice_over,
       'color': const Color(0xFFFFA07A),
     },
     {
-      'title': 'Math Skills',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png',
+      'value': 'cognitive',
+      'title': 'Cognitive Development',
+      'description': 'Thinking skills and cognitive enhancement materials',
+      'icon': Icons.psychology,
       'color': const Color(0xFF87CEEB),
     },
     {
-      'title': 'Phonics Lessons',
-      'description':
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor...',
-      'image': 'asset/images/tiny.png',
+      'value': 'general',
+      'title': 'General Resources',
+      'description': 'Comprehensive therapy resources and materials',
+      'icon': Icons.folder_open,
       'color': const Color(0xFF98FB98),
     },
   ];
@@ -1388,7 +1871,7 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
+                  colors: [Color.fromARGB(255, 255, 255, 255), Color.fromARGB(255, 224, 241, 239)],
                 ),
               ),
               child: Image.asset(
@@ -1530,9 +2013,9 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final material = materials[index];
+                    final category = materialCategories[index];
                     if (_searchQuery.isNotEmpty &&
-                        !material['title']
+                        !category['title']
                             .toLowerCase()
                             .contains(_searchQuery)) {
                       return const SizedBox.shrink();
@@ -1542,38 +2025,30 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16.0, vertical: 8.0),
                       child: GestureDetector(
-                        onTap: () => _openMaterialViewer(material['title']),
+                        onTap: () => _openMaterialFolder(category['value'], category['color'], category['title']),
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: material['color'].withOpacity(0.1),
+                            color: category['color'].withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: material['color'],
+                              color: category['color'],
                               width: 2,
                             ),
                           ),
                           child: Row(
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.asset(
-                                  material['image'],
-                                  width: 60,
-                                  height: 60,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: 60,
-                                      height: 60,
-                                      color: material['color'],
-                                      child: const Icon(
-                                        Icons.book,
-                                        color: Colors.white,
-                                        size: 30,
-                                      ),
-                                    );
-                                  },
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: category['color'].withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  category['icon'],
+                                  color: category['color'],
+                                  size: 30,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -1582,17 +2057,17 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      material['title'],
+                                      category['title'],
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
-                                        color: material['color'],
+                                        color: category['color'],
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      material['description'],
+                                      category['description'],
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: Colors.grey,
@@ -1606,7 +2081,7 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                               ),
                               Icon(
                                 Icons.arrow_forward_ios,
-                                color: material['color'],
+                                color: category['color'],
                                 size: 20,
                               ),
                             ],
@@ -1615,7 +2090,7 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                       ),
                     );
                   },
-                  childCount: materials.length,
+                  childCount: materialCategories.length,
                 ),
               ),
             ],
@@ -1725,6 +2200,19 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  void _openMaterialFolder(String category, Color color, String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ParentMaterialFolderView(
+          category: category,
+          categoryColor: color,
+          title: title,
         ),
       ),
     );
