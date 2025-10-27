@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'kindora_camera_screen.dart';
 
 class ParentMaterials extends StatefulWidget {
   const ParentMaterials({Key? key}) : super(key: key);
@@ -179,6 +180,17 @@ class _ParentMaterialsState extends State<ParentMaterials> {
         ),
       ),
       drawer: const ParentNavbar(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openKindoraCamera,
+        backgroundColor: const Color(0xFF006A5B),
+        child: const Icon(
+          Icons.camera_alt,
+          color: Colors.white,
+          size: 28,
+        ),
+        tooltip: 'Take Photo with Kindora Camera',
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: Stack(
         children: [
           // Background images with fallback gradients (same as dashboard)
@@ -883,5 +895,176 @@ class _ParentMaterialsState extends State<ParentMaterials> {
     } catch (e) {
       return 'Unknown';
     }
+  }
+
+  // Camera functionality
+  Future<void> _openKindoraCamera() async {
+    // Show camera options dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Kindora Camera',
+            style: TextStyle(
+              color: Color(0xFF006A5B),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'Take a photo to share with your therapy team or save therapy progress.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _launchCamera();
+              },
+              icon: const Icon(Icons.camera_alt, color: Colors.white),
+              label: const Text('Open Camera', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF006A5B),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _launchCamera() async {
+    try {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => KindoraCameraScreen(),
+        ),
+      );
+      
+      if (result == 'sent') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo sent successfully to therapy team!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else if (result == 'saved') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo saved to device!'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening camera: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _showCameraFeatures() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Kindora Camera Features',
+            style: TextStyle(
+              color: Color(0xFF006A5B),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.camera_alt, color: Color(0xFF006A5B)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Take Photos',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text('• Capture high-quality photos for therapy sessions'),
+                Text('• Switch between front and back cameras'),
+                Text('• Professional camera interface'),
+                SizedBox(height: 16),
+                
+                Row(
+                  children: [
+                    Icon(Icons.preview, color: Color(0xFF006A5B)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Preview & Actions',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text('• Preview photos before deciding'),
+                Text('• Delete unwanted photos'),
+                Text('• Save photos to device storage'),
+                Text('• Send photos to therapy team'),
+                SizedBox(height: 16),
+                
+                Row(
+                  children: [
+                    Icon(Icons.security, color: Color(0xFF006A5B)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Privacy & Security',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text('• Secure photo transmission'),
+                Text('• Local storage option'),
+                Text('• HIPAA-compliant photo handling'),
+                Text('• Therapy session integration'),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF006A5B),
+              ),
+              child: const Text(
+                'Got it!',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

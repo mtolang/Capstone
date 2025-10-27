@@ -1215,7 +1215,7 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
   Future<void> _pickFile() async {
     try {
       print('🔍 Starting file picker...'); // Debug log
-      
+
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
@@ -1238,20 +1238,20 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
         print('📏 File size: ${file.size} bytes'); // Debug log
         print('🔗 Has bytes: ${file.bytes != null}'); // Debug log
         print('📂 Has path: ${file.path != null}'); // Debug log
-        
+
         // Validate file
         if (file.size <= 0) {
           throw Exception('Selected file is empty');
         }
-        
+
         if (file.bytes == null && file.path == null) {
           throw Exception('Cannot access file data');
         }
-        
+
         setState(() {
           _selectedFile = file;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('File selected: ${file.name}'),
@@ -1292,7 +1292,8 @@ class _AddMaterialDialogState extends State<AddMaterialDialog> {
     if (_selectedFile!.bytes == null && _selectedFile!.path == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Selected file has no data. Please try selecting the file again.'),
+          content: Text(
+              'Selected file has no data. Please try selecting the file again.'),
           backgroundColor: Colors.red,
         ),
       );

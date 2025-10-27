@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'kindora_camera_screen.dart';
 
 // Materials Service for parent access to clinic materials
 class ParentMaterialsService {
@@ -109,7 +110,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
   final List<String> _therapyCategories = [
     'All',
     'Motor',
-    'Cognitive', 
+    'Cognitive',
     'Speech',
   ];
 
@@ -256,8 +257,8 @@ class _MaterialsPageState extends State<MaterialsPage> {
     }
   }
 
-  Widget _buildMaterialFolder(
-      String title, IconData icon, Color color, String subtitle, String category) {
+  Widget _buildMaterialFolder(String title, IconData icon, Color color,
+      String subtitle, String category) {
     return StreamBuilder<QuerySnapshot>(
       stream: ParentMaterialsService.getMaterialsByCategory(category),
       builder: (context, snapshot) {
@@ -329,7 +330,8 @@ class _MaterialsPageState extends State<MaterialsPage> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: color.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -415,7 +417,10 @@ class _MaterialsPageState extends State<MaterialsPage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color.fromARGB(255, 255, 255, 255), Color.fromARGB(255, 255, 255, 255)],
+                    colors: [
+                      Color.fromARGB(255, 255, 255, 255),
+                      Color.fromARGB(255, 255, 255, 255)
+                    ],
                   ),
                 ),
                 child: Image.asset(
@@ -590,12 +595,16 @@ class _MaterialsPageState extends State<MaterialsPage> {
                     delegate: SliverChildBuilderDelegate(
                       (BuildContext context, int index) {
                         // Filter categories based on search query
-                        final filteredCategories = materialCategories.where((category) {
-                          final title = category['title'].toString().toLowerCase();
+                        final filteredCategories =
+                            materialCategories.where((category) {
+                          final title =
+                              category['title'].toString().toLowerCase();
                           final matchesSearch = _searchQuery.isEmpty ||
                               title.contains(_searchQuery);
                           final matchesCategory = _selectedCategory == 'All' ||
-                              category['title'].toString().contains(_selectedCategory);
+                              category['title']
+                                  .toString()
+                                  .contains(_selectedCategory);
                           return matchesSearch && matchesCategory;
                         }).toList();
 
@@ -611,11 +620,14 @@ class _MaterialsPageState extends State<MaterialsPage> {
                         );
                       },
                       childCount: materialCategories.where((category) {
-                        final title = category['title'].toString().toLowerCase();
+                        final title =
+                            category['title'].toString().toLowerCase();
                         final matchesSearch = _searchQuery.isEmpty ||
                             title.contains(_searchQuery);
                         final matchesCategory = _selectedCategory == 'All' ||
-                            category['title'].toString().contains(_selectedCategory);
+                            category['title']
+                                .toString()
+                                .contains(_selectedCategory);
                         return matchesSearch && matchesCategory;
                       }).length,
                     ),
@@ -653,6 +665,17 @@ class _MaterialsPageState extends State<MaterialsPage> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openKindoraCamera,
+        backgroundColor: const Color(0xFF006A5B),
+        child: const Icon(
+          Icons.camera_alt,
+          color: Colors.white,
+          size: 28,
+        ),
+        tooltip: 'Take Photo with Kindora Camera',
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -957,6 +980,84 @@ class _MaterialsPageState extends State<MaterialsPage> {
       return '${date.day}/${date.month}/${date.year}';
     } catch (e) {
       return 'Unknown';
+    }
+  }
+
+  // Camera functionality
+  Future<void> _openKindoraCamera() async {
+    // Show camera options dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Kindora Camera',
+            style: TextStyle(
+              color: Color(0xFF006A5B),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'Take a photo to share with your therapy team or save therapy progress.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _launchCamera();
+              },
+              icon: const Icon(Icons.camera_alt, color: Colors.white),
+              label: const Text('Open Camera', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF006A5B),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _launchCamera() async {
+    try {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => KindoraCameraScreen(),
+        ),
+      );
+      
+      if (result == 'sent') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo sent successfully to therapy team!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else if (result == 'saved') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photo saved to device!'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening camera: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 }
@@ -1401,7 +1502,8 @@ class ParentMaterialFolderView extends StatelessWidget {
             itemBuilder: (context, index) {
               final doc = snapshot.data!.docs[index];
               final material = doc.data() as Map<String, dynamic>;
-              return _buildMaterialCard(context, material, doc.id, categoryColor);
+              return _buildMaterialCard(
+                  context, material, doc.id, categoryColor);
             },
           );
         },
@@ -1409,7 +1511,8 @@ class ParentMaterialFolderView extends StatelessWidget {
     );
   }
 
-  Widget _buildMaterialCard(BuildContext context, Map<String, dynamic> material, String docId, Color categoryColor) {
+  Widget _buildMaterialCard(BuildContext context, Map<String, dynamic> material,
+      String docId, Color categoryColor) {
     final uploadedAt = material['uploadedAt'] as Timestamp?;
     final dateStr = uploadedAt != null
         ? '${uploadedAt.toDate().day}/${uploadedAt.toDate().month}/${uploadedAt.toDate().year}'
@@ -1470,7 +1573,8 @@ class ParentMaterialFolderView extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      if (material['description'] != null && material['description'].toString().isNotEmpty)
+                      if (material['description'] != null &&
+                          material['description'].toString().isNotEmpty)
                         Text(
                           material['description'],
                           style: const TextStyle(
@@ -1559,7 +1663,8 @@ class ParentMaterialFolderView extends StatelessWidget {
     return fileName.split('.').last;
   }
 
-  void _openMaterial(BuildContext context, Map<String, dynamic> material) async {
+  void _openMaterial(
+      BuildContext context, Map<String, dynamic> material) async {
     final downloadUrl = material['downloadUrl'] as String?;
     final materialId = material['materialId'] as String?;
     final fileName = material['fileName'] as String?;
@@ -1585,7 +1690,8 @@ class ParentMaterialFolderView extends StatelessWidget {
 
       if (isImage) {
         // Show image in a dialog
-        _showImageDialog(context, downloadUrl, material['title'] ?? fileName ?? 'Image');
+        _showImageDialog(
+            context, downloadUrl, material['title'] ?? fileName ?? 'Image');
       } else {
         // For other files, show download/open options
         _showFileOptionsDialog(context, downloadUrl, fileName ?? 'file');
@@ -1667,7 +1773,8 @@ class ParentMaterialFolderView extends StatelessWidget {
     );
   }
 
-  void _showFileOptionsDialog(BuildContext context, String downloadUrl, String fileName) {
+  void _showFileOptionsDialog(
+      BuildContext context, String downloadUrl, String fileName) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1683,7 +1790,8 @@ class ParentMaterialFolderView extends StatelessWidget {
               Navigator.pop(context);
               try {
                 if (await canLaunch(downloadUrl)) {
-                  await launch(downloadUrl, forceWebView: false, enableJavaScript: true);
+                  await launch(downloadUrl,
+                      forceWebView: false, enableJavaScript: true);
                 } else {
                   throw 'Could not launch file';
                 }
@@ -1871,7 +1979,10 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color.fromARGB(255, 255, 255, 255), Color.fromARGB(255, 224, 241, 239)],
+                  colors: [
+                    Color.fromARGB(255, 255, 255, 255),
+                    Color.fromARGB(255, 224, 241, 239)
+                  ],
                 ),
               ),
               child: Image.asset(
@@ -2025,7 +2136,8 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16.0, vertical: 8.0),
                       child: GestureDetector(
-                        onTap: () => _openMaterialFolder(category['value'], category['color'], category['title']),
+                        onTap: () => _openMaterialFolder(category['value'],
+                            category['color'], category['title']),
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
