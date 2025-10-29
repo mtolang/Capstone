@@ -12,6 +12,7 @@ import 'kindora_camera_screen.dart';
 class ParentMaterialsService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _materialsCollection = 'Materials';
+  static const String _clinicMaterialsCollection = 'ClinicMaterials';
   static const String _bookingsCollection = 'AcceptedBooking';
 
   // Get materials based on therapy types from AcceptedBooking
@@ -23,20 +24,27 @@ class ParentMaterialsService {
         .snapshots();
   }
 
-  // Get materials for specific therapy type and clinic
+  // Get materials for specific therapy type and clinic - searches both Materials and ClinicMaterials
   static Stream<QuerySnapshot> getTherapyMaterials(String therapyType, {String? clinicId}) {
+    // If clinicId is provided, prioritize ClinicMaterials collection
+    if (clinicId != null && clinicId.isNotEmpty) {
+      print('Querying ClinicMaterials for therapy: $therapyType, clinic: $clinicId');
+      return _firestore
+          .collection(_clinicMaterialsCollection)
+          .where('category', isEqualTo: therapyType.toLowerCase())
+          .where('clinicId', isEqualTo: clinicId)
+          .where('isActive', isEqualTo: true)
+          .orderBy('uploadedAt', descending: true)
+          .snapshots();
+    }
+    
+    // Fallback to Materials collection for general/public materials
+    print('Querying Materials collection for therapy: $therapyType');
     Query query = _firestore
         .collection(_materialsCollection)
         .where('category', isEqualTo: therapyType.toLowerCase())
         .where('isActive', isEqualTo: true);
     
-    // Add clinic filter if clinicId is provided
-    if (clinicId != null && clinicId.isNotEmpty) {
-      query = query.where('clinicId', isEqualTo: clinicId);
-    }
-    
-    // Filter for both public materials and clinic materials
-    // This will show materials that are either public or from the specific clinic
     return query
         .orderBy('uploadedAt', descending: true)
         .snapshots();
@@ -44,25 +52,44 @@ class ParentMaterialsService {
 
   // Search materials by title or tags for specific therapy type and clinic
   static Stream<QuerySnapshot> searchTherapyMaterials(String therapyType, String searchTerm, {String? clinicId}) {
+    // If clinicId is provided, search in ClinicMaterials collection
+    if (clinicId != null && clinicId.isNotEmpty) {
+      return _firestore
+          .collection(_clinicMaterialsCollection)
+          .where('category', isEqualTo: therapyType.toLowerCase())
+          .where('clinicId', isEqualTo: clinicId)
+          .where('tags', arrayContains: searchTerm.toLowerCase())
+          .where('isActive', isEqualTo: true)
+          .orderBy('uploadedAt', descending: true)
+          .snapshots();
+    }
+    
+    // Fallback to Materials collection
     Query query = _firestore
         .collection(_materialsCollection)
         .where('category', isEqualTo: therapyType.toLowerCase())
         .where('tags', arrayContains: searchTerm.toLowerCase())
         .where('isActive', isEqualTo: true);
     
-    // Add clinic filter if clinicId is provided
-    if (clinicId != null && clinicId.isNotEmpty) {
-      query = query.where('clinicId', isEqualTo: clinicId);
-    }
-    
     return query
         .orderBy('uploadedAt', descending: true)
         .snapshots();
   }
 
-  // Increment download count
+  // Increment download count - tries both collections
   static Future<void> incrementDownloadCount(String materialId) async {
     try {
+      // Try ClinicMaterials first
+      final clinicDoc = await _firestore.collection(_clinicMaterialsCollection).doc(materialId).get();
+      if (clinicDoc.exists) {
+        await _firestore.collection(_clinicMaterialsCollection).doc(materialId).update({
+          'downloadCount': FieldValue.increment(1),
+          'lastDownloaded': FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+      
+      // Fallback to Materials collection
       await _firestore.collection(_materialsCollection).doc(materialId).update({
         'downloadCount': FieldValue.increment(1),
         'lastDownloaded': FieldValue.serverTimestamp(),
@@ -308,17 +335,22 @@ class _MaterialsPageState extends State<MaterialsPage> {
         
         print('Found therapy types: $therapyTypes');
         print('User clinic ID: $userClinicId');
+        
+        // For testing, if no clinic ID found, use CLI02 as default
+        if (userClinicId == null || userClinicId.isEmpty) {
+          userClinicId = 'CLI02';
+          print('Using default clinic ID: CLI02');
+        }
 
         if (therapyTypes.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text(
-                  'No therapy types found in your bookings',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
+          // For testing purposes, show speech therapy materials from CLI02
+          print('No therapy types found in bookings, using default: speech from CLI02');
+          return SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                return _buildTherapyContainer('speech', 'CLI02');
+              },
+              childCount: 1,
             ),
           );
         }
@@ -605,7 +637,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
   Widget _buildMaterialFolder(String title, IconData icon, Color color,
       String subtitle, String category) {
     return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: _parentId.isNotEmpty ? 'CLI01' : null),
+      stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: _parentId.isNotEmpty ? 'CLI02' : null),
       builder: (context, snapshot) {
         int materialCount = 0;
         if (snapshot.hasData) {
@@ -1720,7 +1752,7 @@ class ParentMaterialFolderView extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: 'CLI01'),
+        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: 'CLI02'),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
