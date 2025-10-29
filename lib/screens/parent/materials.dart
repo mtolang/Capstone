@@ -5,56 +5,40 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'kindora_camera_screen.dart';
 
-// Materials Service for parent access to clinic materials
+// Materials Service for parent access to therapy-specific materials
 class ParentMaterialsService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const String _collection = 'Materials';
+  static const String _materialsCollection = 'Materials';
+  static const String _bookingsCollection = 'AcceptedBooking';
 
-  // Get all public materials (accessible to parents)
-  static Stream<QuerySnapshot> getAllPublicMaterials() {
+  // Get materials based on therapy types from AcceptedBooking
+  static Stream<QuerySnapshot> getMaterialsByTherapyType(String parentId) {
     return _firestore
-        .collection(_collection)
+        .collection(_bookingsCollection)
+        .where('parentId', isEqualTo: parentId)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots();
+  }
+
+  // Get materials for specific therapy type
+  static Stream<QuerySnapshot> getTherapyMaterials(String therapyType) {
+    return _firestore
+        .collection(_materialsCollection)
+        .where('therapyType', isEqualTo: therapyType.toLowerCase())
         .where('isActive', isEqualTo: true)
         .where('isPublic', isEqualTo: true)
         .orderBy('uploadedAt', descending: true)
         .snapshots();
   }
 
-  // Get materials by category (for all clinics, public materials only)
-  static Stream<QuerySnapshot> getMaterialsByCategory(String category) {
+  // Search materials by title or tags for specific therapy type
+  static Stream<QuerySnapshot> searchTherapyMaterials(String therapyType, String searchTerm) {
     return _firestore
-        .collection(_collection)
-        .where('category', isEqualTo: category.toLowerCase())
-        .where('isActive', isEqualTo: true)
-        .where('isPublic', isEqualTo: true)
-        .orderBy('uploadedAt', descending: true)
-        .snapshots();
-  }
-
-  // Get material count for each category
-  static Future<Map<String, int>> getMaterialCountsByCategory() async {
-    final categories = ['motor', 'speech', 'cognitive', 'general'];
-    final Map<String, int> counts = {};
-
-    for (final category in categories) {
-      final snapshot = await _firestore
-          .collection(_collection)
-          .where('category', isEqualTo: category)
-          .where('isActive', isEqualTo: true)
-          .where('isPublic', isEqualTo: true)
-          .get();
-      counts[category] = snapshot.docs.length;
-    }
-
-    return counts;
-  }
-
-  // Search materials by title or tags
-  static Stream<QuerySnapshot> searchMaterials(String searchTerm) {
-    return _firestore
-        .collection(_collection)
+        .collection(_materialsCollection)
+        .where('therapyType', isEqualTo: therapyType.toLowerCase())
         .where('tags', arrayContains: searchTerm.toLowerCase())
         .where('isActive', isEqualTo: true)
         .where('isPublic', isEqualTo: true)
@@ -65,24 +49,13 @@ class ParentMaterialsService {
   // Increment download count
   static Future<void> incrementDownloadCount(String materialId) async {
     try {
-      await _firestore.collection(_collection).doc(materialId).update({
+      await _firestore.collection(_materialsCollection).doc(materialId).update({
         'downloadCount': FieldValue.increment(1),
         'lastDownloaded': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       print('Error incrementing download count: $e');
     }
-  }
-
-  // Get recently uploaded materials
-  static Stream<QuerySnapshot> getRecentMaterials({int limit = 10}) {
-    return _firestore
-        .collection(_collection)
-        .where('isActive', isEqualTo: true)
-        .where('isPublic', isEqualTo: true)
-        .orderBy('uploadedAt', descending: true)
-        .limit(limit)
-        .snapshots();
   }
 }
 
@@ -96,7 +69,9 @@ class MaterialsPage extends StatefulWidget {
 class _MaterialsPageState extends State<MaterialsPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String _selectedCategory = 'All';
+  String _selectedTherapyType = 'All';
+  String _parentId = '';
+  List<String> _availableTherapyTypes = ['All'];
 
   // YouTube API configuration with new API key
   static const String _youtubeApiKey =
@@ -106,50 +81,20 @@ class _MaterialsPageState extends State<MaterialsPage> {
   List<Map<String, dynamic>> _youtubeVideos = [];
   bool _loadingYouTubeVideos = false;
 
-  // Therapy categories for filtering (reduced to 3 as requested)
-  final List<String> _therapyCategories = [
-    'All',
-    'Motor',
-    'Cognitive',
-    'Speech',
-  ];
-
-  // Dynamic material categories
-  final List<Map<String, dynamic>> materialCategories = [
-    {
-      'value': 'motor',
-      'title': 'Motor Skills',
-      'description': 'Physical development and motor coordination activities',
-      'icon': Icons.accessibility_new,
-      'color': const Color(0xFFE8A87C),
-    },
-    {
-      'value': 'speech',
-      'title': 'Speech Therapy',
-      'description': 'Language development and communication tools',
-      'icon': Icons.record_voice_over,
-      'color': const Color(0xFFFFA07A),
-    },
-    {
-      'value': 'cognitive',
-      'title': 'Cognitive Development',
-      'description': 'Thinking skills and cognitive enhancement materials',
-      'icon': Icons.psychology,
-      'color': const Color(0xFF87CEEB),
-    },
-    {
-      'value': 'general',
-      'title': 'General Resources',
-      'description': 'Comprehensive therapy resources and materials',
-      'icon': Icons.folder_open,
-      'color': const Color(0xFF98FB98),
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
+    _loadParentId();
     _fetchYouTubeVideos();
+  }
+
+  Future<void> _loadParentId() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _parentId = prefs.getString('user_id') ?? 
+                 prefs.getString('parent_id') ?? 
+                 'ParAcc02'; // Default for testing
+    });
   }
 
   @override
@@ -165,8 +110,8 @@ class _MaterialsPageState extends State<MaterialsPage> {
 
     try {
       String searchQuery = 'child development therapy';
-      if (_selectedCategory != 'All') {
-        searchQuery = '$_selectedCategory child development therapy';
+      if (_selectedTherapyType != 'All') {
+        searchQuery = '$_selectedTherapyType child development therapy';
       }
 
       print('Fetching YouTube videos for: $searchQuery');
@@ -257,10 +202,363 @@ class _MaterialsPageState extends State<MaterialsPage> {
     }
   }
 
+  Widget _buildTherapyMaterials() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: ParentMaterialsService.getMaterialsByTherapyType(_parentId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(
+                  color: Color(0xFF006A5B),
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  'Error loading therapy materials: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.folder_open,
+                      size: 64,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No therapy sessions found',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Book a therapy session to access materials',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Extract unique therapy types from accepted bookings
+        final Set<String> therapyTypes = <String>{};
+        for (var doc in snapshot.data!.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final therapyType = data['therapyType'] as String?;
+          if (therapyType != null && therapyType.isNotEmpty) {
+            therapyTypes.add(therapyType);
+          }
+        }
+
+        if (therapyTypes.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text(
+                  'No therapy types found in your bookings',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final therapyType = therapyTypes.elementAt(index);
+              return _buildTherapyContainer(therapyType);
+            },
+            childCount: therapyTypes.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTherapyContainer(String therapyType) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _getTherapyColor(therapyType),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _getTherapyIcon(therapyType),
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${therapyType.toUpperCase()} THERAPY',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006A5B),
+                      ),
+                    ),
+                    Text(
+                      'Tap to view materials',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Camera button
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  onPressed: _openKindoraCamera,
+                  icon: const Icon(Icons.camera_alt),
+                  color: const Color(0xFF006A5B),
+                  iconSize: 28,
+                  tooltip: 'Take Photo',
+                ),
+              ),
+            ],
+          ),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: _buildMaterialsList(therapyType),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialsList(String therapyType) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: ParentMaterialsService.getTherapyMaterials(therapyType),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF006A5B)),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Text(
+            'Error loading materials: ${snapshot.error}',
+            style: const TextStyle(color: Colors.red),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Column(
+            children: [
+              Icon(Icons.folder_open, size: 48, color: Colors.grey),
+              SizedBox(height: 8),
+              Text(
+                'No materials available for this therapy type',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        }
+
+        final materials = snapshot.data!.docs;
+        
+        return Column(
+          children: materials.map((doc) {
+            final material = doc.data() as Map<String, dynamic>;
+            return _buildMaterialCard(material, doc.id);
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildMaterialCard(Map<String, dynamic> material, String docId) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF006A5B).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              _getFileIcon(material['fileName'] ?? ''),
+              color: const Color(0xFF006A5B),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  material['title'] ?? 'Untitled',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF006A5B),
+                  ),
+                ),
+                if (material['description'] != null)
+                  Text(
+                    material['description'],
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => _openMaterial(material),
+            icon: const Icon(Icons.open_in_new),
+            color: const Color(0xFF006A5B),
+            tooltip: 'Open Material',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getTherapyColor(String therapyType) {
+    switch (therapyType.toLowerCase()) {
+      case 'speech':
+        return const Color(0xFFFFA07A);
+      case 'occupational':
+        return const Color(0xFF87CEEB);
+      case 'physical':
+        return const Color(0xFFE8A87C);
+      case 'cognitive':
+        return const Color(0xFF98FB98);
+      default:
+        return const Color(0xFF006A5B);
+    }
+  }
+
+  IconData _getTherapyIcon(String therapyType) {
+    switch (therapyType.toLowerCase()) {
+      case 'speech':
+        return Icons.record_voice_over;
+      case 'occupational':
+        return Icons.accessibility_new;
+      case 'physical':
+        return Icons.fitness_center;
+      case 'cognitive':
+        return Icons.psychology;
+      default:
+        return Icons.healing;
+    }
+  }
+
+  IconData _getFileIcon(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+        return Icons.image;
+      case 'mp4':
+      case 'avi':
+        return Icons.video_file;
+      case 'mp3':
+      case 'wav':
+        return Icons.audio_file;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  void _openMaterial(Map<String, dynamic> material) {
+    final downloadUrl = material['downloadUrl'] as String?;
+    if (downloadUrl != null) {
+      // Implement material opening logic here
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Opening ${material['title'] ?? 'material'}...'),
+          backgroundColor: const Color(0xFF006A5B),
+        ),
+      );
+    }
+  }
+
   Widget _buildMaterialFolder(String title, IconData icon, Color color,
       String subtitle, String category) {
     return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getMaterialsByCategory(category),
+      stream: ParentMaterialsService.getTherapyMaterials(category),
       builder: (context, snapshot) {
         int materialCount = 0;
         if (snapshot.hasData) {
@@ -535,7 +833,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
                             ],
                           ),
                           child: DropdownButton<String>(
-                            value: _selectedCategory,
+                            value: _selectedTherapyType,
                             icon: const Icon(Icons.arrow_drop_down,
                                 color: Color(0xFF006A5B)),
                             iconSize: 24,
@@ -544,11 +842,11 @@ class _MaterialsPageState extends State<MaterialsPage> {
                             underline: Container(),
                             onChanged: (String? newValue) {
                               setState(() {
-                                _selectedCategory = newValue!;
+                                _selectedTherapyType = newValue!;
                               });
-                              _fetchYouTubeVideos(); // Refresh YouTube videos with new category
+                              _fetchYouTubeVideos(); // Refresh YouTube videos with new therapy type
                             },
-                            items: _therapyCategories
+                            items: _availableTherapyTypes
                                 .map<DropdownMenuItem<String>>((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
@@ -566,11 +864,12 @@ class _MaterialsPageState extends State<MaterialsPage> {
                   child: SizedBox(height: 20),
                 ),
 
+                // Therapy Materials Section Header
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.all(16.0),
                     child: Text(
-                      'Digital Materials',
+                      'Your Therapy Materials',
                       style: TextStyle(
                         color: Color(0xFF67AFA5),
                         fontSize: 20,
@@ -581,58 +880,10 @@ class _MaterialsPageState extends State<MaterialsPage> {
                     ),
                   ),
                 ),
-                // Materials folders grid
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 16.0,
-                      crossAxisSpacing: 16.0,
-                      childAspectRatio: 0.85,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        // Filter categories based on search query
-                        final filteredCategories =
-                            materialCategories.where((category) {
-                          final title =
-                              category['title'].toString().toLowerCase();
-                          final matchesSearch = _searchQuery.isEmpty ||
-                              title.contains(_searchQuery);
-                          final matchesCategory = _selectedCategory == 'All' ||
-                              category['title']
-                                  .toString()
-                                  .contains(_selectedCategory);
-                          return matchesSearch && matchesCategory;
-                        }).toList();
-
-                        if (index >= filteredCategories.length) return null;
-
-                        final category = filteredCategories[index];
-                        return _buildMaterialFolder(
-                          category['title'],
-                          category['icon'],
-                          category['color'],
-                          category['description'],
-                          category['value'],
-                        );
-                      },
-                      childCount: materialCategories.where((category) {
-                        final title =
-                            category['title'].toString().toLowerCase();
-                        final matchesSearch = _searchQuery.isEmpty ||
-                            title.contains(_searchQuery);
-                        final matchesCategory = _selectedCategory == 'All' ||
-                            category['title']
-                                .toString()
-                                .contains(_selectedCategory);
-                        return matchesSearch && matchesCategory;
-                      }).length,
-                    ),
-                  ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 15),
                 ),
+                _buildTherapyMaterials(),
 
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 30),
@@ -1422,7 +1673,7 @@ class ParentMaterialFolderView extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ParentMaterialsService.getMaterialsByCategory(category),
+        stream: ParentMaterialsService.getTherapyMaterials(category),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
@@ -1826,8 +2077,7 @@ class MaterialsPageContent extends StatefulWidget {
 
 class _MaterialsPageContentState extends State<MaterialsPageContent> {
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  String _selectedCategory = 'All';
+  String _selectedTherapyType = 'All';
 
   static const String _youtubeApiKey =
       'AIzaSyDQaMiBpfKXc5JlPckBYtQRRkLmrdRv0jo';
@@ -1835,37 +2085,6 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
       'https://www.googleapis.com/youtube/v3/search';
   List<Map<String, dynamic>> _youtubeVideos = [];
   bool _loadingYouTubeVideos = false;
-
-  final List<Map<String, dynamic>> materialCategories = [
-    {
-      'value': 'motor',
-      'title': 'Motor Skills',
-      'description': 'Physical development and motor coordination activities',
-      'icon': Icons.accessibility_new,
-      'color': const Color(0xFFE8A87C),
-    },
-    {
-      'value': 'speech',
-      'title': 'Speech Therapy',
-      'description': 'Language development and communication tools',
-      'icon': Icons.record_voice_over,
-      'color': const Color(0xFFFFA07A),
-    },
-    {
-      'value': 'cognitive',
-      'title': 'Cognitive Development',
-      'description': 'Thinking skills and cognitive enhancement materials',
-      'icon': Icons.psychology,
-      'color': const Color(0xFF87CEEB),
-    },
-    {
-      'value': 'general',
-      'title': 'General Resources',
-      'description': 'Comprehensive therapy resources and materials',
-      'icon': Icons.folder_open,
-      'color': const Color(0xFF98FB98),
-    },
-  ];
 
   @override
   void initState() {
@@ -1886,8 +2105,8 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
 
     try {
       String searchQuery = 'child development therapy';
-      if (_selectedCategory != 'All') {
-        searchQuery = '$_selectedCategory child development therapy';
+      if (_selectedTherapyType != 'All') {
+        searchQuery = '$_selectedTherapyType child development therapy';
       }
 
       final response = await http.get(
@@ -2060,9 +2279,7 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
                   child: TextField(
                     controller: _searchController,
                     onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value.toLowerCase();
-                      });
+                      // Search functionality handled by parent MaterialsPage
                     },
                     decoration: InputDecoration(
                       hintText: 'Search materials...',
@@ -2121,88 +2338,40 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
               const SliverToBoxAdapter(
                 child: SizedBox(height: 10),
               ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final category = materialCategories[index];
-                    if (_searchQuery.isNotEmpty &&
-                        !category['title']
-                            .toLowerCase()
-                            .contains(_searchQuery)) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 8.0),
-                      child: GestureDetector(
-                        onTap: () => _openMaterialFolder(category['value'],
-                            category['color'], category['title']),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: category['color'].withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: category['color'],
-                              width: 2,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: category['color'].withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  category['icon'],
-                                  color: category['color'],
-                                  size: 30,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      category['title'],
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: category['color'],
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      category['description'],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                color: category['color'],
-                                size: 20,
-                              ),
-                            ],
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.school,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Educational resources are now organized by therapy type',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            fontFamily: 'Poppins',
                           ),
                         ),
-                      ),
-                    );
-                  },
-                  childCount: materialCategories.length,
+                        SizedBox(height: 8),
+                        Text(
+                          'Access materials specific to your therapy sessions above',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
