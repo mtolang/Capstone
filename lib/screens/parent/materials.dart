@@ -34,7 +34,7 @@ class ParentMaterialsService {
           .where('category', isEqualTo: therapyType.toLowerCase())
           .where('clinicId', isEqualTo: clinicId)
           .where('isActive', isEqualTo: true)
-          .orderBy('uploadedAt', descending: true)
+          // Removed orderBy to avoid composite index requirement
           .snapshots();
     }
     
@@ -60,7 +60,7 @@ class ParentMaterialsService {
           .where('clinicId', isEqualTo: clinicId)
           .where('tags', arrayContains: searchTerm.toLowerCase())
           .where('isActive', isEqualTo: true)
-          .orderBy('uploadedAt', descending: true)
+          // Removed orderBy to avoid composite index requirement
           .snapshots();
     }
     
@@ -127,6 +127,57 @@ class _MaterialsPageState extends State<MaterialsPage> {
     super.initState();
     _loadParentId();
     _fetchYouTubeVideos();
+    _testFirestoreConnection(); // Add test
+  }
+
+  // Test Firestore connection
+  Future<void> _testFirestoreConnection() async {
+    print('=== FIRESTORE CONNECTION TEST ===');
+    try {
+      // First, get all documents in ClinicMaterials to see what's there
+      final allClinicMaterials = await FirebaseFirestore.instance
+          .collection('ClinicMaterials')
+          .limit(5) // Just get first 5 to see structure
+          .get();
+      
+      print('Total ClinicMaterials documents: ${allClinicMaterials.docs.length}');
+      for (var doc in allClinicMaterials.docs) {
+        final data = doc.data();
+        print('  - Document ID: ${doc.id}');
+        print('  - Fields: ${data.keys}');
+        print('  - Title: ${data['title']}');
+        print('  - Category: ${data['category']}');
+        print('  - Clinic ID: ${data['clinicId']}');
+        print('  - Is Active: ${data['isActive']}');
+        print('  ---');
+      }
+
+      // Test specific query for CLI02 speech materials
+      final clinicQuery = await FirebaseFirestore.instance
+          .collection('ClinicMaterials')
+          .where('clinicId', isEqualTo: 'CLI02')
+          .where('category', isEqualTo: 'speech')
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      print('CLI02 speech materials query result: ${clinicQuery.docs.length} documents');
+      for (var doc in clinicQuery.docs) {
+        final data = doc.data();
+        print('  - Found material: ${data['title']} in ${data['clinicId']}');
+      }
+
+      // Also test without isActive filter
+      final clinicQueryNoActive = await FirebaseFirestore.instance
+          .collection('ClinicMaterials')
+          .where('clinicId', isEqualTo: 'CLI02')
+          .where('category', isEqualTo: 'speech')
+          .get();
+      
+      print('CLI02 speech materials (no isActive filter): ${clinicQueryNoActive.docs.length} documents');
+      
+    } catch (e) {
+      print('Firestore test error: $e');
+    }
   }
 
   Future<void> _loadParentId() async {
@@ -244,6 +295,19 @@ class _MaterialsPageState extends State<MaterialsPage> {
   }
 
   Widget _buildTherapyMaterials() {
+    // For testing - directly show speech therapy materials from CLI02
+    print('Building therapy materials - bypassing AcceptedBooking check for testing');
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          return _buildTherapyContainer('speech', 'CLI02');
+        },
+        childCount: 1,
+      ),
+    );
+    
+    // Original code commented out for testing
+    /*
     return StreamBuilder<QuerySnapshot>(
       stream: ParentMaterialsService.getMaterialsByTherapyType(_parentId),
       builder: (context, snapshot) {
@@ -366,6 +430,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
         );
       },
     );
+    */
   }
 
   Widget _buildTherapyContainer(String therapyType, String? clinicId) {
@@ -450,21 +515,17 @@ class _MaterialsPageState extends State<MaterialsPage> {
   }
 
   Widget _buildMaterialsList(String therapyType, String? clinicId) {
+    // Debug logging
+    print('=== MATERIALS LIST DEBUG ===');
+    print('Building materials list for therapy: $therapyType, clinic: $clinicId');
+    
     return StreamBuilder<QuerySnapshot>(
       stream: ParentMaterialsService.getTherapyMaterials(therapyType, clinicId: clinicId),
       builder: (context, snapshot) {
-        // Debug logging
-        print('Building materials list for therapy: $therapyType, clinic: $clinicId');
-        print('Snapshot state: ${snapshot.connectionState}');
-        if (snapshot.hasData) {
-          print('Found ${snapshot.data!.docs.length} materials');
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            print('Material: ${data['title']} - Category: ${data['category']} - Clinic: ${data['clinicId']}');
-          }
-        }
+        print('Snapshot connection state: ${snapshot.connectionState}');
         
         if (snapshot.connectionState == ConnectionState.waiting) {
+          print('Loading materials...');
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF006A5B)),
           );
@@ -472,13 +533,21 @@ class _MaterialsPageState extends State<MaterialsPage> {
 
         if (snapshot.hasError) {
           print('Error loading materials: ${snapshot.error}');
-          return Text(
-            'Error loading materials: ${snapshot.error}',
-            style: const TextStyle(color: Colors.red),
+          return Column(
+            children: [
+              const Icon(Icons.error, size: 48, color: Colors.red),
+              const SizedBox(height: 8),
+              Text(
+                'Error: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            ],
           );
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          print('No materials found. Docs count: ${snapshot.data?.docs.length ?? 0}');
           return Column(
             children: [
               const Icon(Icons.folder_open, size: 48, color: Colors.grey),
@@ -492,11 +561,21 @@ class _MaterialsPageState extends State<MaterialsPage> {
                   'Clinic: $clinicId',
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
+              const SizedBox(height: 8),
+              const Text(
+                'Check Firebase ClinicMaterials collection',
+                style: TextStyle(color: Colors.orange, fontSize: 10),
+              ),
             ],
           );
         }
 
         final materials = snapshot.data!.docs;
+        print('Found ${materials.length} materials:');
+        for (var doc in materials) {
+          final data = doc.data() as Map<String, dynamic>;
+          print('  - ${data['title']} (${data['category']}) from clinic ${data['clinicId']}');
+        }
         
         return Column(
           children: materials.map((doc) {
