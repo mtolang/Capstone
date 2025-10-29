@@ -142,8 +142,8 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
     _completed = false;
   }
 
-  /// Reset the current attempt without changing level or generating new content
-  void _resetCurrentAttempt() {
+  /// Restart Level - clears current attempt but keeps level number
+  void _restartLevel() {
     setState(() {
       // Clear all drawing/tracing progress
       _pointers.clear();
@@ -179,6 +179,14 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
       // Start new session timer
       _sessionStart = DateTime.now();
     });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Level $_level restarted!'),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   /// Save current game session to Firebase
@@ -1604,13 +1612,13 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
           
           const SizedBox(height: 12),
           
-          // Reset Current Attempt Button
+          // Restart Level Button
           ElevatedButton(
             onPressed: () {
-              _resetCurrentAttempt();
+              _restartLevel();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
+              backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -1623,7 +1631,7 @@ class _TraceAndPopProGameState extends State<TraceAndPopProGame>
               children: [
                 Icon(Icons.replay, size: 20),
                 SizedBox(width: 8),
-                Text('🔄 Reset Current', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('🔄 Restart Level', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
