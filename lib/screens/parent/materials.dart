@@ -23,25 +23,39 @@ class ParentMaterialsService {
         .snapshots();
   }
 
-  // Get materials for specific therapy type
-  static Stream<QuerySnapshot> getTherapyMaterials(String therapyType) {
-    return _firestore
+  // Get materials for specific therapy type and clinic
+  static Stream<QuerySnapshot> getTherapyMaterials(String therapyType, {String? clinicId}) {
+    Query query = _firestore
         .collection(_materialsCollection)
-        .where('therapyType', isEqualTo: therapyType.toLowerCase())
-        .where('isActive', isEqualTo: true)
-        .where('isPublic', isEqualTo: true)
+        .where('category', isEqualTo: therapyType.toLowerCase())
+        .where('isActive', isEqualTo: true);
+    
+    // Add clinic filter if clinicId is provided
+    if (clinicId != null && clinicId.isNotEmpty) {
+      query = query.where('clinicId', isEqualTo: clinicId);
+    }
+    
+    // Filter for both public materials and clinic materials
+    // This will show materials that are either public or from the specific clinic
+    return query
         .orderBy('uploadedAt', descending: true)
         .snapshots();
   }
 
-  // Search materials by title or tags for specific therapy type
-  static Stream<QuerySnapshot> searchTherapyMaterials(String therapyType, String searchTerm) {
-    return _firestore
+  // Search materials by title or tags for specific therapy type and clinic
+  static Stream<QuerySnapshot> searchTherapyMaterials(String therapyType, String searchTerm, {String? clinicId}) {
+    Query query = _firestore
         .collection(_materialsCollection)
-        .where('therapyType', isEqualTo: therapyType.toLowerCase())
+        .where('category', isEqualTo: therapyType.toLowerCase())
         .where('tags', arrayContains: searchTerm.toLowerCase())
-        .where('isActive', isEqualTo: true)
-        .where('isPublic', isEqualTo: true)
+        .where('isActive', isEqualTo: true);
+    
+    // Add clinic filter if clinicId is provided
+    if (clinicId != null && clinicId.isNotEmpty) {
+      query = query.where('clinicId', isEqualTo: clinicId);
+    }
+    
+    return query
         .orderBy('uploadedAt', descending: true)
         .snapshots();
   }
@@ -269,15 +283,31 @@ class _MaterialsPageState extends State<MaterialsPage> {
           );
         }
 
-        // Extract unique therapy types from accepted bookings
+        // Extract unique therapy types and clinic info from accepted bookings
         final Set<String> therapyTypes = <String>{};
+        String? userClinicId;
+        
+        print('Processing ${snapshot.data!.docs.length} accepted bookings for parent: $_parentId');
+        
         for (var doc in snapshot.data!.docs) {
           final data = doc.data() as Map<String, dynamic>;
           final therapyType = data['therapyType'] as String?;
+          final clinicId = data['clinicId'] as String?;
+          
+          print('Booking data: therapyType=$therapyType, clinicId=$clinicId');
+          
           if (therapyType != null && therapyType.isNotEmpty) {
             therapyTypes.add(therapyType);
           }
+          
+          // Store the clinic ID (assuming user only has bookings from one clinic)
+          if (clinicId != null && clinicId.isNotEmpty) {
+            userClinicId = clinicId;
+          }
         }
+        
+        print('Found therapy types: $therapyTypes');
+        print('User clinic ID: $userClinicId');
 
         if (therapyTypes.isEmpty) {
           return const SliverToBoxAdapter(
@@ -297,7 +327,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final therapyType = therapyTypes.elementAt(index);
-              return _buildTherapyContainer(therapyType);
+              return _buildTherapyContainer(therapyType, userClinicId);
             },
             childCount: therapyTypes.length,
           ),
@@ -306,7 +336,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
     );
   }
 
-  Widget _buildTherapyContainer(String therapyType) {
+  Widget _buildTherapyContainer(String therapyType, String? clinicId) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       decoration: BoxDecoration(
@@ -379,7 +409,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              child: _buildMaterialsList(therapyType),
+              child: _buildMaterialsList(therapyType, clinicId),
             ),
           ],
         ),
@@ -387,10 +417,21 @@ class _MaterialsPageState extends State<MaterialsPage> {
     );
   }
 
-  Widget _buildMaterialsList(String therapyType) {
+  Widget _buildMaterialsList(String therapyType, String? clinicId) {
     return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getTherapyMaterials(therapyType),
+      stream: ParentMaterialsService.getTherapyMaterials(therapyType, clinicId: clinicId),
       builder: (context, snapshot) {
+        // Debug logging
+        print('Building materials list for therapy: $therapyType, clinic: $clinicId');
+        print('Snapshot state: ${snapshot.connectionState}');
+        if (snapshot.hasData) {
+          print('Found ${snapshot.data!.docs.length} materials');
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            print('Material: ${data['title']} - Category: ${data['category']} - Clinic: ${data['clinicId']}');
+          }
+        }
+        
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF006A5B)),
@@ -398,6 +439,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
         }
 
         if (snapshot.hasError) {
+          print('Error loading materials: ${snapshot.error}');
           return Text(
             'Error loading materials: ${snapshot.error}',
             style: const TextStyle(color: Colors.red),
@@ -405,14 +447,19 @@ class _MaterialsPageState extends State<MaterialsPage> {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Column(
+          return Column(
             children: [
-              Icon(Icons.folder_open, size: 48, color: Colors.grey),
-              SizedBox(height: 8),
+              const Icon(Icons.folder_open, size: 48, color: Colors.grey),
+              const SizedBox(height: 8),
               Text(
-                'No materials available for this therapy type',
-                style: TextStyle(color: Colors.grey),
+                'No materials available for $therapyType therapy',
+                style: const TextStyle(color: Colors.grey),
               ),
+              if (clinicId != null)
+                Text(
+                  'Clinic: $clinicId',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
             ],
           );
         }
@@ -558,7 +605,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
   Widget _buildMaterialFolder(String title, IconData icon, Color color,
       String subtitle, String category) {
     return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getTherapyMaterials(category),
+      stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: _parentId.isNotEmpty ? 'CLI01' : null),
       builder: (context, snapshot) {
         int materialCount = 0;
         if (snapshot.hasData) {
@@ -1673,7 +1720,7 @@ class ParentMaterialFolderView extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ParentMaterialsService.getTherapyMaterials(category),
+        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: 'CLI01'),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
