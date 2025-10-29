@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -190,12 +189,14 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text(
           'Kindora Camera',
           style: TextStyle(color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF006A5B),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           if (_cameras != null && _cameras!.length > 1)
@@ -209,21 +210,55 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
       body: _isInitialized
           ? Stack(
               children: [
-                // Camera Preview
-                Center(
-                  child: AspectRatio(
-                    aspectRatio: _controller!.value.aspectRatio,
-                    child: CameraPreview(_controller!),
+                // Camera Preview - Full Screen
+                Positioned.fill(
+                  child: CameraPreview(_controller!),
+                ),
+                
+                // App bar background overlay
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: MediaQuery.of(context).padding.top + kToolbarHeight,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.7),
+                          Colors.black.withOpacity(0.3),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 
                 // Camera controls overlay
                 Positioned(
-                  bottom: 30,
+                  bottom: 0,
                   left: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).padding.bottom + 30,
+                      top: 40,
+                      left: 20,
+                      right: 20,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.3),
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
