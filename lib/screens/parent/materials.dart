@@ -1771,6 +1771,14 @@ class _MaterialsPageState extends State<MaterialsPage> {
     );
   }
 
+  // Navigate to show materials for a specific category
+  void _navigateToMaterialList(String category) {
+    setState(() {
+      _selectedTherapyType = category;
+    });
+    // Optionally scroll to the materials section if needed
+  }
+
   Widget _buildMaterialFolder(String title, IconData icon, Color color,
       String subtitle, String category) {
     return StreamBuilder<QuerySnapshot>(
