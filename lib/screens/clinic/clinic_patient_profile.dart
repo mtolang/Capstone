@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ClinicPatientProfile extends StatefulWidget {
   final String patientId;
@@ -25,6 +26,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
   late TabController _tabController;
   String? _parentId;
   String? _parentEmail;
+  String? _clinicId;
   bool _isMenuOpen = false;
 
   @override
@@ -32,6 +34,18 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _extractParentInfo();
+    _extractClinicId();
+  }
+
+  Future<void> _extractClinicId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _clinicId = prefs.getString('clinic_id');
+      print('🏥 Extracted Clinic ID: $_clinicId');
+      setState(() {});
+    } catch (e) {
+      print('❌ Error extracting clinic ID: $e');
+    }
   }
 
   void _extractParentInfo() {
@@ -68,6 +82,125 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showTerminateContractDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Terminate Contract'),
+            ],
+          ),
+          content: Text(
+            'Are you sure you want to terminate the contract with ${widget.patientName}?\n\n'
+            'This action will:\n'
+            '• Remove all scheduled appointments\n'
+            '• End the therapeutic relationship\n'
+            '• Cannot be undone\n\n'
+            'Please confirm if you want to proceed.',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _terminateContract();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Terminate Contract'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _terminateContract() async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Terminating contract...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Get the accepted booking document to delete
+      final QuerySnapshot bookingSnapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('parentEmail', isEqualTo: _parentEmail)
+          .where('clinicId', isEqualTo: _clinicId)
+          .get();
+
+      // Delete the accepted booking
+      for (QueryDocumentSnapshot doc in bookingSnapshot.docs) {
+        await doc.reference.delete();
+        print('Deleted AcceptedBooking: ${doc.id}');
+      }
+
+      // Also delete any related schedules for this patient
+      final QuerySnapshot scheduleSnapshot = await FirebaseFirestore.instance
+          .collection('Schedule')
+          .where('parentEmail', isEqualTo: _parentEmail)
+          .where('clinicId', isEqualTo: _clinicId)
+          .get();
+
+      for (QueryDocumentSnapshot doc in scheduleSnapshot.docs) {
+        await doc.reference.delete();
+        print('Deleted Schedule: ${doc.id}');
+      }
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Contract terminated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navigate back to previous screen
+      Navigator.of(context).pop();
+
+    } catch (e) {
+      print('Error terminating contract: $e');
+      
+      // Close loading dialog if still open
+      Navigator.of(context).pop();
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error terminating contract: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -166,9 +299,28 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  IconButton(
+                  PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: Colors.white),
-                    onPressed: () {},
+                    onSelected: (String value) {
+                      if (value == 'terminate') {
+                        _showTerminateContractDialog();
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      const PopupMenuItem<String>(
+                        value: 'terminate',
+                        child: Row(
+                          children: [
+                            Icon(Icons.cancel, color: Colors.red, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Terminate Contract',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

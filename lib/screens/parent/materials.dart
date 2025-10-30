@@ -6,6 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'dart:io';
 import 'kindora_camera_screen.dart';
 
 // Materials Service for parent access to therapy-specific materials
@@ -15,12 +20,11 @@ class ParentMaterialsService {
   static const String _clinicMaterialsCollection = 'ClinicMaterials';
   static const String _bookingsCollection = 'AcceptedBooking';
 
-  // Get materials based on therapy types from AcceptedBooking
-  static Stream<QuerySnapshot> getMaterialsByTherapyType(String parentId) {
+  // Get materials based on therapy types from AcceptedBooking and filter by clinic
+  static Stream<QuerySnapshot> getMaterialsByTherapyType(String parentId, {String? clinicId}) {
     return _firestore
         .collection(_bookingsCollection)
-        .where('parentId', isEqualTo: parentId)
-        .where('status', isEqualTo: 'accepted')
+        .where('parentInfo.parentId', isEqualTo: parentId) // Updated to nested field
         .snapshots();
   }
 
@@ -28,7 +32,7 @@ class ParentMaterialsService {
   static Stream<QuerySnapshot> getTherapyMaterials(String therapyType, {String? clinicId}) {
     // If clinicId is provided, prioritize ClinicMaterials collection
     if (clinicId != null && clinicId.isNotEmpty) {
-      print('Querying ClinicMaterials for therapy: $therapyType, clinic: $clinicId');
+      print('🎯 Querying ClinicMaterials for therapy: $therapyType, clinic: $clinicId');
       return _firestore
           .collection(_clinicMaterialsCollection)
           .where('category', isEqualTo: therapyType.toLowerCase())
@@ -39,7 +43,7 @@ class ParentMaterialsService {
     }
     
     // Fallback to Materials collection for general/public materials
-    print('Querying Materials collection for therapy: $therapyType');
+    print('📚 Querying Materials collection for therapy: $therapyType (no clinic filter)');
     Query query = _firestore
         .collection(_materialsCollection)
         .where('category', isEqualTo: therapyType.toLowerCase())
@@ -112,7 +116,40 @@ class _MaterialsPageState extends State<MaterialsPage> {
   String _searchQuery = '';
   String _selectedTherapyType = 'All';
   String _parentId = '';
+  String _clinicId = ''; // Add clinic ID variable
   List<String> _availableTherapyTypes = ['All'];
+
+  // Material Categories
+  List<Map<String, dynamic>> _materialCategories = [
+    {
+      'title': 'Motor',
+      'subtitle': 'Fine & Gross Motor Skills',
+      'icon': Icons.accessibility_new,
+      'color': const Color(0xFF48BB78),
+      'count': 0,
+    },
+    {
+      'title': 'Speech',
+      'subtitle': 'Speech & Language Therapy',
+      'icon': Icons.record_voice_over,
+      'color': const Color(0xFF4A90E2),
+      'count': 0,
+    },
+    {
+      'title': 'Cognitive',
+      'subtitle': 'Cognitive Development',
+      'icon': Icons.psychology,
+      'color': const Color(0xFF9F7AEA),
+      'count': 0,
+    },
+    {
+      'title': 'General',
+      'subtitle': 'General Resources',
+      'icon': Icons.folder_open,
+      'color': const Color(0xFFED8936),
+      'count': 0,
+    },
+  ];
 
   // YouTube API configuration with new API key
   static const String _youtubeApiKey =
@@ -125,68 +162,302 @@ class _MaterialsPageState extends State<MaterialsPage> {
   @override
   void initState() {
     super.initState();
-    _loadParentId();
+    _initializeData();
     _fetchYouTubeVideos();
     _testFirestoreConnection(); // Add test
+  }
+
+  // Initialize data in the correct order
+  Future<void> _initializeData() async {
+    await _loadParentId();
+    await _loadParentClinicId();
   }
 
   // Test Firestore connection
   Future<void> _testFirestoreConnection() async {
     print('=== FIRESTORE CONNECTION TEST ===');
     try {
-      // First, get all documents in ClinicMaterials to see what's there
+      // Test 1: Check all ClinicMaterials
       final allClinicMaterials = await FirebaseFirestore.instance
           .collection('ClinicMaterials')
-          .limit(5) // Just get first 5 to see structure
+          .limit(10)
           .get();
       
-      print('Total ClinicMaterials documents: ${allClinicMaterials.docs.length}');
+      print('📚 Total ClinicMaterials documents: ${allClinicMaterials.docs.length}');
       for (var doc in allClinicMaterials.docs) {
         final data = doc.data();
-        print('  - Document ID: ${doc.id}');
-        print('  - Fields: ${data.keys}');
-        print('  - Title: ${data['title']}');
-        print('  - Category: ${data['category']}');
-        print('  - Clinic ID: ${data['clinicId']}');
-        print('  - Is Active: ${data['isActive']}');
-        print('  ---');
+        print('  - ${data['clinicId']}: ${data['title']} (${data['category']})');
       }
-
-      // Test specific query for CLI02 speech materials
-      final clinicQuery = await FirebaseFirestore.instance
+      
+      // Test 2: Specifically check CLI03 materials
+      final cli03Materials = await FirebaseFirestore.instance
           .collection('ClinicMaterials')
-          .where('clinicId', isEqualTo: 'CLI02')
-          .where('category', isEqualTo: 'speech')
-          .where('isActive', isEqualTo: true)
+          .where('clinicId', isEqualTo: 'CLI03')
           .get();
       
-      print('CLI02 speech materials query result: ${clinicQuery.docs.length} documents');
-      for (var doc in clinicQuery.docs) {
+      print('🏥 CLI03 materials: ${cli03Materials.docs.length}');
+      for (var doc in cli03Materials.docs) {
         final data = doc.data();
-        print('  - Found material: ${data['title']} in ${data['clinicId']}');
+        print('  - CLI03 Material: ${data['title']} | Category: ${data['category']} | Active: ${data['isActive']}');
       }
-
-      // Also test without isActive filter
-      final clinicQueryNoActive = await FirebaseFirestore.instance
+      
+      // Test 3: Check motor therapy materials for CLI03 (Physical Therapy might map to motor)
+      final motorMaterials = await FirebaseFirestore.instance
           .collection('ClinicMaterials')
-          .where('clinicId', isEqualTo: 'CLI02')
-          .where('category', isEqualTo: 'speech')
+          .where('clinicId', isEqualTo: 'CLI03')
+          .where('category', isEqualTo: 'motor')
           .get();
       
-      print('CLI02 speech materials (no isActive filter): ${clinicQueryNoActive.docs.length} documents');
+      print('🦾 CLI03 motor materials: ${motorMaterials.docs.length}');
+      for (var doc in motorMaterials.docs) {
+        final data = doc.data();
+        print('  - Motor Material: ${data['title']} | Active: ${data['isActive']}');
+      }
       
     } catch (e) {
-      print('Firestore test error: $e');
+      print('🔥 Firestore test error: $e');
     }
   }
 
   Future<void> _loadParentId() async {
     final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    final parentId = prefs.getString('parent_id');
+    
+    print('🔍 Debug parent ID loading:');
+    print('  - user_id from prefs: $userId');
+    print('  - parent_id from prefs: $parentId');
+    
     setState(() {
-      _parentId = prefs.getString('user_id') ?? 
-                 prefs.getString('parent_id') ?? 
-                 'ParAcc02'; // Default for testing
+      _parentId = userId ?? parentId ?? '';
+      _clinicId = ''; // Reset clinic ID for new user
     });
+    
+    print('✅ Final parent ID set to: $_parentId');
+    
+    if (_parentId.isEmpty) {
+      print('❌ No parent ID found in SharedPreferences');
+    }
+  }
+
+  // Get current user's email for booking lookup
+  Future<String?> _getCurrentUserEmail() async {
+    try {
+      // First try Firebase Auth
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null && firebaseUser.email != null) {
+        print('📧 Got email from Firebase Auth: ${firebaseUser.email}');
+        return firebaseUser.email;
+      }
+      
+      // Fallback to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final storedEmail = prefs.getString('user_email') ?? prefs.getString('email');
+      if (storedEmail != null) {
+        print('📧 Got email from SharedPreferences: $storedEmail');
+        return storedEmail;
+      }
+      
+      print('❌ No email found in Firebase Auth or SharedPreferences');
+      return null;
+    } catch (e) {
+      print('❌ Error getting current user email: $e');
+      return null;
+    }
+  }
+
+  // Load clinic ID from parent's accepted bookings
+  Future<void> _loadParentClinicId() async {
+    if (_parentId.isEmpty) return;
+    
+    try {
+      print('🏥 Loading clinic ID for parent: $_parentId');
+      
+      // Clear any stored clinic ID to ensure fresh lookup
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('clinic_id');
+      
+      // Reset clinic ID for this parent
+      setState(() {
+        _clinicId = '';
+      });
+      
+      // First, let's see ALL bookings for this parent to debug
+      final allBookingsSnapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('parentInfo.parentId', isEqualTo: _parentId) // Updated to nested field
+          .get();
+      
+      print('📊 Total bookings found for $_parentId: ${allBookingsSnapshot.docs.length}');
+      
+      // If no bookings found, let's check if there are ANY bookings with current user's email
+      if (allBookingsSnapshot.docs.isEmpty) {
+        print('🔍 Searching for bookings by email...');
+        
+        // Get current user's email dynamically
+        final currentUserEmail = await _getCurrentUserEmail();
+        if (currentUserEmail == null) {
+          print('❌ No email found for current user');
+          return;
+        }
+        
+        print('🔍 Looking up bookings for email: $currentUserEmail');
+        
+        // Check if parentId might be stored differently
+        final altBookings1 = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('parentEmail', isEqualTo: currentUserEmail)
+            .get();
+        print('📧 Bookings by email: ${altBookings1.docs.length}');
+        
+        // If found by email, use that booking
+        if (altBookings1.docs.isNotEmpty) {
+          final emailBookingData = altBookings1.docs.first.data();
+          final clinicId = emailBookingData['clinicId'] as String?;
+          final approvedBy = emailBookingData['approvedBy'] as String?;
+          final appointmentType = emailBookingData['appointmentType'] as String?;
+          
+          print('📧 Found booking by email:');
+          print('  - clinicId: $clinicId');
+          print('  - approvedBy: $approvedBy');  
+          print('  - appointmentType: $appointmentType');
+          
+          // Use the clinic ID from email-based booking
+          String? finalClinicId;
+          if (clinicId != null && clinicId.isNotEmpty && clinicId != 'unknown') {
+            finalClinicId = clinicId;
+          } else if (approvedBy != null && approvedBy.startsWith('CLI')) {
+            finalClinicId = approvedBy;
+          }
+          
+          if (finalClinicId != null) {
+            setState(() {
+              _clinicId = finalClinicId!;
+            });
+            print('✅ Found clinic ID via email: $_clinicId for parent: $_parentId');
+            print('📚 Appointment type: $appointmentType');
+            return; // Exit early since we found the booking
+          }
+        } else {
+          print('❌ No bookings found for email: $currentUserEmail');
+        }
+        
+        // Check if it's in a nested field
+        final altBookings2 = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('parentInfo.parentId', isEqualTo: _parentId)
+            .get();
+        print('🏗️ Bookings by parentInfo.parentId: ${altBookings2.docs.length}');
+        
+        // Get a few random bookings to see the structure
+        final sampleBookings = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .limit(3)
+            .get();
+        
+        print('📋 Sample booking structures:');
+        for (var doc in sampleBookings.docs) {
+          final data = doc.data();
+          print('  📄 Booking ${doc.id}:');
+          print('    - All keys: ${data.keys.toList()}');
+          if (data.containsKey('parentId')) print('    - parentId: ${data['parentId']}');
+          if (data.containsKey('parentEmail')) print('    - parentEmail: ${data['parentEmail']}');
+          if (data.containsKey('parentInfo')) print('    - parentInfo: ${data['parentInfo']}');
+          if (data.containsKey('clinicId')) print('    - clinicId: ${data['clinicId']}');
+          if (data.containsKey('appointmentType')) print('    - appointmentType: ${data['appointmentType']}');
+          print('    ---');
+        }
+      }
+      
+      for (var doc in allBookingsSnapshot.docs) {
+        final data = doc.data();
+        print('  - Booking ID: ${doc.id}');
+        print('  - Parent ID: ${data['parentId']}');
+        print('  - Clinic ID: ${data['clinicId']}');
+        print('  - Approved By: ${data['approvedBy']}');
+        print('  - Appointment Type: ${data['appointmentType']}');
+        print('  - Status: ${data['status']}');
+        print('  - All fields: ${data.keys.toList()}');
+        print('  ---');
+      }
+      
+      // Query AcceptedBooking collection for this parent's clinic - try without status filter first
+      final bookingSnapshot = await FirebaseFirestore.instance
+          .collection('AcceptedBooking')
+          .where('parentInfo.parentId', isEqualTo: _parentId) // Changed to nested field
+          .limit(1) // Just need one booking to get the clinic
+          .get();
+      
+      if (bookingSnapshot.docs.isNotEmpty) {
+        final bookingData = bookingSnapshot.docs.first.data();
+        final clinicId = bookingData['clinicId'] as String?;
+        final approvedBy = bookingData['approvedBy'] as String?;
+        final appointmentType = bookingData['appointmentType'] as String?;
+        
+        print('📋 First booking data:');
+        print('  - clinicId: $clinicId');
+        print('  - approvedBy: $approvedBy');
+        print('  - appointmentType: $appointmentType');
+        
+        // Use clinicId if available, otherwise try approvedBy
+        String? finalClinicId;
+        if (clinicId != null && clinicId.isNotEmpty && clinicId != 'unknown') {
+          finalClinicId = clinicId;
+        } else if (approvedBy != null && approvedBy.startsWith('CLI')) {
+          finalClinicId = approvedBy;
+        }
+        
+        if (finalClinicId != null) {
+          setState(() {
+            _clinicId = finalClinicId!;
+          });
+          print('✅ Found clinic ID: $_clinicId for parent: $_parentId');
+          print('📚 Appointment type: $appointmentType');
+        } else {
+          print('⚠️ Could not determine clinic ID from booking data');
+        }
+      } else {
+        print('❌ No bookings found for parent: $_parentId using nested query');
+        
+        // Fallback: try direct parentId field
+        final fallbackBookingSnapshot = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('parentId', isEqualTo: _parentId)
+            .limit(1)
+            .get();
+            
+        if (fallbackBookingSnapshot.docs.isNotEmpty) {
+          final bookingData = fallbackBookingSnapshot.docs.first.data();
+          final clinicId = bookingData['clinicId'] as String?;
+          final approvedBy = bookingData['approvedBy'] as String?;
+          
+          if (clinicId != null && clinicId.isNotEmpty) {
+            setState(() {
+              _clinicId = clinicId;
+            });
+            print('✅ Found clinic ID via fallback: $_clinicId');
+          } else if (approvedBy != null && approvedBy.startsWith('CLI')) {
+            setState(() {
+              _clinicId = approvedBy;
+            });
+            print('✅ Found clinic ID via approvedBy fallback: $_clinicId');
+          }
+        } else {
+          print('❌ No bookings found in either nested or direct field queries');
+          // Check if stored in SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          final storedClinicId = prefs.getString('clinic_id');
+          if (storedClinicId != null && storedClinicId.isNotEmpty) {
+            setState(() {
+              _clinicId = storedClinicId;
+            });
+            print('✅ Using stored clinic ID: $_clinicId');
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading clinic ID: $e');
+    }
   }
 
   @override
@@ -295,15 +566,134 @@ class _MaterialsPageState extends State<MaterialsPage> {
   }
 
   Widget _buildTherapyMaterials() {
-    // For testing - directly show speech therapy materials from CLI02
-    print('Building therapy materials - bypassing AcceptedBooking check for testing');
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return _buildTherapyContainer('speech', 'CLI02');
-        },
-        childCount: 1,
-      ),
+    // Check if we have clinic ID loaded, otherwise show loading
+    if (_clinicId.isEmpty) {
+      print('⏳ Clinic ID not loaded yet, showing loading...');
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                CircularProgressIndicator(color: Color(0xFF006A5B)),
+                SizedBox(height: 16),
+                Text(
+                  'Loading your clinic materials...',
+                  style: TextStyle(
+                    color: Color(0xFF67AFA5),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    print('🏥 Building therapy materials for clinic: $_clinicId');
+    
+    // Since "Physical Therapy" maps to "motor", show motor materials for CLI03
+    return StreamBuilder<QuerySnapshot>(
+      stream: ParentMaterialsService.getTherapyMaterials('motor', clinicId: _clinicId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(
+                  color: Color(0xFF006A5B),
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  'Error loading therapy materials: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.folder_open,
+                      size: 64,
+                      color: Color(0xFF67AFA5),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No materials available for clinic $_clinicId',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Process the materials directly since we're querying ClinicMaterials now
+        final materials = snapshot.data!.docs;
+        print('🎯 Found ${materials.length} motor materials for clinic $_clinicId');
+        
+        return SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Motor Therapy Materials (${materials.length} items)',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Build the materials grid
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.8,
+                  ),
+                  itemCount: materials.length,
+                  itemBuilder: (context, index) {
+                    final doc = materials[index];
+                    final material = doc.data() as Map<String, dynamic>;
+                    return _buildMaterialCard(material, doc.id);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
     
     // Original code commented out for testing
@@ -382,13 +772,27 @@ class _MaterialsPageState extends State<MaterialsPage> {
         
         for (var doc in snapshot.data!.docs) {
           final data = doc.data() as Map<String, dynamic>;
-          final therapyType = data['therapyType'] as String?;
+          final appointmentType = data['appointmentType'] as String?; // Changed from therapyType
           final clinicId = data['clinicId'] as String?;
           
-          print('Booking data: therapyType=$therapyType, clinicId=$clinicId');
+          print('Booking data: appointmentType=$appointmentType, clinicId=$clinicId');
           
-          if (therapyType != null && therapyType.isNotEmpty) {
-            therapyTypes.add(therapyType);
+          if (appointmentType != null && appointmentType.isNotEmpty) {
+            // Convert appointment type to therapy category
+            String therapyCategory;
+            if (appointmentType.toLowerCase().contains('speech')) {
+              therapyCategory = 'speech';
+            } else if (appointmentType.toLowerCase().contains('occupational')) {
+              therapyCategory = 'motor';
+            } else if (appointmentType.toLowerCase().contains('physical')) {
+              therapyCategory = 'motor'; // Physical Therapy maps to motor skills
+            } else if (appointmentType.toLowerCase().contains('cognitive')) {
+              therapyCategory = 'cognitive';
+            } else {
+              therapyCategory = 'general';
+            }
+            therapyTypes.add(therapyCategory);
+            print('  -> Mapped $appointmentType to $therapyCategory');
           }
           
           // Store the clinic ID (assuming user only has bookings from one clinic)
@@ -400,19 +804,82 @@ class _MaterialsPageState extends State<MaterialsPage> {
         print('Found therapy types: $therapyTypes');
         print('User clinic ID: $userClinicId');
         
-        // For testing, if no clinic ID found, use CLI02 as default
+        // If no clinic ID found, show message that user needs to book appointment
         if (userClinicId == null || userClinicId.isEmpty) {
-          userClinicId = 'CLI02';
-          print('Using default clinic ID: CLI02');
+          print('⚠️ No clinic ID found - user needs to book appointment');
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.info_outline, size: 64, color: Color(0xFF67AFA5)),
+                    SizedBox(height: 16),
+                    Text(
+                      'No Materials Available',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006A5B),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Please book an appointment with a clinic to access therapy materials.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
         }
 
         if (therapyTypes.isEmpty) {
-          // For testing purposes, show speech therapy materials from CLI02
-          print('No therapy types found in bookings, using default: speech from CLI02');
-          return SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                return _buildTherapyContainer('speech', 'CLI02');
+          print('⚠️ No therapy types found in bookings for clinic: $userClinicId');
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.info_outline, size: 64, color: Color(0xFF67AFA5)),
+                    SizedBox(height: 16),
+                    Text(
+                      'No Therapy Materials Found',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006A5B),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Your clinic hasn\'t uploaded materials for your therapy type yet.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF67AFA5),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              if (index < therapyTypes.length) {
+                return _buildTherapyContainer(therapyTypes[index], userClinicId!);
               },
               childCount: 1,
             ),
@@ -713,127 +1180,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
     }
   }
 
-  Widget _buildMaterialFolder(String title, IconData icon, Color color,
-      String subtitle, String category) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: _parentId.isNotEmpty ? 'CLI02' : null),
-      builder: (context, snapshot) {
-        int materialCount = 0;
-        if (snapshot.hasData) {
-          materialCount = snapshot.data!.docs.length;
-        }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 2,
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(15),
-              onTap: () => _openMaterialFolder(category, color, title),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Icon(
-                        icon,
-                        size: 30,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                        fontFamily: 'Poppins',
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                        fontFamily: 'Poppins',
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '$materialCount files',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: color,
-                          fontWeight: FontWeight.w500,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _openMaterialFolder(String category, Color color, String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ParentMaterialFolderView(
-          category: category,
-          categoryColor: color,
-          title: title,
-        ),
-      ),
-    );
-  }
-
-  void _openMaterialViewer(String title) {
-    // TODO: Replace this with actual PDF viewer or content viewer
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MaterialViewer(materialTitle: title),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -960,6 +1307,42 @@ class _MaterialsPageState extends State<MaterialsPage> {
                   child: SizedBox(height: 16),
                 ),
 
+                // Material Categories Section
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Material Categories',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color.fromARGB(255, 0, 0, 0),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        GridView.count(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.95,
+                          children: _materialCategories.map((category) {
+                            return _buildMaterialCategoryCard(category);
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 24),
+                ),
+
                 // Filter dropdown button
                 SliverToBoxAdapter(
                   child: Container(
@@ -1020,31 +1403,6 @@ class _MaterialsPageState extends State<MaterialsPage> {
 
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 20),
-                ),
-
-                // Therapy Materials Section Header
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'Your Therapy Materials',
-                      style: TextStyle(
-                        color: Color(0xFF67AFA5),
-                        fontSize: 20,
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w900,
-                      ),
-                      textAlign: TextAlign.left,
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 15),
-                ),
-                _buildTherapyMaterials(),
-
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 30),
                 ),
 
                 // YouTube Videos Section Header
@@ -1469,78 +1827,523 @@ class _MaterialsPageState extends State<MaterialsPage> {
       );
     }
   }
+
+  // Build Material Category Card
+  Widget _buildMaterialCategoryCard(Map<String, dynamic> category) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _clinicId.isNotEmpty
+          ? FirebaseFirestore.instance
+              .collection('ClinicMaterials')
+              .where('category', isEqualTo: category['title'].toString().toLowerCase())
+              .where('clinicId', isEqualTo: _clinicId)
+              .where('isActive', isEqualTo: true)
+              .snapshots()
+          : null,
+      builder: (context, snapshot) {
+        int materialCount = 0;
+        if (snapshot.hasData) {
+          materialCount = snapshot.data!.docs.length;
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => _openMaterialCategory(category['title'], category['color']),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: category['color'].withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        category['icon'],
+                        size: 24,
+                        color: category['color'],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      category['title'],
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2D3748),
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      category['subtitle'],
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: category['color'].withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$materialCount files',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: category['color'],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Open Material Category
+  void _openMaterialCategory(String categoryTitle, Color categoryColor) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MaterialCategoryPage(
+          categoryTitle: categoryTitle,
+          categoryColor: categoryColor,
+          clinicId: _clinicId,
+        ),
+      ),
+    );
+  }
 }
 
-// TODO: This is where you'll implement the PDF viewer or content viewer
-class MaterialViewer extends StatelessWidget {
-  final String materialTitle;
+// Material Viewer for displaying PDF and other content
+class MaterialViewer extends StatefulWidget {
+  final Map<String, dynamic> material;
+  final Color categoryColor;
 
-  const MaterialViewer({super.key, required this.materialTitle});
+  const MaterialViewer({
+    super.key, 
+    required this.material,
+    required this.categoryColor,
+  });
+
+  @override
+  State<MaterialViewer> createState() => _MaterialViewerState();
+}
+
+class _MaterialViewerState extends State<MaterialViewer> {
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
+    final String materialTitle = widget.material['title'] ?? 'Material';
+    final String? fileUrl = widget.material['downloadUrl'] ?? widget.material['fileUrl'];
+    final String? description = widget.material['description'];
+    
     return Scaffold(
       appBar: AppBar(
         title: Text(
           materialTitle,
           style: const TextStyle(color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF006A5B),
+        backgroundColor: widget.categoryColor,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download, color: Colors.white),
+            onPressed: () => _downloadMaterial(),
+            tooltip: 'Download',
+          ),
+        ],
       ),
-      body: Center(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.picture_as_pdf,
-              size: 100,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'PDF Viewer for: $materialTitle',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            // Material Info Card
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            const SizedBox(height: 10),
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'TODO: Implement PDF viewer here\n\n'
-                'You can use packages like:\n'
-                '• flutter_pdfview\n'
-                '• syncfusion_flutter_pdfviewer\n'
-                '• native_pdf_view\n\n'
-                'This is where the actual content will be displayed.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: widget.categoryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.picture_as_pdf,
+                            color: widget.categoryColor,
+                            size: 30,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                materialTitle,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Category: ${widget.material['category']?.toString().toUpperCase() ?? 'Unknown'}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: widget.categoryColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (description != null && description.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Description:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        description,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'Uploaded: ${_formatDate(widget.material['uploadedAt'])}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                // TODO: Add functionality to load and display PDF
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Loading $materialTitle content...'),
+            
+            const SizedBox(height: 24),
+            
+            // Action Buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: fileUrl != null ? () => _viewInApp() : null,
+                    icon: const Icon(Icons.visibility),
+                    label: const Text('View in App'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.categoryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF006A5B),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Load Content'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: fileUrl != null ? () => _downloadMaterial() : null,
+                    icon: _isLoading 
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.download),
+                    label: Text(_isLoading ? 'Downloading...' : 'Download'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.categoryColor.withOpacity(0.8),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            
+            const SizedBox(height: 24),
+            
+            // Instructions
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: widget.categoryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.categoryColor.withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: widget.categoryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'How to view this material:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: widget.categoryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '• Tap "View in App" to view the PDF directly in the app\n'
+                    '• Tap "Download" to save the file to your device\n'
+                    '• Once downloaded, you can open it with any PDF reader app',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            
+            if (fileUrl == null || fileUrl.isEmpty) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.red.withOpacity(0.3),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This material is not available for viewing. Please contact your clinic.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _viewInApp() async {
+    final String? fileUrl = widget.material['downloadUrl'] ?? widget.material['fileUrl'];
+    if (fileUrl != null && fileUrl.isNotEmpty) {
+      try {
+        // Navigate to in-app PDF viewer
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => InAppPDFViewer(
+              title: widget.material['title'] ?? 'Material',
+              pdfUrl: fileUrl,
+              categoryColor: widget.categoryColor,
+            ),
+          ),
+        );
+      } catch (e) {
+        _showErrorDialog('Error opening file: ${e.toString()}');
+      }
+    } else {
+      _showErrorDialog('File URL not available for this material.');
+    }
+  }
+
+  Future<void> _downloadMaterial() async {
+    if (_isLoading) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final String? downloadUrl = widget.material['downloadUrl'] ?? widget.material['fileUrl'];
+      
+      if (downloadUrl == null || downloadUrl.isEmpty) {
+        _showErrorDialog('Download URL not available for this material.');
+        return;
+      }
+
+      // Request storage permission
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+        if (!status.isGranted) {
+          _showErrorDialog('Storage permission is required to download files.');
+          return;
+        }
+      }
+
+      // Download the file
+      final response = await http.get(Uri.parse(downloadUrl));
+      
+      if (response.statusCode == 200) {
+        // Get the downloads directory
+        Directory? downloadsDirectory;
+        if (Platform.isAndroid) {
+          downloadsDirectory = Directory('/storage/emulated/0/Download');
+        } else {
+          downloadsDirectory = await getApplicationDocumentsDirectory();
+        }
+
+        // Create filename
+        final String fileName = widget.material['title'] ?? 'material';
+        final String fileExtension = downloadUrl.split('.').last.split('?').first;
+        final String fullFileName = '$fileName.$fileExtension';
+        
+        // Save file
+        final File file = File('${downloadsDirectory.path}/$fullFileName');
+        await file.writeAsBytes(response.bodyBytes);
+
+        // Show success dialog
+        _showSuccessDialog('File downloaded successfully!', file.path);
+      } else {
+        _showErrorDialog('Failed to download file. Please try again.');
+      }
+    } catch (e) {
+      _showErrorDialog('Error downloading file: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Error'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSuccessDialog(String message, String filePath) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Success'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              const SizedBox(height: 8),
+              Text(
+                'Saved to: $filePath',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return 'Unknown';
+    try {
+      if (timestamp is Timestamp) {
+        final date = timestamp.toDate();
+        return '${date.day}/${date.month}/${date.year}';
+      }
+      return 'Unknown';
+    } catch (e) {
+      return 'Unknown';
+    }
   }
 }
 
@@ -1809,12 +2612,14 @@ class ParentMaterialFolderView extends StatelessWidget {
   final String category;
   final Color categoryColor;
   final String title;
+  final String? clinicId;
 
   const ParentMaterialFolderView({
     Key? key,
     required this.category,
     required this.categoryColor,
     required this.title,
+    this.clinicId,
   }) : super(key: key);
 
   @override
@@ -1831,7 +2636,7 @@ class ParentMaterialFolderView extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: 'CLI02'),
+        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: clinicId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
@@ -2643,25 +3448,498 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
       ),
     );
   }
+}
 
-  void _openMaterialFolder(String category, Color color, String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ParentMaterialFolderView(
-          category: category,
-          categoryColor: color,
-          title: title,
+// Material Category Page for viewing specific category materials
+class MaterialCategoryPage extends StatelessWidget {
+  final String categoryTitle;
+  final Color categoryColor;
+  final String clinicId;
+
+  const MaterialCategoryPage({
+    super.key,
+    required this.categoryTitle,
+    required this.categoryColor,
+    required this.clinicId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '$categoryTitle Materials',
+          style: const TextStyle(color: Colors.white),
         ),
+        backgroundColor: categoryColor,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: clinicId.isNotEmpty
+            ? FirebaseFirestore.instance
+                .collection('ClinicMaterials')
+                .where('category', isEqualTo: categoryTitle.toLowerCase())
+                .where('clinicId', isEqualTo: clinicId)
+                .where('isActive', isEqualTo: true)
+                .snapshots()
+            : null,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}'),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.folder_open,
+                    size: 100,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'No $categoryTitle materials found',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Materials will appear here when your clinic uploads them.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final material = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16.0),
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(16.0),
+                  leading: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: categoryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.picture_as_pdf,
+                      color: categoryColor,
+                      size: 30,
+                    ),
+                  ),
+                  title: Text(
+                    material['title'] ?? 'Untitled',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        material['description'] ?? 'No description available',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Uploaded: ${_formatDate(material['uploadedAt'])}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.download,
+                          color: categoryColor,
+                          size: 24,
+                        ),
+                        onPressed: () => _downloadMaterial(context, material),
+                        tooltip: 'Download',
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        color: categoryColor,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    // Handle material tap - open material viewer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MaterialViewer(
+                          material: material,
+                          categoryColor: categoryColor,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
 
-  void _openMaterialViewer(String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MaterialViewer(materialTitle: title),
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return 'Unknown';
+    try {
+      if (timestamp is Timestamp) {
+        final date = timestamp.toDate();
+        return '${date.day}/${date.month}/${date.year}';
+      }
+      return 'Unknown';
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  // Download material method
+  Future<void> _downloadMaterial(BuildContext context, Map<String, dynamic> material) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: categoryColor),
+                const SizedBox(width: 20),
+                const Text('Downloading...'),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Get the download URL from the material data
+      final String? downloadUrl = material['downloadUrl'] ?? material['fileUrl'];
+      
+      if (downloadUrl == null || downloadUrl.isEmpty) {
+        Navigator.of(context).pop(); // Close loading dialog
+        _showErrorDialog(context, 'Download URL not available for this material.');
+        return;
+      }
+
+      // Request storage permission
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+        if (!status.isGranted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          _showErrorDialog(context, 'Storage permission is required to download files.');
+          return;
+        }
+      }
+
+      // Download the file
+      final response = await http.get(Uri.parse(downloadUrl));
+      
+      if (response.statusCode == 200) {
+        // Get the downloads directory
+        Directory? downloadsDirectory;
+        if (Platform.isAndroid) {
+          downloadsDirectory = Directory('/storage/emulated/0/Download');
+        } else {
+          downloadsDirectory = await getApplicationDocumentsDirectory();
+        }
+
+        // Create filename
+        final String fileName = material['title'] ?? 'material';
+        final String fileExtension = downloadUrl.split('.').last.split('?').first;
+        final String fullFileName = '$fileName.$fileExtension';
+        
+        // Save file
+        final File file = File('${downloadsDirectory.path}/$fullFileName');
+        await file.writeAsBytes(response.bodyBytes);
+
+        Navigator.of(context).pop(); // Close loading dialog
+        
+        // Show success dialog
+        _showSuccessDialog(context, 'File downloaded successfully!', file.path);
+      } else {
+        Navigator.of(context).pop(); // Close loading dialog
+        _showErrorDialog(context, 'Failed to download file. Please try again.');
+      }
+    } catch (e) {
+      Navigator.of(context).pop(); // Close loading dialog
+      _showErrorDialog(context, 'Error downloading file: ${e.toString()}');
+    }
+  }
+
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Download Error'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSuccessDialog(BuildContext context, String message, String filePath) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Download Complete'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              const SizedBox(height: 8),
+              Text(
+                'Saved to: $filePath',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// In-App PDF Viewer using WebView
+class InAppPDFViewer extends StatefulWidget {
+  final String title;
+  final String pdfUrl;
+  final Color categoryColor;
+
+  const InAppPDFViewer({
+    super.key,
+    required this.title,
+    required this.pdfUrl,
+    required this.categoryColor,
+  });
+
+  @override
+  State<InAppPDFViewer> createState() => _InAppPDFViewerState();
+}
+
+class _InAppPDFViewerState extends State<InAppPDFViewer> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeWebView();
+  }
+
+  void _initializeWebView() {
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+              _hasError = false;
+            });
+          },
+          onPageFinished: (String url) {
+            setState(() {
+              _isLoading = false;
+            });
+          },
+          onWebResourceError: (WebResourceError error) {
+            setState(() {
+              _isLoading = false;
+              _hasError = true;
+              _errorMessage = error.description;
+            });
+          },
+        ),
+      );
+
+    // Load PDF using Google Docs Viewer
+    final String googleDocsUrl = 'https://docs.google.com/viewer?url=${Uri.encodeComponent(widget.pdfUrl)}&embedded=true';
+    _controller.loadRequest(Uri.parse(googleDocsUrl));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.title,
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: widget.categoryColor,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: () {
+              _initializeWebView();
+            },
+            tooltip: 'Refresh',
+          ),
+          IconButton(
+            icon: const Icon(Icons.open_in_browser, color: Colors.white),
+            onPressed: () async {
+              final Uri url = Uri.parse(widget.pdfUrl);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+            tooltip: 'Open in Browser',
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          if (_hasError)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 80,
+                      color: Colors.red.shade300,
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Unable to load PDF',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _errorMessage.isNotEmpty ? _errorMessage : 'There was an error loading the PDF file.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 30),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            _initializeWebView();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.categoryColor,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final Uri url = Uri.parse(widget.pdfUrl);
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          icon: const Icon(Icons.open_in_browser),
+                          label: const Text('Open Externally'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.categoryColor.withOpacity(0.8),
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            WebViewWidget(controller: _controller),
+          
+          if (_isLoading)
+            Container(
+              color: Colors.white.withOpacity(0.8),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      color: widget.categoryColor,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Loading PDF...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: widget.categoryColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

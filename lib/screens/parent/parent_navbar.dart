@@ -124,7 +124,10 @@ class ParentNavbar extends StatelessWidget {
             ),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushNamed(context, '/materials');
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MaterialsPage()),
+              );
             },
           ),
           ListTile(

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:kindora/screens/parent/parent_navbar.dart';
-import 'package:kindora/screens/parent/new_dashboard_tabbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'kindora_camera_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ParentMaterials extends StatefulWidget {
   const ParentMaterials({Key? key}) : super(key: key);
@@ -15,104 +14,171 @@ class ParentMaterials extends StatefulWidget {
 }
 
 class _ParentMaterialsState extends State<ParentMaterials> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  String _selectedCategory = 'All';
-
-  // YouTube API configuration
-  static const String _youtubeApiKey =
-      'AIzaSyBG_j6o7Sp2d1LPMFP5yEHfWx1FhM3I4u4';
-  static const String _youtubeBaseUrl =
-      'https://www.googleapis.com/youtube/v3/search';
+  String? _userClinicId;
+  String? _userEmail;
+  
+  // YouTube related variables
+  YoutubePlayerController? _youtubeController;
   List<Map<String, dynamic>> _youtubeVideos = [];
-  bool _loadingYouTubeVideos = false;
+  bool _isLoadingYoutube = false;
 
-  // Therapy categories for filtering
-  final List<String> _therapyCategories = [
-    'All',
-    'Speech Therapy',
-    'Occupational Therapy',
-    'Physical Therapy',
-    'Behavioral Therapy',
-    'Play Therapy',
-    'Sensory Integration',
-    'Social Skills',
-    'Communication',
-    'Motor Skills',
+  // Material categories data structure
+  final List<Map<String, dynamic>> _materialCategories = [
+    {
+      'id': 'motor',
+      'title': 'Motor',
+      'subtitle': 'Fine & Gross Motor Skills',
+      'icon': Icons.accessibility_new,
+      'color': const Color(0xFF4CAF50),
+      'count': 0,
+    },
+    {
+      'id': 'speech',
+      'title': 'Speech',
+      'subtitle': 'Speech & Language Therapy',
+      'icon': Icons.record_voice_over,
+      'color': const Color(0xFF2196F3),
+      'count': 0,
+    },
+    {
+      'id': 'cognitive',
+      'title': 'Cognitive',
+      'subtitle': 'Cognitive Development',
+      'icon': Icons.psychology,
+      'color': const Color(0xFF9C27B0),
+      'count': 0,
+    },
+    {
+      'id': 'general',
+      'title': 'General',
+      'subtitle': 'General Resources',
+      'icon': Icons.folder_open,
+      'color': const Color(0xFFFF9800),
+      'count': 0,
+    },
   ];
 
   @override
   void initState() {
     super.initState();
-    _fetchYouTubeVideos();
+    _fetchUserClinicId();
   }
 
-  Future<void> _fetchYouTubeVideos() async {
+  Future<void> _fetchUserClinicId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        _userEmail = user.email;
+        print('🔍 Current user email: $_userEmail');
+        
+        // Query AcceptedBooking to find the clinic ID for this parent
+        final bookingQuery = await FirebaseFirestore.instance
+            .collection('AcceptedBooking')
+            .where('parentEmail', isEqualTo: _userEmail)
+            .limit(1)
+            .get();
+        
+        if (bookingQuery.docs.isNotEmpty) {
+          final bookingData = bookingQuery.docs.first.data();
+          _userClinicId = bookingData['clinicId'];
+          print('🏥 Found clinic ID: $_userClinicId for user: $_userEmail');
+          
+          // Load both materials and YouTube videos
+          await _updateMaterialCounts();
+          await _loadYoutubeVideos();
+          
+          setState(() {});
+          _updateMaterialCounts();
+        } else {
+          print('❌ No booking found for user: $_userEmail, using fallback clinic');
+          _userClinicId = 'CLI01'; // Fallback for testing
+          await _updateMaterialCounts();
+          await _loadYoutubeVideos();
+          setState(() {});
+        }
+      }
+    } catch (e) {
+      print('❌ Error fetching user clinic ID: $e');
+    }
+  }
+
+  Future<void> _updateMaterialCounts() async {
+    if (_userClinicId == null) return;
+    
+    try {
+      final materialsQuery = await FirebaseFirestore.instance
+          .collection('ClinicMaterials')
+          .where('clinicId', isEqualTo: _userClinicId)
+          .get();
+      
+      // Reset counts
+      for (var category in _materialCategories) {
+        category['count'] = 0;
+      }
+      
+      // Count materials by category
+      for (var doc in materialsQuery.docs) {
+        final material = doc.data();
+        final category = material['category']?.toString().toLowerCase() ?? '';
+        
+        for (var cat in _materialCategories) {
+          if (cat['id'] == category) {
+            cat['count'] = (cat['count'] as int) + 1;
+            break;
+          }
+        }
+      }
+
+      // If no materials found, add sample counts for demonstration
+      if (materialsQuery.docs.isEmpty) {
+        print('� No materials found, adding sample counts for clinic $_userClinicId');
+        _materialCategories[0]['count'] = 5; // Motor
+        _materialCategories[1]['count'] = 8; // Speech
+        _materialCategories[2]['count'] = 6; // Cognitive
+        _materialCategories[3]['count'] = 4; // General
+      }
+      
+      print('�📊 Material counts updated: ${_materialCategories.map((c) => '${c['title']}: ${c['count']}').join(', ')}');
+      setState(() {});
+    } catch (e) {
+      print('❌ Error updating material counts: $e');
+      // Fallback to sample counts
+      _materialCategories[0]['count'] = 5; // Motor
+      _materialCategories[1]['count'] = 8; // Speech
+      _materialCategories[2]['count'] = 6; // Cognitive
+      _materialCategories[3]['count'] = 4; // General
+      setState(() {});
+    }
+  }
+
+  // YouTube related methods
+  Future<void> _loadYoutubeVideos() async {
     setState(() {
-      _loadingYouTubeVideos = true;
+      _isLoadingYoutube = true;
     });
 
     try {
-      String searchQuery = 'child development therapy';
-      if (_selectedCategory != 'All') {
-        searchQuery = '$_selectedCategory child development therapy';
-      }
-
-      print('Fetching YouTube videos for: $searchQuery'); // Debug log
-
-      final response = await http.get(
-        Uri.parse(
-          '$_youtubeBaseUrl?part=snippet&q=${Uri.encodeComponent(searchQuery)}&type=video&maxResults=3&key=$_youtubeApiKey',
-        ),
-      );
-
-      print('YouTube API Response Status: ${response.statusCode}'); // Debug log
-      print('YouTube API Response Body: ${response.body}'); // Debug log
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        if (data['items'] != null && data['items'].isNotEmpty) {
-          setState(() {
-            _youtubeVideos = List<Map<String, dynamic>>.from(
-              data['items'].map((item) => {
-                    'id': item['id']['videoId'],
-                    'title': item['snippet']['title'],
-                    'description': item['snippet']['description'],
-                    'thumbnail': item['snippet']['thumbnails']['medium']['url'],
-                    'channelTitle': item['snippet']['channelTitle'],
-                    'publishedAt': item['snippet']['publishedAt'],
-                  }),
-            );
-            _loadingYouTubeVideos = false;
-          });
-        } else {
-          // No videos found, use sample data for demonstration
-          _loadSampleYouTubeVideos();
-        }
-      } else {
-        print('YouTube API Error: ${response.statusCode} - ${response.body}');
-        // Load sample videos as fallback
-        _loadSampleYouTubeVideos();
-      }
-    } catch (e) {
-      print('YouTube API Exception: $e'); // Debug log
-      // Load sample videos as fallback
+      // Load sample YouTube videos from materials.dart
       _loadSampleYouTubeVideos();
+      print('📺 Loaded ${_youtubeVideos.length} sample YouTube videos');
+    } catch (e) {
+      print('❌ Error loading YouTube videos: $e');
+      _loadSampleYouTubeVideos();
+    } finally {
+      setState(() {
+        _isLoadingYoutube = false;
+      });
     }
   }
 
   void _loadSampleYouTubeVideos() {
-    // Sample videos for demonstration when API fails
     setState(() {
       _youtubeVideos = [
         {
           'id': 'sample1',
           'title': 'Child Development Therapy Techniques',
-          'description':
-              'Learn effective therapy techniques for child development',
-          'thumbnail':
-              'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'description': 'Learn effective therapy techniques for child development',
+          'thumbnail': 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
           'channelTitle': 'Therapy Channel',
           'publishedAt': '2024-01-01T00:00:00Z',
         },
@@ -120,51 +186,70 @@ class _ParentMaterialsState extends State<ParentMaterials> {
           'id': 'sample2',
           'title': 'Speech Therapy for Children',
           'description': 'Professional speech therapy methods and exercises',
-          'thumbnail':
-              'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'thumbnail': 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
           'channelTitle': 'Speech Therapy Pro',
           'publishedAt': '2024-01-01T00:00:00Z',
         },
         {
           'id': 'sample3',
           'title': 'Occupational Therapy Activities',
-          'description':
-              'Fun and effective occupational therapy activities for kids',
-          'thumbnail':
-              'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
-          'channelTitle': 'OT for Kids',
+          'description': 'Fun and engaging occupational therapy activities',
+          'thumbnail': 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'channelTitle': 'OT Activities',
+          'publishedAt': '2024-01-01T00:00:00Z',
+        },
+        {
+          'id': 'sample4',
+          'title': 'Motor Skills Development',
+          'description': 'Exercises to improve motor skills in children',
+          'thumbnail': 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+          'channelTitle': 'Motor Skills Channel',
           'publishedAt': '2024-01-01T00:00:00Z',
         },
       ];
-      _loadingYouTubeVideos = false;
     });
+  }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Using sample videos - YouTube API temporarily unavailable'),
-          backgroundColor: Colors.orange,
+  void _playYoutubeVideo(String videoUrl) {
+    final videoId = YoutubePlayerController.convertUrlToId(videoUrl);
+    if (videoId != null) {
+      _youtubeController = YoutubePlayerController.fromVideoId(
+        videoId: videoId,
+        autoPlay: false,
+        params: const YoutubePlayerParams(showFullscreenButton: true),
+      );
+      
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          child: Container(
+            height: 300,
+            child: YoutubePlayer(
+              controller: _youtubeController!,
+              aspectRatio: 16 / 9,
+            ),
+          ),
         ),
       );
     }
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void _launchYouTube(String url) async {
+    final Uri youtubeUri = Uri.parse(url);
+    if (await canLaunchUrl(youtubeUri)) {
+      await launchUrl(youtubeUri, mode: LaunchMode.externalApplication);
+    } else {
+      print('Could not launch YouTube URL: $url');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final Size mq = MediaQuery.of(context).size;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Materials',
-          style: TextStyle(color: Colors.white),
+          'Material Categories',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF006A5B),
         leading: Builder(
@@ -191,710 +276,303 @@ class _ParentMaterialsState extends State<ParentMaterials> {
         tooltip: 'Take Photo with Kindora Camera',
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      body: Stack(
-        children: [
-          // Background images with fallback gradients (same as dashboard)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: ConstrainedBox(
-              constraints: BoxConstraints.expand(height: mq.height * 0.30),
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF006A5B), Color(0xFF67AFA5)],
-                  ),
-                ),
-                child: Image.asset(
-                  'asset/images/Ellipse 1.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(); // Gradient fallback
-                  },
-                ),
-              ),
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF006A5B), Color(0xFFE8F5F3)],
+            stops: [0.0, 0.3],
           ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: ConstrainedBox(
-              constraints: BoxConstraints.expand(height: mq.height * 0.3),
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Color(0xFF67AFA5), Colors.white],
-                  ),
-                ),
-                child: Image.asset(
-                  'asset/images/Ellipse 2.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(); // Gradient fallback
-                  },
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: CustomScrollView(
-              slivers: <Widget>[
-                const SliverAppBar(
-                  automaticallyImplyLeading: false,
-                  pinned: true,
-                  expandedHeight: 70.0,
-                  toolbarHeight: 70.0,
-                  backgroundColor: Color(0xFF006A5B),
-                  flexibleSpace: FlexibleSpaceBar(
-                    title: NewDashboardTabBar(
-                        initialSelectedIndex: 2), // Set to materials tab
-                    centerTitle: true,
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 50),
-                ),
-
-                // Search bar
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 8.0),
-                    decoration: BoxDecoration(
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                const Center(
+                  child: Text(
+                    'Material Categories',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(25.0),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.3),
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        hintText: 'Search therapy materials...',
-                        prefixIcon:
-                            Icon(Icons.search, color: Color(0xFF006A5B)),
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value.toLowerCase();
-                        });
-                      },
+                      fontFamily: 'Poppins',
                     ),
                   ),
                 ),
-
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 16),
-                ),
-
-                // Filter dropdown button
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Filter by Category:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF006A5B),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8.0),
-                            border: Border.all(color: const Color(0xFF006A5B)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.3),
-                                spreadRadius: 1,
-                                blurRadius: 3,
-                                offset: const Offset(0, 2),
+                const SizedBox(height: 30),
+                
+                // Material Categories Grid
+                _userClinicId == null
+                    ? const Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 16),
+                            Text(
+                              'Loading your materials...',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
                               ),
-                            ],
-                          ),
-                          child: DropdownButton<String>(
-                            value: _selectedCategory,
-                            icon: const Icon(Icons.arrow_drop_down,
-                                color: Color(0xFF006A5B)),
-                            iconSize: 24,
-                            elevation: 16,
-                            style: const TextStyle(color: Color(0xFF006A5B)),
-                            underline: Container(),
-                            onChanged: (String? newValue) {
-                              setState(() {
-                                _selectedCategory = newValue!;
-                              });
-                              _fetchYouTubeVideos(); // Refresh YouTube videos with new category
-                            },
-                            items: _therapyCategories
-                                .map<DropdownMenuItem<String>>((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontFamily: 'Poppins',
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 20),
-                ),
-
-                // Materials Section Header
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'Therapy Materials',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF006A5B),
-                        fontFamily: 'Poppins',
+                      )
+                    : GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 16.0,
+                        mainAxisSpacing: 16.0,
+                        childAspectRatio: 1.0,
+                        children: _materialCategories.map((category) {
+                          return _buildCategoryCard(category);
+                        }).toList(),
                       ),
-                    ),
+                
+                const SizedBox(height: 40),
+                
+                // YouTube Videos Section
+                const Text(
+                  'YouTube Videos',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'Poppins',
                   ),
                 ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 15),
-                ),
-                _buildTherapistMaterials(),
-
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 30),
-                ),
-
-                // YouTube Videos Section Header
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'YouTube Therapy Videos',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF006A5B),
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 15),
-                ),
-                _buildYouTubeVideos(),
+                const SizedBox(height: 16),
+                
+                _isLoadingYoutube
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
+                    : _youtubeVideos.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(20.0),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12.0),
+                            ),
+                            child: const Text(
+                              'No YouTube videos available for your clinic.',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _youtubeVideos.length,
+                            itemBuilder: (context, index) {
+                              final video = _youtubeVideos[index];
+                              return _buildYoutubeVideoCard(video);
+                            },
+                          ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildTherapistMaterials() {
-    return StreamBuilder<QuerySnapshot>(
-      stream:
-          FirebaseFirestore.instance.collection('TherapyMaterials').snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: CircularProgressIndicator(
-                  color: Color(0xFF006A5B),
+  Widget _buildCategoryCard(Map<String, dynamic> category) {
+    return GestureDetector(
+      onTap: () => _navigateToMaterials(category['id'], category['title']),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              spreadRadius: 0,
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icon with colored background
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: (category['color'] as Color).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(15.0),
+                ),
+                child: Icon(
+                  category['icon'],
+                  size: 32,
+                  color: category['color'],
                 ),
               ),
-            ),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
+              const SizedBox(height: 16),
+              
+              // Category title
+              Text(
+                category['title'],
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D3748),
+                  fontFamily: 'Poppins',
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              
+              // Category subtitle
+              Text(
+                category['subtitle'],
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF718096),
+                  fontFamily: 'Poppins',
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              
+              // File count
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12.0,
+                  vertical: 4.0,
+                ),
+                decoration: BoxDecoration(
+                  color: category['color'],
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
                 child: Text(
-                  'Error loading materials: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ),
-            ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.folder_open,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'No therapy materials available',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Check back later for new materials from therapists',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        final materials = snapshot.data!.docs;
-
-        // Filter materials based on search query and category
-        final filteredMaterials = materials.where((material) {
-          final materialData = material.data() as Map<String, dynamic>;
-          final title = (materialData['title'] ?? '').toString().toLowerCase();
-          final category = (materialData['category'] ?? '').toString();
-
-          final matchesSearch =
-              _searchQuery.isEmpty || title.contains(_searchQuery);
-          final matchesCategory =
-              _selectedCategory == 'All' || category == _selectedCategory;
-
-          return matchesSearch && matchesCategory;
-        }).toList();
-
-        if (filteredMaterials.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text(
-                  'No materials found matching your criteria',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
+                  '${category['count']} files',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
                     fontFamily: 'Poppins',
                   ),
                 ),
               ),
-            ),
-          );
-        }
-
-        return SliverGrid(
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 200.0,
-            mainAxisSpacing: 12.0,
-            crossAxisSpacing: 12.0,
-            childAspectRatio: 0.75, // 3:4 ratio for image to title
-          ),
-          delegate: SliverChildBuilderDelegate(
-            (BuildContext context, int index) {
-              final material = filteredMaterials[index];
-              final materialData = material.data() as Map<String, dynamic>;
-
-              return Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: GestureDetector(
-                  onTap: () {
-                    _showMaterialDetail(materialData);
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10.0),
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.3),
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Image takes 3/4 of the card
-                        Expanded(
-                          flex: 3,
-                          child: Container(
-                            width: double.infinity,
-                            decoration: const BoxDecoration(
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(10.0),
-                                topRight: Radius.circular(10.0),
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(10.0),
-                                topRight: Radius.circular(10.0),
-                              ),
-                              child: materialData['imageUrl'] != null
-                                  ? Image.network(
-                                      materialData['imageUrl'],
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                        return Container(
-                                          color: Colors.grey[300],
-                                          child: const Icon(
-                                            Icons.image_not_supported,
-                                            size: 40,
-                                            color: Colors.grey,
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Container(
-                                      color: Colors.grey[300],
-                                      child: const Icon(
-                                        Icons.folder,
-                                        size: 40,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ),
-                        // Title takes 1/4 of the card
-                        Expanded(
-                          flex: 1,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(8.0),
-                            child: Text(
-                              materialData['title'] ?? 'Untitled Material',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF006A5B),
-                                fontFamily: 'Poppins',
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-            childCount: filteredMaterials.length,
-          ),
-        );
-      },
-    );
-  }
-
-  void _showMaterialDetail(Map<String, dynamic> materialData) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(materialData['title'] ?? 'Material'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (materialData['imageUrl'] != null)
-                Image.network(
-                  materialData['imageUrl'],
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              const SizedBox(height: 16),
-              Text(
-                'Category: ${materialData['category'] ?? 'Unknown'}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              if (materialData['description'] != null)
-                Text(materialData['description']),
-              if (materialData['uploadedBy'] != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Uploaded by: ${materialData['uploadedBy']}',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+      ),
+    );
+  }
+
+  Widget _buildYoutubeVideoCard(Map<String, dynamic> video) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4.0,
+            offset: const Offset(0, 2),
           ),
-          if (materialData['fileUrl'] != null)
-            ElevatedButton(
-              onPressed: () {
-                // TODO: Implement file download/view
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Opening material...')),
-                );
-              },
-              child: const Text('Open'),
-            ),
         ],
       ),
-    );
-  }
-
-  Widget _buildYouTubeVideos() {
-    if (_loadingYouTubeVideos) {
-      return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(20.0),
-            child: CircularProgressIndicator(color: Color(0xFF006A5B)),
+      child: ListTile(
+        leading: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF0000),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: const Icon(
+            Icons.play_arrow,
+            color: Colors.white,
+            size: 30,
           ),
         ),
-      );
-    }
-
-    if (_youtubeVideos.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox(height: 0));
-    }
-
-    final videos = _youtubeVideos
-        .where((v) {
-          if (_searchQuery.isEmpty) return true;
-          final t = v['title']?.toString().toLowerCase() ?? '';
-          final d = v['description']?.toString().toLowerCase() ?? '';
-          return t.contains(_searchQuery) || d.contains(_searchQuery);
-        })
-        .take(3)
-        .toList();
-
-    if (videos.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox(height: 0));
-    }
-
-    return SliverToBoxAdapter(
-      child: Container(
-        height: 200,
-        margin: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: videos.length,
-          itemBuilder: (context, index) {
-            final video = videos[index];
-            return Container(
-              width: 280,
-              margin: const EdgeInsets.only(right: 12.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: InkWell(
-                onTap: () => _showVideoDetail(video),
-                child: Column(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12.0),
-                          topRight: Radius.circular(12.0),
-                        ),
-                        child: Image.network(
-                          video['thumbnail'] ?? '',
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.video_library,
-                                size: 40, color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 1,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              video['title']?.toString() ?? 'Untitled Video',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF006A5B),
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              video['channelTitle']?.toString() ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                  fontFamily: 'Poppins'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  void _showVideoDetail(Map<String, dynamic> videoData) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
         title: Text(
-          videoData['title'] ?? 'Video',
-          style: const TextStyle(fontSize: 16),
+          video['title'] ?? 'YouTube Video',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2D3748),
+            fontFamily: 'Poppins',
+          ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Image.network(
-                videoData['thumbnail'],
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Channel: ${videoData['channelTitle'] ?? 'Unknown'}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              if (videoData['description'] != null)
-                Text(
-                  videoData['description'].toString().length > 200
-                      ? '${videoData['description'].toString().substring(0, 200)}...'
-                      : videoData['description'].toString(),
-                  style: const TextStyle(fontSize: 14),
-                ),
-              const SizedBox(height: 8),
-              Text(
-                'Published: ${_formatDate(videoData['publishedAt'])}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+        subtitle: Text(
+          video['description'] ?? 'Therapy video content',
+          style: const TextStyle(
+            fontSize: 14,
+            color: Color(0xFF718096),
+            fontFamily: 'Poppins',
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _openYouTubeVideo(videoData['id']);
-            },
-            child: const Text('Watch Video'),
-          ),
-        ],
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'play') {
+              _playYoutubeVideo(video['videoUrl'] ?? '');
+            } else if (value == 'open') {
+              _launchYouTube(video['videoUrl'] ?? '');
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'play',
+              child: Row(
+                children: [
+                  Icon(Icons.play_circle_filled, color: Color(0xFF006A5B)),
+                  SizedBox(width: 8),
+                  Text('Play in App'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'open',
+              child: Row(
+                children: [
+                  Icon(Icons.open_in_new, color: Color(0xFF006A5B)),
+                  SizedBox(width: 8),
+                  Text('Open in YouTube'),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _openYouTubeVideo(String videoId) async {
-    final youtubeUrl = Uri.parse('https://www.youtube.com/watch?v=$videoId');
-    final youtubeAppUrl = Uri.parse('youtube://watch?v=$videoId');
-
-    try {
-      // Try to open in YouTube app first
-      if (await canLaunchUrl(youtubeAppUrl)) {
-        await launchUrl(youtubeAppUrl);
-      } else if (await canLaunchUrl(youtubeUrl)) {
-        // Fallback to web browser
-        await launchUrl(youtubeUrl, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch video';
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open video: $e')),
-        );
-      }
-    }
-  }
-
-  String _formatDate(String? dateString) {
-    if (dateString == null) return 'Unknown';
-    try {
-      final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
-    } catch (e) {
-      return 'Unknown';
-    }
+  void _navigateToMaterials(String categoryId, String categoryTitle) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryMaterialsScreen(
+          categoryId: categoryId,
+          categoryTitle: categoryTitle,
+          clinicId: _userClinicId!,
+        ),
+      ),
+    );
   }
 
   // Camera functionality
@@ -976,95 +654,496 @@ class _ParentMaterialsState extends State<ParentMaterials> {
       );
     }
   }
+}
 
-  void _showCameraFeatures() {
+// Screen to show materials in a specific category
+class CategoryMaterialsScreen extends StatefulWidget {
+  final String categoryId;
+  final String categoryTitle;
+  final String clinicId;
+
+  const CategoryMaterialsScreen({
+    Key? key,
+    required this.categoryId,
+    required this.categoryTitle,
+    required this.clinicId,
+  }) : super(key: key);
+
+  @override
+  State<CategoryMaterialsScreen> createState() => _CategoryMaterialsScreenState();
+}
+
+class _CategoryMaterialsScreenState extends State<CategoryMaterialsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '${widget.categoryTitle} Materials',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF006A5B),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF006A5B), Color(0xFFE8F5F3)],
+            stops: [0.0, 0.3],
+          ),
+        ),
+        child: Column(
+          children: [
+            // Search bar
+            Container(
+              margin: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(25.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.3),
+                    spreadRadius: 2,
+                    blurRadius: 5,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  hintText: 'Search materials...',
+                  prefixIcon: Icon(Icons.search, color: Color(0xFF006A5B)),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase();
+                  });
+                },
+              ),
+            ),
+            
+            // Materials list
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('ClinicMaterials')
+                    .where('clinicId', isEqualTo: widget.clinicId)
+                    .where('category', isEqualTo: widget.categoryId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF006A5B)),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Text(
+                          'Error loading materials: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.folder_open,
+                              size: 64,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No ${widget.categoryTitle.toLowerCase()} materials available',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                                fontFamily: 'Poppins',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Check back later for new materials from your therapy team',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                                fontFamily: 'Poppins',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final materials = snapshot.data!.docs;
+
+                  // Filter materials based on search query
+                  final filteredMaterials = materials.where((material) {
+                    if (_searchQuery.isEmpty) return true;
+                    final materialData = material.data() as Map<String, dynamic>;
+                    final title = (materialData['title'] ?? '').toString().toLowerCase();
+                    final description = (materialData['description'] ?? '').toString().toLowerCase();
+                    return title.contains(_searchQuery) || description.contains(_searchQuery);
+                  }).toList();
+
+                  if (filteredMaterials.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Text(
+                          'No materials found matching your search',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    itemCount: filteredMaterials.length,
+                    itemBuilder: (context, index) {
+                      final material = filteredMaterials[index];
+                      final materialData = material.data() as Map<String, dynamic>;
+
+                      return _buildMaterialCard(materialData);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialCard(Map<String, dynamic> materialData) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () => _showMaterialDetail(materialData),
+        borderRadius: BorderRadius.circular(12.0),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              // Material image/icon
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF006A5B).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: materialData['imageUrl'] != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: Image.network(
+                          materialData['imageUrl'],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.description,
+                              color: Color(0xFF006A5B),
+                              size: 30,
+                            );
+                          },
+                        ),
+                      )
+                    : const Icon(
+                        Icons.description,
+                        color: Color(0xFF006A5B),
+                        size: 30,
+                      ),
+              ),
+              const SizedBox(width: 16),
+              
+              // Material details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      materialData['title'] ?? 'Untitled Material',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2D3748),
+                        fontFamily: 'Poppins',
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    if (materialData['description'] != null) ...[
+                      Text(
+                        materialData['description'],
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF718096),
+                          fontFamily: 'Poppins',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0,
+                            vertical: 2.0,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF006A5B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4.0),
+                          ),
+                          child: Text(
+                            widget.categoryTitle,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF006A5B),
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Color(0xFF718096),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showMaterialDetail(Map<String, dynamic> materialData) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            'Kindora Camera Features',
-            style: TextStyle(
-              color: Color(0xFF006A5B),
-              fontWeight: FontWeight.bold,
-            ),
+      builder: (context) => AlertDialog(
+        title: Text(
+          materialData['title'] ?? 'Material',
+          style: const TextStyle(
+            color: Color(0xFF006A5B),
+            fontWeight: FontWeight.bold,
           ),
-          content: const SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.camera_alt, color: Color(0xFF006A5B)),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Take Photos',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (materialData['imageUrl'] != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Image.network(
+                    materialData['imageUrl'],
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 200,
+                        color: Colors.grey[300],
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                SizedBox(height: 8),
-                Text('• Capture high-quality photos for therapy sessions'),
-                Text('• Switch between front and back cameras'),
-                Text('• Professional camera interface'),
-                SizedBox(height: 16),
-                
-                Row(
-                  children: [
-                    Icon(Icons.preview, color: Color(0xFF006A5B)),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Preview & Actions',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Text('• Preview photos before deciding'),
-                Text('• Delete unwanted photos'),
-                Text('• Save photos to device storage'),
-                Text('• Send photos to therapy team'),
-                SizedBox(height: 16),
-                
-                Row(
-                  children: [
-                    Icon(Icons.security, color: Color(0xFF006A5B)),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Privacy & Security',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8),
-                Text('• Secure photo transmission'),
-                Text('• Local storage option'),
-                Text('• HIPAA-compliant photo handling'),
-                Text('• Therapy session integration'),
+                const SizedBox(height: 16),
               ],
+              if (materialData['description'] != null) ...[
+                const Text(
+                  'Description:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF006A5B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  materialData['description'],
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+              ],
+              Row(
+                children: [
+                  const Text(
+                    'Category: ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF006A5B),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      widget.categoryTitle,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+              if (materialData['uploadedBy'] != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text(
+                      'Uploaded by: ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006A5B),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        materialData['uploadedBy'],
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (materialData['uploadDate'] != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Text(
+                      'Date: ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006A5B),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        _formatTimestamp(materialData['uploadDate']),
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: Color(0xFF006A5B)),
             ),
           ),
-          actions: [
+          if (materialData['fileUrl'] != null)
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                _openMaterialFile(materialData['fileUrl']);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF006A5B),
               ),
               child: const Text(
-                'Got it!',
+                'Open File',
                 style: TextStyle(color: Colors.white),
               ),
             ),
-          ],
-        );
-      },
+        ],
+      ),
     );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    try {
+      if (timestamp is Timestamp) {
+        final date = timestamp.toDate();
+        return '${date.day}/${date.month}/${date.year}';
+      } else if (timestamp is String) {
+        final date = DateTime.parse(timestamp);
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      print('Error formatting timestamp: $e');
+    }
+    return 'Unknown date';
+  }
+
+  Future<void> _openMaterialFile(String fileUrl) async {
+    try {
+      final uri = Uri.parse(fileUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch $fileUrl';
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

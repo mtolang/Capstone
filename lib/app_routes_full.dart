@@ -14,7 +14,6 @@ import 'package:kindora/screens/registration/therapist_reg.dart';
 
 // Parent pages
 import 'package:kindora/screens/parent/new_dashboard_tabbar.dart';
-import 'package:kindora/screens/parent/materials.dart';
 import 'package:kindora/screens/parent/games_option.dart';
 import 'package:kindora/screens/parent/games/talk_with_tiles.dart';
 import 'package:kindora/screens/parent/games/cognitive_pattern_master.dart';
@@ -56,7 +55,7 @@ final Map<String, WidgetBuilder> routes = {
       const NewDashboardTabBar(initialSelectedIndex: 0),
   '/therdashboard': (context) =>
       const NewDashboardTabBar(initialSelectedIndex: 1),
-  '/materials': (context) => const MaterialsPage(),
+  '/materials': (context) => const NewDashboardTabBar(),
   '/gamesoption': (context) => const GamesOption(),
   '/talkwithtiles': (context) => const TalkWithTilesGame(),
   '/shapeshifters': (context) => const PatternMasterApp(),

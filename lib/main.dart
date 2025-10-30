@@ -249,8 +249,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 initialSelectedIndex: 0), // New Clinics tab
             '/therdashboard': (context) => const NewDashboardTabBar(
                 initialSelectedIndex: 1), // New Therapists tab
-            '/materials': (context) => const NewDashboardTabBar(
-                initialSelectedIndex: 2), // Materials tab
+            '/materials': (context) => const NewDashboardTabBar(),
             '/gamesoption': (context) => const GamesOption(),
             '/talkwithtiles': (context) => const TalkWithTilesGame(),
             '/shapeshifters': (context) => const PatternMasterApp(),

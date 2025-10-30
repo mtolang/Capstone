@@ -23,11 +23,20 @@ class _ClinicMaterialsState extends State<ClinicMaterials> {
 
   Future<void> _loadClinicId() async {
     final prefs = await SharedPreferences.getInstance();
+    final clinicId = prefs.getString('clinic_id') ??
+        prefs.getString('user_id') ??
+        prefs.getString('clinicId') ??
+        prefs.getString('userId');
+    
+    print('🏥 Clinic Materials - Loading clinic ID:');
+    print('  - clinic_id: ${prefs.getString('clinic_id')}');
+    print('  - user_id: ${prefs.getString('user_id')}');
+    print('  - clinicId: ${prefs.getString('clinicId')}');
+    print('  - userId: ${prefs.getString('userId')}');
+    print('  - Final clinic ID: $clinicId');
+    
     setState(() {
-      _clinicId = prefs.getString('clinic_id') ??
-          prefs.getString('user_id') ??
-          prefs.getString('clinicId') ??
-          prefs.getString('userId');
+      _clinicId = clinicId;
     });
   }
 
@@ -224,15 +233,31 @@ class _ClinicMaterialsState extends State<ClinicMaterials> {
 
   Widget _buildMaterialFolder(
       String title, IconData icon, Color color, String subtitle) {
+    print('🎯 Building material folder for: $title, clinicId: $_clinicId');
+    
     return StreamBuilder<QuerySnapshot>(
       stream: _clinicId != null
           ? ClinicMaterialsService.getMaterialsByCategory(
               _clinicId!, title.toLowerCase())
           : null,
       builder: (context, snapshot) {
+        print('📊 StreamBuilder for $title - ConnectionState: ${snapshot.connectionState}');
+        print('📊 StreamBuilder for $title - HasData: ${snapshot.hasData}');
+        print('📊 StreamBuilder for $title - HasError: ${snapshot.hasError}');
+        if (snapshot.hasError) {
+          print('❌ Error for $title: ${snapshot.error}');
+        }
+        
         int materialCount = 0;
         if (snapshot.hasData) {
           materialCount = snapshot.data!.docs.length;
+          print('📊 Material count for $title: $materialCount');
+          
+          // Log the actual documents found
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            print('  - Material: ${data['title']} | Category: ${data['category']} | ClinicId: ${data['clinicId']}');
+          }
         }
 
         return Container(
@@ -1550,19 +1575,19 @@ class ClinicMaterialsService {
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
         .where('isActive', isEqualTo: true)
-        .orderBy('uploadedAt', descending: true)
         .snapshots();
   }
 
   // Get materials by category for a specific clinic
   static Stream<QuerySnapshot> getMaterialsByCategory(
       String clinicId, String category) {
+    print('🔍 Querying materials: clinicId=$clinicId, category=$category');
+    
     return _firestore
         .collection(_collection)
         .where('clinicId', isEqualTo: clinicId)
         .where('category', isEqualTo: category.toLowerCase())
         .where('isActive', isEqualTo: true)
-        .orderBy('uploadedAt', descending: true)
         .snapshots();
   }
 
