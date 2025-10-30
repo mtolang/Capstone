@@ -468,12 +468,13 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
     bool isCorrectLength =
         sentence.length >= levelData[currentLevel]!.expectedLength;
 
+    // Award stars based on the current level number
     if (isCorrectPattern && isCorrectLength) {
-      return 5; // Perfect sentence
+      return currentLevel; // Award stars equal to the current level (1-10 stars)
     } else if (isCorrectLength) {
-      return 3; // Good effort with correct length
+      return (currentLevel * 0.6).round(); // Award 60% of level stars for correct length
     } else if (sentence.length >= levelData[currentLevel]!.expectedLength - 1) {
-      return 2; // Close to correct length
+      return (currentLevel * 0.4).round(); // Award 40% of level stars for close attempt
     } else {
       return 1; // Participation star
     }
@@ -505,8 +506,9 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
       setState(() {
         showSuccess = false;
 
-        // Advance to next level if got 3+ stars or if this is level 10
-        if (starsEarned >= 3 || currentLevel >= 10) {
+        // Advance to next level if got 60% or more of the level's stars
+        int minimumStarsToPass = (currentLevel * 0.6).round();
+        if (starsEarned >= minimumStarsToPass || currentLevel >= 10) {
           if (currentLevel < 10) {
             _levelsCompleted++;
             currentLevel++;
@@ -544,16 +546,16 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
     }
   }
 
-  /// Manual reset - clears all progress including stars
-  Future<void> _manualReset() async {
+  /// Reset All Progress - clears all progress including level number and total stars
+  Future<void> _resetAllProgress() async {
     // Show confirmation dialog first
     bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Reset Progress'),
+          title: const Text('Reset All Progress'),
           content: const Text(
-            'Are you sure you want to reset all progress? This will clear your level and stars.',
+            'Are you sure you want to reset ALL progress? This will return you to Level 1 and clear all stars.',
           ),
           actions: [
             TextButton(
@@ -563,7 +565,7 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Reset'),
+              child: const Text('Reset All'),
             ),
           ],
         );
@@ -586,20 +588,18 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
         // Start new session
         _newSession();
 
-        // Manual reset - no immediate save, will save on next speak action
-
         // Show confirmation message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Progress reset successfully!'),
+            content: Text('All progress reset successfully!'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
         );
 
-        print('Manual reset completed');
+        print('All progress reset completed');
       } catch (e) {
-        print('Error during manual reset: $e');
+        print('Error during reset: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Error resetting progress. Please try again.'),
@@ -620,24 +620,27 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
     });
   }
 
-  /// Reset the current level completely
-  void _resetCurrentLevel() {
+  /// Restart Level - clears current level attempt but keeps level number and total stars
+  void _restartLevel() {
     setState(() {
       selectedTiles.clear();
       showSuccess = false;
       showEncouragement = false;
       currentLevelStars = 0;
-      gameScore = 0;
-      
-      // Reset session tracking for current level
-      _sessionStart = DateTime.now();
-      _tilesUsed = 0;
-      _sentencesFormed = 0;
+      // Note: gameScore, currentLevel, and totalStars are NOT reset
       
       // Cancel any pending saves
       _saveTimer?.cancel();
       _hasPendingSave = false;
     });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Level $currentLevel restarted!'),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   void removeTile(int index) {
@@ -750,10 +753,10 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.restart_alt),
             color: Colors.white,
-            tooltip: 'Reset Progress',
-            onPressed: _manualReset,
+            tooltip: 'Reset All Progress',
+            onPressed: _resetAllProgress,
           ),
         ],
       ),
@@ -881,7 +884,7 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
                                     color: Colors.grey.shade600,
                                   ),
                                 ),
-                                ...List.generate(5, (index) {
+                                ...List.generate(currentLevel, (index) {
                                   return Icon(
                                     Icons.star,
                                     size: 20,
@@ -1063,11 +1066,11 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // Reset Level Button
+                          // Restart Level Button
                           ElevatedButton.icon(
-                            onPressed: _resetCurrentLevel,
+                            onPressed: _restartLevel,
                             icon: const Icon(Icons.replay),
-                            label: const Text('Reset Level'),
+                            label: const Text('Restart Level'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange,
                               foregroundColor: Colors.white,
@@ -1210,46 +1213,57 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
                         width: 80,
                         height: 80,
                         decoration: BoxDecoration(
-                          color: currentLevelStars >= 4
+                          color: currentLevelStars == currentLevel
                               ? Colors.green.shade100
-                              : currentLevelStars >= 2
+                              : currentLevelStars >= (currentLevel * 0.6).round()
                                   ? Colors.orange.shade100
                                   : Colors.blue.shade100,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          currentLevelStars >= 4 ? Icons.star : Icons.thumb_up,
+                          currentLevelStars == currentLevel ? Icons.star : Icons.thumb_up,
                           size: 40,
-                          color: currentLevelStars >= 4
+                          color: currentLevelStars == currentLevel
                               ? Colors.green.shade600
-                              : currentLevelStars >= 2
+                              : currentLevelStars >= (currentLevel * 0.6).round()
                                   ? Colors.orange.shade600
                                   : Colors.blue.shade600,
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Star display
+                      // Star display - shows stars earned vs possible for current level
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(5, (index) {
-                          return Icon(
-                            Icons.star,
-                            size: 32,
-                            color: index < currentLevelStars
-                                ? Colors.yellow.shade600
-                                : Colors.grey.shade300,
-                          );
-                        }),
+                        children: [
+                          ...List.generate(currentLevelStars.clamp(0, 10), (index) {
+                            return Icon(
+                              Icons.star,
+                              size: 32,
+                              color: Colors.yellow.shade600,
+                            );
+                          }),
+                          if (currentLevelStars < currentLevel) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '/ $currentLevel',
+                              style: TextStyle(
+                                fontSize: 20,
+                                color: Colors.grey.shade500,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        currentLevelStars >= 4
-                            ? 'Amazing! Perfect sentence!'
-                            : currentLevelStars >= 3
-                                ? 'Great job! Well done!'
-                                : currentLevelStars >= 2
-                                    ? "You're so close! Keep trying!"
-                                    : 'Good try! You can do it!',
+                        currentLevelStars == currentLevel
+                            ? 'Perfect! You earned all $currentLevel stars!'
+                            : currentLevelStars >= (currentLevel * 0.6).round()
+                                ? 'Great job! You earned $currentLevelStars stars!'
+                                : currentLevelStars >= (currentLevel * 0.4).round()
+                                    ? "Good try! You earned $currentLevelStars stars!"
+                                    : 'Nice effort! Keep practicing!',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -1259,7 +1273,7 @@ class _TalkWithTilesGameState extends State<TalkWithTilesGame>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        currentLevelStars >= 3
+                        currentLevelStars >= (currentLevel * 0.6).round()
                             ? 'Moving to next level!'
                             : 'Try again - you\'re doing great!',
                         style: TextStyle(

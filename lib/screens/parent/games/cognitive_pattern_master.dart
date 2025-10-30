@@ -195,8 +195,8 @@ class _PatternMasterGameState extends State<PatternMasterGame>
     }
   }
 
-  /// Reset the current level completely
-  void _resetCurrentLevel() {
+  /// Restart Level - clears current level attempt but keeps level number and score
+  void _restartLevel() {
     setState(() {
       // Clear all game elements and patterns
       gameElements.clear();
@@ -210,20 +210,25 @@ class _PatternMasterGameState extends State<PatternMasterGame>
       gameActive = false;
       memoryPhase = false;
       
-      // Reset scoring and skills tracking
+      // Reset level-specific tracking (but keep overall score)
       _correctMatches = 0;
       _totalAttempts = 0;
       
       // Cancel any active timers
       _gameTimer?.cancel();
       _memoryFlashTimer?.cancel();
-      
-      // Reset session start time
-      _sessionStart = DateTime.now();
     });
     
     // Reload the current level
     _loadLevel();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Level ${currentLevel + 1} restarted!'),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   // Level 1: Visual Pattern Memory
@@ -1399,12 +1404,12 @@ class _PatternMasterGameState extends State<PatternMasterGame>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _resetCurrentLevel,
+        onPressed: _restartLevel,
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.replay),
         label: const Text(
-          'Reset Level',
+          'Restart Level',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         elevation: 8,

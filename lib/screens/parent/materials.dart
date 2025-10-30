@@ -1055,6 +1055,34 @@ class _MaterialsPageState extends State<MaterialsPage> {
   }
 
   Widget _buildMaterialCard(Map<String, dynamic> material, String docId) {
+    final fileName = material['fileName'] as String? ?? '';
+    final fileSize = material['fileSize'] as String? ?? 'Unknown size';
+    final uploadedAt = material['uploadedAt'] as Timestamp?;
+    final isImage = material['isImage'] == true;
+    final isVideo = material['isVideo'] == true;
+    final isDocument = material['isDocument'] == true;
+    
+    // Format upload date
+    String uploadDate = 'Unknown date';
+    if (uploadedAt != null) {
+      final date = uploadedAt.toDate();
+      uploadDate = '${date.day}/${date.month}/${date.year}';
+    }
+    
+    // Get file type indicator
+    String fileType = 'File';
+    Color typeColor = Colors.grey;
+    if (isImage) {
+      fileType = 'Image';
+      typeColor = Colors.orange;
+    } else if (isVideo) {
+      fileType = 'Video';
+      typeColor = Colors.purple;
+    } else if (isDocument) {
+      fileType = 'Document';
+      typeColor = Colors.blue;
+    }
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -1065,19 +1093,45 @@ class _MaterialsPageState extends State<MaterialsPage> {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF006A5B).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              _getFileIcon(material['fileName'] ?? ''),
-              color: const Color(0xFF006A5B),
-              size: 24,
-            ),
+          // File icon with type indicator
+          Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF006A5B).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _getFileIcon(fileName),
+                  color: const Color(0xFF006A5B),
+                  size: 24,
+                ),
+              ),
+              // File type badge
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: typeColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    fileType.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 12),
+          // Material information
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1089,8 +1143,11 @@ class _MaterialsPageState extends State<MaterialsPage> {
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF006A5B),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                if (material['description'] != null)
+                if (material['description'] != null) ...[
+                  const SizedBox(height: 2),
                   Text(
                     material['description'],
                     style: TextStyle(
@@ -1100,14 +1157,79 @@ class _MaterialsPageState extends State<MaterialsPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ],
+                const SizedBox(height: 4),
+                // File details row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        fileType,
+                        style: TextStyle(
+                          color: typeColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      fileSize,
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 10,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      uploadDate,
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          IconButton(
-            onPressed: () => _openMaterial(material),
-            icon: const Icon(Icons.open_in_new),
-            color: const Color(0xFF006A5B),
-            tooltip: 'Open Material',
+          const SizedBox(width: 8),
+          // Action buttons
+          Column(
+            children: [
+              // Download button
+              IconButton(
+                onPressed: () {
+                  final downloadUrl = material['downloadUrl'] as String?;
+                  if (downloadUrl != null) {
+                    _downloadFile(downloadUrl, material['title'] ?? fileName);
+                  }
+                },
+                icon: const Icon(Icons.download, size: 20),
+                color: const Color(0xFF006A5B),
+                tooltip: 'Download',
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+              ),
+              // Open button
+              IconButton(
+                onPressed: () => _openMaterial(material),
+                icon: const Icon(Icons.open_in_new, size: 20),
+                color: const Color(0xFF006A5B),
+                tooltip: 'Open',
+                constraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1169,17 +1291,390 @@ class _MaterialsPageState extends State<MaterialsPage> {
 
   void _openMaterial(Map<String, dynamic> material) {
     final downloadUrl = material['downloadUrl'] as String?;
+    final fileName = material['fileName'] as String?;
+    final title = material['title'] as String?;
+    final isImage = material['isImage'] == true;
+    final isVideo = material['isVideo'] == true;
+    final isDocument = material['isDocument'] == true;
+    
     if (downloadUrl != null) {
-      // Implement material opening logic here
+      // Increment download count
+      final materialId = material['materialId'] ?? material['clinicMaterialId'];
+      if (materialId != null) {
+        ParentMaterialsService.incrementDownloadCount(materialId);
+      }
+      
+      // Show different options based on file type
+      if (isImage) {
+        _showImageViewer(downloadUrl, title ?? fileName ?? 'Image');
+      } else if (isVideo) {
+        _showVideoOptions(downloadUrl, title ?? fileName ?? 'Video');
+      } else if (isDocument) {
+        _showDocumentOptions(downloadUrl, title ?? fileName ?? 'Document');
+      } else {
+        // Generic file - show download options
+        _showFileOptions(downloadUrl, title ?? fileName ?? 'File');
+      }
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Opening ${material['title'] ?? 'material'}...'),
-          backgroundColor: const Color(0xFF006A5B),
+        const SnackBar(
+          content: Text('Material not available for download'),
+          backgroundColor: Colors.red,
         ),
       );
     }
   }
 
+  // Show image in full screen with download option
+  void _showImageViewer(String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.black,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.9,
+            maxWidth: MediaQuery.of(context).size.width * 0.95,
+          ),
+          child: Column(
+            children: [
+              // Header with title and close button
+              Container(
+                color: const Color(0xFF006A5B),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.download, color: Colors.white),
+                      onPressed: () => _downloadFile(imageUrl, title),
+                      tooltip: 'Download Image',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              // Image viewer
+              Expanded(
+                child: InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 3.0,
+                  child: Center(
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: const Color(0xFF006A5B),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error, size: 64, color: Colors.red),
+                              SizedBox(height: 16),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Show video options
+  void _showVideoOptions(String videoUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Open Video: $title'),
+        content: const Text('Choose how you want to view this video:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _downloadFile(videoUrl, title);
+            },
+            icon: const Icon(Icons.download, color: Colors.white),
+            label: const Text('Download', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _openInBrowser(videoUrl);
+            },
+            icon: const Icon(Icons.play_arrow, color: Colors.white),
+            label: const Text('Play', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Show document options
+  void _showDocumentOptions(String documentUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Open Document: $title'),
+        content: const Text('Choose how you want to access this document:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _downloadFile(documentUrl, title);
+            },
+            icon: const Icon(Icons.download, color: Colors.white),
+            label: const Text('Download', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _openInBrowser(documentUrl);
+            },
+            icon: const Icon(Icons.open_in_browser, color: Colors.white),
+            label: const Text('View Online', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Show generic file options
+  void _showFileOptions(String fileUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Open File: $title'),
+        content: const Text('Choose an action for this file:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _downloadFile(fileUrl, title);
+            },
+            icon: const Icon(Icons.download, color: Colors.white),
+            label: const Text('Download', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _openInBrowser(fileUrl);
+            },
+            icon: const Icon(Icons.open_in_browser, color: Colors.white),
+            label: const Text('Open', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Download file function
+  Future<void> _downloadFile(String url, String fileName) async {
+    try {
+      // For web, we can use the browser's download functionality
+      if (await canLaunch(url)) {
+        await launch(url, forceWebView: false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Downloading $fileName...'),
+            backgroundColor: const Color(0xFF006A5B),
+            action: SnackBarAction(
+              label: 'View Downloads',
+              textColor: Colors.white,
+              onPressed: () {
+                // Could open downloads folder or show instruction
+                _showDownloadInfo();
+              },
+            ),
+          ),
+        );
+      } else {
+        throw 'Could not download file';
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error downloading file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Open file in browser
+  Future<void> _openInBrowser(String url) async {
+    try {
+      if (await canLaunch(url)) {
+        await launch(url, forceWebView: true, enableJavaScript: true);
+      } else {
+        throw 'Could not open file';
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Show download information
+  void _showDownloadInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Download Information'),
+        content: const Text(
+          'Your file is being downloaded to your device\'s Downloads folder. '
+          'Check your browser\'s download section or your file manager to access it.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaterialFolder(String title, IconData icon, Color color,
+      String subtitle, String category) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: _parentId.isNotEmpty ? 'CLI02' : null),
+      builder: (context, snapshot) {
+        int materialCount = 0;
+        if (snapshot.hasData) {
+          materialCount = snapshot.data!.docs.length;
+        }
+
+        return Card(
+          margin: const EdgeInsets.all(8),
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: InkWell(
+            onTap: () => _navigateToMaterialList(category),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    color.withOpacity(0.8),
+                    color.withOpacity(0.6),
+                  ],
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 48,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    category,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$materialCount Materials',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
 
   @override
