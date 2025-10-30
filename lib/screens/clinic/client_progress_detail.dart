@@ -410,7 +410,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No Assessments Found',
+            'No Sessions Found',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -420,7 +420,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'No assessments were found for this client.',
+            'No therapy sessions were found for this client.',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[500],
@@ -631,7 +631,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '${assessments.length} Assessments',
+              '${assessments.length} Sessions',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
@@ -692,7 +692,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Based on ${assessments.length} assessment${assessments.length != 1 ? 's' : ''}',
+            'Based on ${assessments.length} session${assessments.length != 1 ? 's' : ''}',
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withOpacity(0.9),
@@ -1016,7 +1016,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Assessment History',
+            'Session History',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -1083,7 +1083,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Assessment ${assessments.length - index}',
+                  'Session ${assessments.length - index}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1129,7 +1129,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
         ),
         child: const Center(
           child: Text(
-            'No assessment data available',
+            'No session data available',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey,
@@ -1165,7 +1165,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
               ),
               const SizedBox(width: 12),
               const Text(
-                'Detailed Assessment Data',
+                'Detailed Session Data',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1192,7 +1192,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
                 const Expanded(
                   flex: 2,
                   child: Text(
-                    'Assessment Date',
+                    'Session Date',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -1404,7 +1404,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
         backgroundColor: Colors.grey[50],
         collapsedBackgroundColor: Colors.white,
         title: Text(
-          'Assessment ${assessments.length - index} - $dateStr',
+          'Session ${assessments.length - index} - $dateStr',
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
