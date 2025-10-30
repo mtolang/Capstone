@@ -1534,32 +1534,97 @@ class _MaterialsPageState extends State<MaterialsPage> {
   // Download file function
   Future<void> _downloadFile(String url, String fileName) async {
     try {
-      // For web, we can use the browser's download functionality
-      if (await canLaunch(url)) {
-        await launch(url, forceWebView: false);
+      print('📁 Starting download for: $fileName');
+      print('🔗 URL: $url');
+      
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Downloading $fileName...'),
+          backgroundColor: const Color(0xFF006A5B),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Download the file
+      final response = await http.get(Uri.parse(url));
+      print('📡 HTTP Response: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        // Clean the filename
+        final String fileExtension = url.split('.').last.split('?').first;
+        final String cleanFileName = fileName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+        final String fullFileName = '$cleanFileName.$fileExtension';
         
+        Directory? saveDirectory;
+        String locationMessage = '';
+        
+        if (Platform.isAndroid) {
+          // Try to save to Downloads first
+          try {
+            // Request permission
+            var status = await Permission.storage.request();
+            print('🔐 Storage permission status: $status');
+            
+            if (status.isGranted) {
+              saveDirectory = Directory('/storage/emulated/0/Download');
+              locationMessage = 'Downloaded to: Downloads folder';
+            } else {
+              // Fallback to app directory
+              saveDirectory = await getApplicationDocumentsDirectory();
+              locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+            }
+          } catch (e) {
+            print('❌ Permission error: $e');
+            // Fallback to app directory
+            saveDirectory = await getApplicationDocumentsDirectory();
+            locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+          }
+        } else {
+          saveDirectory = await getApplicationDocumentsDirectory();
+          locationMessage = 'Downloaded to: Documents folder';
+        }
+        
+        // Create directory if it doesn't exist
+        if (!await saveDirectory.exists()) {
+          await saveDirectory.create(recursive: true);
+        }
+        
+        // Save file
+        final File file = File('${saveDirectory.path}/$fullFileName');
+        await file.writeAsBytes(response.bodyBytes);
+        print('✅ File saved to: ${file.path}');
+
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Downloading $fileName...'),
+            content: Text('$fullFileName\n$locationMessage'),
             backgroundColor: const Color(0xFF006A5B),
+            duration: const Duration(seconds: 4),
             action: SnackBarAction(
-              label: 'View Downloads',
+              label: 'Info',
               textColor: Colors.white,
-              onPressed: () {
-                // Could open downloads folder or show instruction
-                _showDownloadInfo();
-              },
+              onPressed: () => _showDownloadInfo(),
             ),
           ),
         );
       } else {
-        throw 'Could not download file';
+        throw 'Failed to download file. Server responded with ${response.statusCode}';
       }
     } catch (e) {
+      print('❌ Download error: $e');
+      
+      // Show error with option to try in browser
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error downloading file: $e'),
+          content: Text('Download failed: $e'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Try Browser',
+            textColor: Colors.white,
+            onPressed: () => _openInBrowser(url),
+          ),
         ),
       );
     }
@@ -1589,9 +1654,39 @@ class _MaterialsPageState extends State<MaterialsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Download Information'),
-        content: const Text(
-          'Your file is being downloaded to your device\'s Downloads folder. '
-          'Check your browser\'s download section or your file manager to access it.'
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your files are downloaded to:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            if (Platform.isAndroid) ...[
+              const Text('📱 Android: /storage/emulated/0/Download/'),
+              const SizedBox(height: 8),
+              const Text('To find your downloads:'),
+              const Text('1. Open your File Manager app'),
+              const Text('2. Look for "Downloads" folder'),
+              const Text('3. Find your downloaded materials'),
+            ] else ...[
+              const Text('Your file is being downloaded to your device\'s Downloads folder.'),
+              const Text('Check your browser\'s download section or your file manager to access it.'),
+            ],
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '💡 Tip: If you can\'t find the file, try checking your phone\'s notification panel for download completion.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -2425,6 +2520,30 @@ class _MaterialsPageState extends State<MaterialsPage> {
     );
   }
 
+  // Navigate to material list for specific category
+  void _navigateToMaterialList(String category) {
+    // Get the color for this category
+    Map<String, Color> categoryColors = {
+      'Motor': const Color(0xFF4CAF50),
+      'Speech': const Color(0xFF2196F3),
+      'Cognitive': const Color(0xFF9C27B0),
+      'General': const Color(0xFFFF9800),
+    };
+    
+    Color categoryColor = categoryColors[category] ?? const Color(0xFF006A5B);
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MaterialCategoryPage(
+          categoryTitle: category,
+          categoryColor: categoryColor,
+          clinicId: _clinicId,
+        ),
+      ),
+    );
+  }
+
   // Open Material Category
   void _openMaterialCategory(String categoryTitle, Color categoryColor) {
     Navigator.push(
@@ -2697,8 +2816,20 @@ class _MaterialViewerState extends State<MaterialViewer> {
 
   Future<void> _viewInApp() async {
     final String? fileUrl = widget.material['downloadUrl'] ?? widget.material['fileUrl'];
+    
+    // Debug: Show URL being used
+    print('MaterialViewer: Opening PDF with URL: $fileUrl');
+    
     if (fileUrl != null && fileUrl.isNotEmpty) {
       try {
+        // Show debug info to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Opening PDF: ${fileUrl.length > 50 ? '${fileUrl.substring(0, 50)}...' : fileUrl}'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
         // Navigate to in-app PDF viewer
         Navigator.push(
           context,
@@ -2733,39 +2864,57 @@ class _MaterialViewerState extends State<MaterialViewer> {
         return;
       }
 
-      // Request storage permission
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-        if (!status.isGranted) {
-          _showErrorDialog('Storage permission is required to download files.');
-          return;
-        }
-      }
+      print('📁 Starting material download');
+      print('🔗 URL: $downloadUrl');
 
       // Download the file
       final response = await http.get(Uri.parse(downloadUrl));
+      print('📡 HTTP Response: ${response.statusCode}');
       
       if (response.statusCode == 200) {
-        // Get the downloads directory
-        Directory? downloadsDirectory;
-        if (Platform.isAndroid) {
-          downloadsDirectory = Directory('/storage/emulated/0/Download');
-        } else {
-          downloadsDirectory = await getApplicationDocumentsDirectory();
-        }
-
-        // Create filename
+        // Clean the filename
         final String fileName = widget.material['title'] ?? 'material';
         final String fileExtension = downloadUrl.split('.').last.split('?').first;
-        final String fullFileName = '$fileName.$fileExtension';
+        final String cleanFileName = fileName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+        final String fullFileName = '$cleanFileName.$fileExtension';
+        
+        Directory? saveDirectory;
+        String locationMessage = '';
+        
+        if (Platform.isAndroid) {
+          // Try to save to Downloads first
+          try {
+            // Request permission
+            var status = await Permission.storage.request();
+            print('🔐 Storage permission status: $status');
+            
+            if (status.isGranted) {
+              saveDirectory = Directory('/storage/emulated/0/Download');
+              locationMessage = 'Downloaded to: Downloads folder';
+            } else {
+              // Fallback to app directory (no permissions needed)
+              print('📂 Using app directory fallback');
+              saveDirectory = await getApplicationDocumentsDirectory();
+              locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+            }
+          } catch (e) {
+            print('❌ Permission error: $e');
+            // Fallback to app directory (no permissions needed)
+            saveDirectory = await getApplicationDocumentsDirectory();
+            locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+          }
+        } else {
+          saveDirectory = await getApplicationDocumentsDirectory();
+          locationMessage = 'Downloaded to: Documents folder';
+        }
         
         // Save file
-        final File file = File('${downloadsDirectory.path}/$fullFileName');
+        final File file = File('${saveDirectory.path}/$fullFileName');
         await file.writeAsBytes(response.bodyBytes);
+        print('✅ File saved to: ${file.path}');
 
         // Show success dialog
-        _showSuccessDialog('File downloaded successfully!', file.path);
+        _showSuccessDialog('File downloaded successfully!\n\n$locationMessage', file.path);
       } else {
         _showErrorDialog('Failed to download file. Please try again.');
       }
@@ -4155,42 +4304,59 @@ class MaterialCategoryPage extends StatelessWidget {
         return;
       }
 
-      // Request storage permission
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-        if (!status.isGranted) {
-          Navigator.of(context).pop(); // Close loading dialog
-          _showErrorDialog(context, 'Storage permission is required to download files.');
-          return;
-        }
-      }
+      print('📁 Starting material download');
+      print('🔗 URL: $downloadUrl');
 
       // Download the file
       final response = await http.get(Uri.parse(downloadUrl));
+      print('📡 HTTP Response: ${response.statusCode}');
       
       if (response.statusCode == 200) {
-        // Get the downloads directory
-        Directory? downloadsDirectory;
-        if (Platform.isAndroid) {
-          downloadsDirectory = Directory('/storage/emulated/0/Download');
-        } else {
-          downloadsDirectory = await getApplicationDocumentsDirectory();
-        }
-
-        // Create filename
+        // Clean the filename
         final String fileName = material['title'] ?? 'material';
         final String fileExtension = downloadUrl.split('.').last.split('?').first;
-        final String fullFileName = '$fileName.$fileExtension';
+        final String cleanFileName = fileName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
+        final String fullFileName = '$cleanFileName.$fileExtension';
+        
+        Directory? saveDirectory;
+        String locationMessage = '';
+        
+        if (Platform.isAndroid) {
+          // Try to save to Downloads first
+          try {
+            // Request permission
+            var status = await Permission.storage.request();
+            print('🔐 Storage permission status: $status');
+            
+            if (status.isGranted) {
+              saveDirectory = Directory('/storage/emulated/0/Download');
+              locationMessage = 'Downloaded to: Downloads folder';
+            } else {
+              // Fallback to app directory (no permissions needed)
+              print('📂 Using app directory fallback');
+              saveDirectory = await getApplicationDocumentsDirectory();
+              locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+            }
+          } catch (e) {
+            print('❌ Permission error: $e');
+            // Fallback to app directory (no permissions needed)
+            saveDirectory = await getApplicationDocumentsDirectory();
+            locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+          }
+        } else {
+          saveDirectory = await getApplicationDocumentsDirectory();
+          locationMessage = 'Downloaded to: Documents folder';
+        }
         
         // Save file
-        final File file = File('${downloadsDirectory.path}/$fullFileName');
+        final File file = File('${saveDirectory.path}/$fullFileName');
         await file.writeAsBytes(response.bodyBytes);
+        print('✅ File saved to: ${file.path}');
 
         Navigator.of(context).pop(); // Close loading dialog
         
         // Show success dialog
-        _showSuccessDialog(context, 'File downloaded successfully!', file.path);
+        _showSuccessDialog(context, 'File downloaded successfully!\n\n$locationMessage', file.path);
       } else {
         Navigator.of(context).pop(); // Close loading dialog
         _showErrorDialog(context, 'Failed to download file. Please try again.');
@@ -4282,22 +4448,27 @@ class _InAppPDFViewerState extends State<InAppPDFViewer> {
   }
 
   void _initializeWebView() {
+    print('🔗 PDF URL: ${widget.pdfUrl}');
+    
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
+            print('📄 Page started loading: $url');
             setState(() {
               _isLoading = true;
               _hasError = false;
             });
           },
           onPageFinished: (String url) {
+            print('✅ Page finished loading: $url');
             setState(() {
               _isLoading = false;
             });
           },
           onWebResourceError: (WebResourceError error) {
+            print('❌ WebView error: ${error.description}');
             setState(() {
               _isLoading = false;
               _hasError = true;
@@ -4307,9 +4478,81 @@ class _InAppPDFViewerState extends State<InAppPDFViewer> {
         ),
       );
 
-    // Load PDF using Google Docs Viewer
-    final String googleDocsUrl = 'https://docs.google.com/viewer?url=${Uri.encodeComponent(widget.pdfUrl)}&embedded=true';
-    _controller.loadRequest(Uri.parse(googleDocsUrl));
+    // Try multiple PDF viewing approaches
+    _loadPDF();
+  }
+
+  void _loadPDF() async {
+    print('🔄 Starting PDF load for: ${widget.pdfUrl}');
+    
+    // Validate URL
+    if (!widget.pdfUrl.startsWith('http')) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = 'Invalid PDF URL format';
+      });
+      return;
+    }
+    
+    try {
+      // Check if it's a Firebase Storage URL
+      final bool isFirebaseUrl = widget.pdfUrl.contains('firebase') || widget.pdfUrl.contains('googleapis.com');
+      
+      if (isFirebaseUrl) {
+        print('🔥 Detected Firebase URL, using direct approach');
+        // For Firebase URLs, try direct loading first
+        await _controller.loadRequest(Uri.parse(widget.pdfUrl));
+        
+        // Wait a bit to see if it loads
+        await Future.delayed(const Duration(seconds: 5));
+        
+        // If still loading, try Google Docs
+        if (_isLoading && !_hasError) {
+          print('🔄 Direct Firebase load taking time, trying Google Docs...');
+          final String googleDocsUrl = 'https://docs.google.com/viewer?url=${Uri.encodeComponent(widget.pdfUrl)}&embedded=true';
+          await _controller.loadRequest(Uri.parse(googleDocsUrl));
+        }
+      } else {
+        // For other URLs, start with Google Docs Viewer
+        final String googleDocsUrl = 'https://docs.google.com/viewer?url=${Uri.encodeComponent(widget.pdfUrl)}&embedded=true';
+        print('🔄 Trying Google Docs Viewer: $googleDocsUrl');
+        await _controller.loadRequest(Uri.parse(googleDocsUrl));
+        
+        // Wait a bit to see if it loads
+        await Future.delayed(const Duration(seconds: 3));
+        
+        // If still loading after 3 seconds, show alternative
+        if (_isLoading && !_hasError) {
+          print('⏰ Google Docs taking too long, trying alternative...');
+          _tryAlternativePDFViewer();
+        }
+      }
+    } catch (e) {
+      print('❌ Initial PDF load failed: $e');
+      _tryAlternativePDFViewer();
+    }
+  }
+
+  void _tryAlternativePDFViewer() async {
+    try {
+      // Alternative 1: Mozilla PDF.js viewer
+      final String pdfJsUrl = 'https://mozilla.github.io/pdf.js/web/viewer.html?file=${Uri.encodeComponent(widget.pdfUrl)}';
+      print('🔄 Trying PDF.js Viewer: $pdfJsUrl');
+      await _controller.loadRequest(Uri.parse(pdfJsUrl));
+    } catch (e) {
+      print('❌ PDF.js failed: $e');
+      // Alternative 2: Direct PDF URL (some browsers can handle this)
+      try {
+        print('🔄 Trying direct PDF URL: ${widget.pdfUrl}');
+        await _controller.loadRequest(Uri.parse(widget.pdfUrl));
+      } catch (e2) {
+        print('❌ Direct PDF failed: $e2');
+        setState(() {
+          _hasError = true;
+          _errorMessage = 'Could not load PDF. Please try downloading or opening in browser.';
+        });
+      }
+    }
   }
 
   @override
@@ -4373,12 +4616,39 @@ class _InAppPDFViewerState extends State<InAppPDFViewer> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            '💡 Troubleshooting Tips:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            '• Try downloading the file instead\n'
+                            '• Check your internet connection\n'
+                            '• The PDF might not be publicly accessible\n'
+                            '• Some PDFs require special permissions',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
                       children: [
                         ElevatedButton.icon(
                           onPressed: () {
+                            print('🔄 Manual retry triggered');
                             _initializeWebView();
                           },
                           icon: const Icon(Icons.refresh),
@@ -4393,12 +4663,37 @@ class _InAppPDFViewerState extends State<InAppPDFViewer> {
                             final Uri url = Uri.parse(widget.pdfUrl);
                             if (await canLaunchUrl(url)) {
                               await launchUrl(url, mode: LaunchMode.externalApplication);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Could not open URL in browser'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
                             }
                           },
                           icon: const Icon(Icons.open_in_browser),
-                          label: const Text('Open Externally'),
+                          label: const Text('Browser'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: widget.categoryColor.withOpacity(0.8),
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            // Try to download the file as alternative
+                            Navigator.of(context).pop(); // Go back
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Try using the download button to save the file to your device'),
+                                backgroundColor: Color(0xFF006A5B),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.download),
+                          label: const Text('Download'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                           ),
                         ),
