@@ -1557,57 +1557,96 @@ class _MaterialsPageState extends State<MaterialsPage> {
         final String fullFileName = '$cleanFileName.$fileExtension';
         
         Directory? saveDirectory;
-        String locationMessage = '';
         
         if (Platform.isAndroid) {
-          // Try to save to Downloads first
+          // Try multiple permission strategies for Downloads folder
           try {
-            // Request permission
-            var status = await Permission.storage.request();
-            print('🔐 Storage permission status: $status');
+            bool hasPermission = false;
             
-            if (status.isGranted) {
+            // Try different permission types based on Android version
+            var storageStatus = await Permission.storage.request();
+            var manageExternalStorageStatus = await Permission.manageExternalStorage.request();
+            
+            print('🔐 Storage permission: $storageStatus');
+            print('🔐 Manage external storage: $manageExternalStorageStatus');
+            
+            // Check if any permission is granted
+            if (storageStatus.isGranted || manageExternalStorageStatus.isGranted) {
+              hasPermission = true;
+            }
+            
+            if (hasPermission) {
+              // Use Downloads folder
               saveDirectory = Directory('/storage/emulated/0/Download');
-              locationMessage = 'Downloaded to: Downloads folder';
+              print('✅ Using Downloads folder: ${saveDirectory.path}');
             } else {
-              // Fallback to app directory
+              // Show permission explanation and try again
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('For better access, allow storage permission. File will be saved to app folder.'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
               saveDirectory = await getApplicationDocumentsDirectory();
-              locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+              print('📂 Using app directory: ${saveDirectory.path}');
             }
           } catch (e) {
             print('❌ Permission error: $e');
-            // Fallback to app directory
             saveDirectory = await getApplicationDocumentsDirectory();
-            locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
           }
         } else {
           saveDirectory = await getApplicationDocumentsDirectory();
-          locationMessage = 'Downloaded to: Documents folder';
         }
         
         // Create directory if it doesn't exist
         if (!await saveDirectory.exists()) {
+          print('📂 Creating directory: ${saveDirectory.path}');
           await saveDirectory.create(recursive: true);
         }
         
         // Save file
         final File file = File('${saveDirectory.path}/$fullFileName');
-        await file.writeAsBytes(response.bodyBytes);
-        print('✅ File saved to: ${file.path}');
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$fullFileName\n$locationMessage'),
-            backgroundColor: const Color(0xFF006A5B),
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Info',
-              textColor: Colors.white,
-              onPressed: () => _showDownloadInfo(),
-            ),
-          ),
-        );
+        print('📝 Writing file to: ${file.path}');
+        print('📊 File size: ${response.bodyBytes.length} bytes');
+        
+        try {
+          await file.writeAsBytes(response.bodyBytes);
+          
+          // Verify file was actually written
+          if (await file.exists()) {
+            final int fileSize = await file.length();
+            print('✅ File successfully saved: ${file.path}');
+            print('✅ Verified file size: $fileSize bytes');
+            
+            // Determine location message
+            String locationMessage;
+            if (file.path.contains('/storage/emulated/0/Download')) {
+              locationMessage = 'Downloaded to: Downloads folder 📁\n\nOpen your file manager and look in Downloads to find: $fullFileName';
+            } else {
+              locationMessage = 'Downloaded to: App storage 📱\n\nFind in: File Manager > Android > data > com.example.kindora > files';
+            }
+            
+            // Show success message with clear location info
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ $fullFileName downloaded!\n\n$locationMessage\n\nSize: ${(fileSize / 1024).round()} KB'),
+                backgroundColor: const Color(0xFF006A5B),
+                duration: const Duration(seconds: 8),
+                action: SnackBarAction(
+                  label: 'Got it',
+                  textColor: Colors.white,
+                  onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                ),
+              ),
+            );
+          } else {
+            throw 'File was not created successfully';
+          }
+        } catch (fileError) {
+          print('❌ File write error: $fileError');
+          throw 'Failed to save file: $fileError';
+        }
       } else {
         throw 'Failed to download file. Server responded with ${response.statusCode}';
       }
@@ -1646,6 +1685,40 @@ class _MaterialsPageState extends State<MaterialsPage> {
         ),
       );
     }
+  }
+
+  // Show file information after download
+  void _showFileInfo(String filePath, int fileSize) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Download Complete'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('File downloaded successfully!'),
+              const SizedBox(height: 10),
+              Text('Path: $filePath'),
+              Text('Size: ${(fileSize / 1024).round()} KB'),
+              const SizedBox(height: 10),
+              const Text(
+                'You can find this file in your file manager by navigating to:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const Text('Android > data > com.example.kindora > files'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // Show download information
@@ -2879,42 +2952,78 @@ class _MaterialViewerState extends State<MaterialViewer> {
         final String fullFileName = '$cleanFileName.$fileExtension';
         
         Directory? saveDirectory;
-        String locationMessage = '';
         
         if (Platform.isAndroid) {
-          // Try to save to Downloads first
+          // Try multiple permission strategies for Downloads folder
           try {
-            // Request permission
-            var status = await Permission.storage.request();
-            print('🔐 Storage permission status: $status');
+            bool hasPermission = false;
             
-            if (status.isGranted) {
+            // Try different permission types based on Android version
+            var storageStatus = await Permission.storage.request();
+            var manageExternalStorageStatus = await Permission.manageExternalStorage.request();
+            
+            print('🔐 Storage permission: $storageStatus');
+            print('🔐 Manage external storage: $manageExternalStorageStatus');
+            
+            // Check if any permission is granted
+            if (storageStatus.isGranted || manageExternalStorageStatus.isGranted) {
+              hasPermission = true;
+            }
+            
+            if (hasPermission) {
+              // Use Downloads folder
               saveDirectory = Directory('/storage/emulated/0/Download');
-              locationMessage = 'Downloaded to: Downloads folder';
+              print('✅ Using Downloads folder: ${saveDirectory.path}');
             } else {
-              // Fallback to app directory (no permissions needed)
-              print('📂 Using app directory fallback');
+              // Use app directory as fallback
               saveDirectory = await getApplicationDocumentsDirectory();
-              locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+              print('📂 Using app directory: ${saveDirectory.path}');
             }
           } catch (e) {
             print('❌ Permission error: $e');
-            // Fallback to app directory (no permissions needed)
             saveDirectory = await getApplicationDocumentsDirectory();
-            locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
           }
         } else {
           saveDirectory = await getApplicationDocumentsDirectory();
-          locationMessage = 'Downloaded to: Documents folder';
+        }
+        
+        // Create directory if it doesn't exist
+        if (!await saveDirectory.exists()) {
+          print('📂 Creating directory: ${saveDirectory.path}');
+          await saveDirectory.create(recursive: true);
         }
         
         // Save file
         final File file = File('${saveDirectory.path}/$fullFileName');
-        await file.writeAsBytes(response.bodyBytes);
-        print('✅ File saved to: ${file.path}');
-
-        // Show success dialog
-        _showSuccessDialog('File downloaded successfully!\n\n$locationMessage', file.path);
+        print('📝 Writing file to: ${file.path}');
+        print('📊 File size: ${response.bodyBytes.length} bytes');
+        
+        try {
+          await file.writeAsBytes(response.bodyBytes);
+          
+          // Verify file was actually written
+          if (await file.exists()) {
+            final int fileSize = await file.length();
+            print('✅ File successfully saved: ${file.path}');
+            print('✅ Verified file size: $fileSize bytes');
+            
+            // Determine location message
+            String locationMessage;
+            if (file.path.contains('/storage/emulated/0/Download')) {
+              locationMessage = 'File saved to Downloads folder 📁\n\nOpen your file manager and look in Downloads to find your file.';
+            } else {
+              locationMessage = 'File saved to app storage 📱\n\nFind in: File Manager > Android > data > com.example.kindora > files';
+            }
+            
+            // Show success dialog
+            _showSuccessDialog('✅ Download Complete!\n\n$locationMessage\n\nFile: $fullFileName\nSize: ${(fileSize / 1024).round()} KB', file.path);
+          } else {
+            throw 'File was not created successfully';
+          }
+        } catch (fileError) {
+          print('❌ File write error: $fileError');
+          throw 'Failed to save file: $fileError';
+        }
       } else {
         _showErrorDialog('Failed to download file. Please try again.');
       }
@@ -4319,44 +4428,76 @@ class MaterialCategoryPage extends StatelessWidget {
         final String fullFileName = '$cleanFileName.$fileExtension';
         
         Directory? saveDirectory;
-        String locationMessage = '';
         
         if (Platform.isAndroid) {
-          // Try to save to Downloads first
+          // Try multiple permission strategies for Downloads folder
           try {
-            // Request permission
-            var status = await Permission.storage.request();
-            print('🔐 Storage permission status: $status');
+            bool hasPermission = false;
             
-            if (status.isGranted) {
+            // Try different permission types based on Android version
+            var storageStatus = await Permission.storage.request();
+            var manageExternalStorageStatus = await Permission.manageExternalStorage.request();
+            
+            print('🔐 Storage permission: $storageStatus');
+            print('🔐 Manage external storage: $manageExternalStorageStatus');
+            
+            // Check if any permission is granted
+            if (storageStatus.isGranted || manageExternalStorageStatus.isGranted) {
+              hasPermission = true;
+            }
+            
+            if (hasPermission) {
+              // Use Downloads folder
               saveDirectory = Directory('/storage/emulated/0/Download');
-              locationMessage = 'Downloaded to: Downloads folder';
+              print('✅ Using Downloads folder: ${saveDirectory.path}');
             } else {
-              // Fallback to app directory (no permissions needed)
-              print('📂 Using app directory fallback');
+              // Use app directory as fallback
               saveDirectory = await getApplicationDocumentsDirectory();
-              locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
+              print('📂 Using app directory: ${saveDirectory.path}');
             }
           } catch (e) {
             print('❌ Permission error: $e');
-            // Fallback to app directory (no permissions needed)
             saveDirectory = await getApplicationDocumentsDirectory();
-            locationMessage = 'Downloaded to: App Documents folder\n(Check file manager > Android > data > com.example.kindora > files)';
           }
         } else {
           saveDirectory = await getApplicationDocumentsDirectory();
-          locationMessage = 'Downloaded to: Documents folder';
         }
         
         // Save file
         final File file = File('${saveDirectory.path}/$fullFileName');
-        await file.writeAsBytes(response.bodyBytes);
-        print('✅ File saved to: ${file.path}');
-
-        Navigator.of(context).pop(); // Close loading dialog
+        print('📝 Writing file to: ${file.path}');
+        print('📊 File size: ${response.bodyBytes.length} bytes');
         
-        // Show success dialog
-        _showSuccessDialog(context, 'File downloaded successfully!\n\n$locationMessage', file.path);
+        try {
+          await file.writeAsBytes(response.bodyBytes);
+          
+          // Verify file was actually written
+          if (await file.exists()) {
+            final int fileSize = await file.length();
+            print('✅ File successfully saved: ${file.path}');
+            print('✅ Verified file size: $fileSize bytes');
+
+            // Determine location message
+            String locationMessage;
+            if (file.path.contains('/storage/emulated/0/Download')) {
+              locationMessage = 'File saved to Downloads folder 📁\n\nOpen your file manager and look in Downloads to find your file.';
+            } else {
+              locationMessage = 'File saved to app storage 📱\n\nFind in: File Manager > Android > data > com.example.kindora > files';
+            }
+
+            Navigator.of(context).pop(); // Close loading dialog
+            
+            // Show success dialog
+            _showSuccessDialog(context, '✅ Download Complete!\n\n$locationMessage\n\nFile: $fullFileName\nSize: ${(fileSize / 1024).round()} KB', file.path);
+          } else {
+            Navigator.of(context).pop(); // Close loading dialog
+            throw 'File was not created successfully';
+          }
+        } catch (fileError) {
+          Navigator.of(context).pop(); // Close loading dialog
+          print('❌ File write error: $fileError');
+          throw 'Failed to save file: $fileError';
+        }
       } else {
         Navigator.of(context).pop(); // Close loading dialog
         _showErrorDialog(context, 'Failed to download file. Please try again.');
