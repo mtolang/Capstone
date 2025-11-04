@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'final_evaluation_form.dart';
 
 class ClientProgressDetailPage extends StatefulWidget {
   final Map<String, dynamic> clientData;
@@ -25,6 +26,27 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
   void initState() {
     super.initState();
     _loadAssessments();
+  }
+
+  Future<void> _navigateToFinalEvaluation() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FinalEvaluationForm(
+          clientData: widget.clientData,
+          clinicId: widget.clinicId,
+          sessionHistory: assessments,
+        ),
+      ),
+    );
+
+    // Refresh data if evaluation was submitted
+    if (result == true) {
+      setState(() {
+        isLoading = true;
+      });
+      await _loadAssessments();
+    }
   }
 
   Future<void> _loadAssessments() async {
@@ -355,7 +377,30 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
             fontFamily: 'Poppins',
           ),
         ),
+        actions: [
+          if (assessments.isNotEmpty)
+            IconButton(
+              onPressed: _navigateToFinalEvaluation,
+              icon: const Icon(Icons.assignment_turned_in, color: Colors.white),
+              tooltip: 'Create Final Evaluation',
+            ),
+        ],
       ),
+      floatingActionButton: assessments.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: _navigateToFinalEvaluation,
+              backgroundColor: const Color(0xFF006A5B),
+              icon: const Icon(Icons.assignment_turned_in, color: Colors.white),
+              label: const Text(
+                'Final Evaluation',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            )
+          : null,
       body: isLoading
           ? const Center(
               child: CircularProgressIndicator(
