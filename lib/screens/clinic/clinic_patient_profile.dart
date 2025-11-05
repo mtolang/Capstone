@@ -635,14 +635,18 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
   }
 
   Widget _buildRecordsTab() {
-    // Use parent ID if available, otherwise fallback to patient ID
-    final String searchId = _parentId ?? widget.patientId;
-    print('🔍 Searching Journal with parentId: $searchId');
+    // Use parent ID and clinic ID for filtering TherapyPhotos
+    final String searchParentId = _parentId ?? widget.patientId;
+    final String searchClinicId = _clinicId ?? '';
+    print('🔍 Searching TherapyPhotos with parentId: $searchParentId, clinicId: $searchClinicId');
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('Journal')
-          .where('parentId', isEqualTo: searchId)
+          .collection('TherapyPhotos')
+          .where('uploadedById', isEqualTo: searchParentId)
+          .where('clinicId', isEqualTo: searchClinicId)
+          .where('isActive', isEqualTo: true)
+          .orderBy('uploadedAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -660,13 +664,13 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.book_outlined,
+                  Icons.photo_outlined,
                   size: 64,
                   color: Colors.grey,
                 ),
                 SizedBox(height: 16),
                 Text(
-                  'This journal is empty',
+                  'No therapy photos',
                   style: TextStyle(
                     fontSize: 18,
                     color: Colors.grey,
@@ -675,7 +679,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'No journal entries found for this patient',
+                  'Error loading therapy photos',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -688,19 +692,19 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          print('🔍 No Journal documents found for parentId: $searchId');
+          print('🔍 No TherapyPhotos documents found for parentId: $searchParentId, clinicId: $searchClinicId');
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.book_outlined,
+                  Icons.photo_outlined,
                   size: 64,
                   color: Colors.grey,
                 ),
                 SizedBox(height: 16),
                 Text(
-                  'This journal is empty',
+                  'No therapy photos',
                   style: TextStyle(
                     fontSize: 18,
                     color: Colors.grey,
@@ -709,7 +713,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'No journal entries have been created yet',
+                  'No therapy photos have been uploaded yet',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -722,7 +726,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
         }
 
         final records = snapshot.data!.docs;
-        print('🔍 Found ${records.length} Journal documents for this parent');
+        print('🔍 Found ${records.length} TherapyPhotos documents for this patient');
 
         return Column(
           children: [
@@ -742,7 +746,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
               ),
               child: Row(
                 children: [
-                  _buildRecordStat('Total Records', records.length.toString()),
+                  _buildRecordStat('Total Photos', records.length.toString()),
                   _buildRecordStat(
                       'This Month', _getThisMonthCount(records).toString()),
                   _buildRecordStat(
@@ -751,13 +755,13 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
               ),
             ),
             const SizedBox(height: 20),
-            // Records list
+            // Photos list
             Expanded(
               child: ListView.builder(
                 itemCount: records.length,
                 itemBuilder: (context, index) {
                   final record = records[index].data() as Map<String, dynamic>;
-                  return _buildJournalCard(record);
+                  return _buildTherapyPhotoCard(record);
                 },
               ),
             ),
@@ -1095,6 +1099,440 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
         ],
       ),
     );
+  }
+
+  Widget _buildTherapyPhotoCard(Map<String, dynamic> record) {
+    final photoUrl = record['photoUrl'] as String?;
+    final materialTitle = record['associatedMaterialTitle'] as String? ?? 'Unknown Material';
+    final materialCategory = record['associatedMaterialCategory'] as String? ?? 'general';
+    final uploadedAt = record['uploadedAt'];
+    final notes = record['notes'] as String? ?? '';
+    final fileName = record['fileName'] as String? ?? '';
+    final fileSize = record['fileSize'] as int? ?? 0;
+    final viewed = record['viewed'] as bool? ?? false;
+
+    // Category color mapping
+    Color getCategoryColor(String category) {
+      switch (category.toLowerCase()) {
+        case 'speech':
+          return const Color(0xFFFFA07A);
+        case 'motor':
+        case 'physical':
+          return const Color(0xFF87CEEB);
+        case 'occupational':
+          return const Color(0xFFE8A87C);
+        case 'cognitive':
+          return const Color(0xFF98FB98);
+        default:
+          return const Color(0xFFDDD6FE);
+      }
+    }
+
+    // Category icon mapping
+    IconData getCategoryIcon(String category) {
+      switch (category.toLowerCase()) {
+        case 'speech':
+          return Icons.record_voice_over;
+        case 'motor':
+        case 'physical':
+          return Icons.fitness_center;
+        case 'occupational':
+          return Icons.accessibility_new;
+        case 'cognitive':
+          return Icons.psychology;
+        default:
+          return Icons.folder;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with material info and status
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Category icon
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: getCategoryColor(materialCategory),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    getCategoryIcon(materialCategory),
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Material info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        materialTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2D3748),
+                        ),
+                      ),
+                      Text(
+                        materialCategory.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: getCategoryColor(materialCategory),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Upload date and viewed status
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _formatDate(uploadedAt),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF718096),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: viewed ? Colors.green[100] : Colors.orange[100],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        viewed ? 'Viewed' : 'New',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: viewed ? Colors.green[700] : Colors.orange[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          // Photo preview
+          if (photoUrl != null)
+            GestureDetector(
+              onTap: () => _showFullScreenPhoto(photoUrl, materialTitle, record),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                height: 200,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Stack(
+                    children: [
+                      Image.network(
+                        photoUrl,
+                        width: double.infinity,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            height: 200,
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF006D63),
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Failed to load image',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      // Tap to expand overlay
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Icon(
+                            Icons.fullscreen,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          
+          // Notes and file info
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (notes.isNotEmpty) ...[
+                  const Text(
+                    'Notes:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF4A5568),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notes,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF4A5568),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                // File details
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Color(0xFF718096),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        '$fileName • ${_formatFileSize(fileSize)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF718096),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreenPhoto(String photoUrl, String title, Map<String, dynamic> photoData) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            // Photo viewer
+            Center(
+              child: InteractiveViewer(
+                maxScale: 5.0,
+                minScale: 0.1,
+                child: Image.network(
+                  photoUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.white,
+                            size: 64,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Failed to load image',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            
+            // Header with close button and info
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black54,
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            _formatDate(photoData['uploadedAt']),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Bottom info panel
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  bottom: MediaQuery.of(context).padding.bottom + 16,
+                  top: 16,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black54,
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (photoData['notes'] != null && photoData['notes'].toString().isNotEmpty)
+                      Text(
+                        photoData['notes'].toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Category: ${photoData['associatedMaterialCategory']?.toString().toUpperCase() ?? 'GENERAL'}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
   }
 
   Widget _buildSimpleScheduleCard(Map<String, dynamic> booking) {
@@ -2031,7 +2469,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
 
     return records.where((record) {
       final data = record.data() as Map<String, dynamic>;
-      final timestamp = data['createdAt'] ?? data['timestamp'];
+      final timestamp = data['uploadedAt'] ?? data['createdAt'] ?? data['timestamp'];
       if (timestamp == null) return false;
 
       DateTime recordDate;
@@ -2052,7 +2490,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
 
     return records.where((record) {
       final data = record.data() as Map<String, dynamic>;
-      final timestamp = data['createdAt'] ?? data['timestamp'];
+      final timestamp = data['uploadedAt'] ?? data['createdAt'] ?? data['timestamp'];
       if (timestamp == null) return false;
 
       DateTime recordDate;
