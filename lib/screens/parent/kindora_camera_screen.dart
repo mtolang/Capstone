@@ -23,7 +23,7 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
 
   Future<void> _requestPermissions() async {
     final cameraStatus = await Permission.camera.request();
-    
+
     if (cameraStatus.isGranted) {
       _initializeCamera();
     } else {
@@ -77,7 +77,7 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
       );
 
       await _controller!.initialize();
-      
+
       if (mounted) {
         setState(() {
           _isInitialized = true;
@@ -109,7 +109,9 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
   }
 
   Future<void> _takePicture() async {
-    if (_controller == null || !_controller!.value.isInitialized || _isProcessing) {
+    if (_controller == null ||
+        !_controller!.value.isInitialized ||
+        _isProcessing) {
       return;
     }
 
@@ -120,7 +122,7 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
     try {
       // Take picture
       final XFile image = await _controller!.takePicture();
-      
+
       // Navigate to preview screen
       if (mounted) {
         final result = await Navigator.push(
@@ -214,7 +216,7 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
                 Positioned.fill(
                   child: CameraPreview(_controller!),
                 ),
-                
+
                 // App bar background overlay
                 Positioned(
                   top: 0,
@@ -235,7 +237,7 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
                     ),
                   ),
                 ),
-                
+
                 // Camera controls overlay
                 Positioned(
                   bottom: 0,
@@ -282,7 +284,7 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        
+
                         // Snap Button
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -303,11 +305,11 @@ class _KindoraCameraScreenState extends State<KindoraCameraScreen> {
                                   margin: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: _isProcessing 
-                                        ? Colors.grey 
+                                    color: _isProcessing
+                                        ? Colors.grey
                                         : const Color(0xFF006A5B),
                                   ),
-                                  child: _isProcessing 
+                                  child: _isProcessing
                                       ? const Center(
                                           child: CircularProgressIndicator(
                                             color: Colors.white,
