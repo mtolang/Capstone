@@ -53,14 +53,17 @@ class _PhotoSendFormScreenState extends State<PhotoSendFormScreen> {
         _isLoading = true;
       });
 
-      // Get materials that match the parent ID
-      final materialsQuery = await _firestore
+      // First, try to get materials that match the parent ID
+      print('Loading materials for parent: $_parentId');
+      
+      // Get materials from ClinicMaterials collection
+      final clinicMaterialsQuery = await _firestore
           .collection('ClinicMaterials')
           .where('parentId', isEqualTo: _parentId)
           .where('isActive', isEqualTo: true)
           .get();
 
-      // Also check Materials collection as fallback
+      // Also check the main Materials collection
       final generalMaterialsQuery = await _firestore
           .collection('Materials')
           .where('parentId', isEqualTo: _parentId)
@@ -70,13 +73,13 @@ class _PhotoSendFormScreenState extends State<PhotoSendFormScreen> {
       List<Map<String, dynamic>> materials = [];
 
       // Add clinic materials
-      for (var doc in materialsQuery.docs) {
+      for (var doc in clinicMaterialsQuery.docs) {
         var data = doc.data();
         data['docId'] = doc.id;
         data['collection'] = 'ClinicMaterials';
         materials.add(data);
         
-        // Store child and clinic info for the form
+        // Store child and clinic info for the form (from first material)
         if (_childId.isEmpty && data['childId'] != null) {
           _childId = data['childId'];
           _childName = data['childName'] ?? '';
@@ -90,7 +93,21 @@ class _PhotoSendFormScreenState extends State<PhotoSendFormScreen> {
         data['docId'] = doc.id;
         data['collection'] = 'Materials';
         materials.add(data);
+        
+        // Store child and clinic info if not already set
+        if (_childId.isEmpty && data['childId'] != null) {
+          _childId = data['childId'];
+          _childName = data['childName'] ?? '';
+          _clinicId = data['clinicId'] ?? '';
+        }
       }
+
+      // Sort materials by category and title
+      materials.sort((a, b) {
+        int categoryCompare = (a['category'] ?? '').compareTo(b['category'] ?? '');
+        if (categoryCompare != 0) return categoryCompare;
+        return (a['title'] ?? '').compareTo(b['title'] ?? '');
+      });
 
       setState(() {
         _availableMaterials = materials;
@@ -98,11 +115,23 @@ class _PhotoSendFormScreenState extends State<PhotoSendFormScreen> {
       });
 
       print('Loaded ${materials.length} materials for parent $_parentId');
+      if (materials.isNotEmpty) {
+        print('Child ID: $_childId, Child Name: $_childName, Clinic ID: $_clinicId');
+      }
     } catch (e) {
       print('Error loading materials: $e');
       setState(() {
         _isLoading = false;
       });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading materials: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -371,70 +400,140 @@ class _PhotoSendFormScreenState extends State<PhotoSendFormScreen> {
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(color: Colors.orange[200]!),
                                     ),
-                                    child: Row(
+                                    child: Column(
                                       children: [
-                                        Icon(Icons.info_outline, color: Colors.orange[700]),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'No materials found for your account. Please contact your therapist.',
-                                            style: TextStyle(color: Colors.orange[700]),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.info_outline, color: Colors.orange[700]),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'No materials found for your account',
+                                                style: TextStyle(
+                                                  color: Colors.orange[700],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Please contact your therapist to ensure materials are assigned to your account ($_parentId)',
+                                          style: TextStyle(
+                                            color: Colors.orange[600],
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
                                     ),
                                   )
                                 else
-                                  DropdownButtonFormField<String>(
-                                    value: _selectedMaterial,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide(color: Colors.grey[300]!),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide(color: Colors.grey[300]!),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: const BorderSide(color: Color(0xFF006A5B)),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey[50],
-                                      hintText: 'Select a material...',
-                                    ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      DropdownButtonFormField<String>(
+                                        value: _selectedMaterial,
+                                        decoration: InputDecoration(
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide(color: Colors.grey[300]!),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide(color: Colors.grey[300]!),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: const BorderSide(color: Color(0xFF006A5B)),
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.grey[50],
+                                          hintText: 'Select a material...',
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        ),
+                                        isExpanded: true,
+                                        menuMaxHeight: 300,
                                     items: _availableMaterials.map((material) {
+                                      String categoryDisplay = (material['category'] ?? 'unknown').toLowerCase();
+                                      String categoryIcon = '';
+                                      switch (categoryDisplay) {
+                                        case 'speech':
+                                          categoryIcon = '🗣️';
+                                          break;
+                                        case 'motor':
+                                        case 'physical':
+                                          categoryIcon = '🏃';
+                                          break;
+                                        case 'occupational':
+                                          categoryIcon = '🧩';
+                                          break;
+                                        case 'cognitive':
+                                          categoryIcon = '🧠';
+                                          break;
+                                        default:
+                                          categoryIcon = '📚';
+                                      }
+                                      
                                       return DropdownMenuItem<String>(
                                         value: material['docId'],
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              material['title'] ?? 'Untitled Material',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w500,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 4),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(categoryIcon, style: const TextStyle(fontSize: 16)),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      material['title'] ?? 'Untitled Material',
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w500,
+                                                        fontSize: 14,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ),
-                                            Text(
-                                              '${material['category']} • ${material['collection']}',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey[600],
+                                              const SizedBox(height: 2),
+                                              Padding(
+                                                padding: const EdgeInsets.only(left: 24),
+                                                child: Text(
+                                                  '${categoryDisplay.toUpperCase()} • ${material['collection']}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       );
                                     }).toList(),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _selectedMaterial = value;
-                                        _selectedMaterialData = _availableMaterials
-                                            .firstWhere((material) => material['docId'] == value);
-                                      });
-                                    },
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _selectedMaterial = value;
+                                            _selectedMaterialData = _availableMaterials
+                                                .firstWhere((material) => material['docId'] == value);
+                                          });
+                                        },
+                                      ),
+                                      
+                                      // Show material count
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '${_availableMaterials.length} materials available',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
                                   ),
 
                                 // Selected Material Details
