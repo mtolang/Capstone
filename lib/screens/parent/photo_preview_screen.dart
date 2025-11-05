@@ -2,9 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'photo_send_form_screen.dart';
 
 // Photo Preview Screen - Delete, Save, Send
 class PhotoPreviewScreen extends StatelessWidget {
@@ -133,135 +131,17 @@ class PhotoPreviewScreen extends StatelessWidget {
   }
 
   Future<void> _sendPhoto(BuildContext context) async {
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Send Photo',
-          style: TextStyle(color: Color(0xFF006A5B)),
-        ),
-        content: const Text(
-          'Do you want to send this photo to your therapy team? They will be able to view it in your session records.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF006A5B),
-            ),
-            child: const Text('Send', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+    // Navigate to the send form screen
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PhotoSendFormScreen(imagePath: imagePath),
       ),
     );
 
-    if (confirmed != true) return;
-
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Color(0xFF006A5B)),
-                SizedBox(height: 16),
-                Text('Sending photo to therapy team...'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    try {
-      // Upload to your system
-      await _uploadToServer(imagePath);
-
-      if (context.mounted) {
-        Navigator.pop(context); // Close loading dialog
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Photo sent successfully to therapy team!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        Navigator.pop(context, 'sent');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context); // Close loading dialog
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send photo: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _uploadToServer(String filePath) async {
-    try {
-      // Get user information from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id') ??
-          prefs.getString('parent_id') ??
-          'unknown_user';
-      final userName = prefs.getString('parent_name') ??
-          prefs.getString('user_name') ??
-          'Unknown User';
-
-      final file = File(filePath);
-      final fileName = path.basename(filePath);
-      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final uniqueFileName = 'kindora_${timestamp}_$fileName';
-
-      // Upload to Firebase Storage
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('therapy_photos')
-          .child('parent_uploads')
-          .child(uniqueFileName);
-
-      final uploadTask = await ref.putFile(file);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-
-      // Save metadata to Firestore
-      await FirebaseFirestore.instance.collection('TherapyPhotos').add({
-        'photoUrl': downloadUrl,
-        'fileName': fileName,
-        'uniqueFileName': uniqueFileName,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'uploadedBy': userName,
-        'uploadedById': userId,
-        'uploaderType': 'parent',
-        'sessionId': null, // Can be linked to therapy session later
-        'clientId': userId, // Link to the parent's child
-        'notes': 'Photo taken with Kindora camera app',
-        'isActive': true,
-        'fileSize': await file.length(),
-        'storagePath': ref.fullPath,
-        'category': 'progress_photo',
-        'tags': ['kindora_camera', 'parent_upload', 'therapy_progress'],
-      });
-
-      print('Photo uploaded successfully to Firebase');
-    } catch (e) {
-      print('Upload error: $e');
-      throw Exception('Failed to upload photo: $e');
+    // Handle result from form screen
+    if (result == 'sent' && context.mounted) {
+      Navigator.pop(context, 'sent');
     }
   }
 
