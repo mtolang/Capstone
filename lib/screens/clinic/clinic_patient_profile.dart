@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'give_materials_screen.dart';
 
 class ClinicPatientProfile extends StatefulWidget {
   final String patientId;
@@ -1602,21 +1603,62 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
 
   Widget _buildFloatingActionMenu() {
     if (_isMenuOpen) {
-      // When menu is open, show a simple button that navigates directly
-      return FloatingActionButton.extended(
-        onPressed: () {
-          print('� Direct assessment navigation');
-          _navigateToAssessment();
-        },
-        backgroundColor: const Color(0xFF006D63),
-        icon: const Icon(Icons.assessment, color: Colors.white),
-        label: const Text(
-          'Assess Client',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+      // When menu is open, show menu options vertically
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Give Materials button
+          _buildMenuButton(
+            icon: Icons.folder_shared,
+            label: 'Assign Materials',
+            onTap: () {
+              print('📁 Assign Materials tapped');
+              setState(() {
+                _isMenuOpen = false;
+              });
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GiveMaterialsScreen(
+                    patientId: widget.patientId,
+                    patientName: widget.patientName,
+                    parentId: _parentId,
+                  ),
+                ),
+              );
+            },
           ),
-        ),
+          const SizedBox(height: 12),
+          // Assess Client button
+          _buildMenuButton(
+            icon: Icons.assessment,
+            label: 'Assess Client',
+            onTap: () {
+              print('📊 Direct assessment navigation');
+              setState(() {
+                _isMenuOpen = false;
+              });
+              _navigateToAssessment();
+            },
+          ),
+          const SizedBox(height: 16),
+          // Close button
+          FloatingActionButton(
+            onPressed: () {
+              print('❌ Closing menu');
+              setState(() {
+                _isMenuOpen = false;
+              });
+            },
+            backgroundColor: const Color(0xFF006D63),
+            child: const Icon(
+              Icons.close,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+        ],
       );
     } else {
       // When menu is closed, show the toggle button

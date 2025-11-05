@@ -28,30 +28,35 @@ class ParentMaterialsService {
         .snapshots();
   }
 
-  // Get materials for specific therapy type and clinic - searches both Materials and ClinicMaterials
-  static Stream<QuerySnapshot> getTherapyMaterials(String therapyType, {String? clinicId}) {
-    // If clinicId is provided, prioritize ClinicMaterials collection
-    if (clinicId != null && clinicId.isNotEmpty) {
-      print('🎯 Querying ClinicMaterials for therapy: $therapyType, clinic: $clinicId');
-      return _firestore
-          .collection(_clinicMaterialsCollection)
-          .where('category', isEqualTo: therapyType.toLowerCase())
-          .where('clinicId', isEqualTo: clinicId)
-          .where('isActive', isEqualTo: true)
-          // Removed orderBy to avoid composite index requirement
-          .snapshots();
+  // Get materials for specific therapy type that were shared with this parent
+  static Stream<QuerySnapshot> getTherapyMaterials(String therapyType, {String? clinicId, String? parentId}) {
+    print('🎯 Querying Materials collection for shared materials');
+    print('   - therapy: $therapyType');
+    print('   - parentId: $parentId');
+    print('   - clinicId: $clinicId');
+    
+    Query query = _firestore
+        .collection(_materialsCollection);
+    
+    // Filter by category/therapy type
+    if (therapyType.toLowerCase() != 'all') {
+      query = query.where('category', isEqualTo: therapyType.toLowerCase());
     }
     
-    // Fallback to Materials collection for general/public materials
-    print('📚 Querying Materials collection for therapy: $therapyType (no clinic filter)');
-    Query query = _firestore
-        .collection(_materialsCollection)
-        .where('category', isEqualTo: therapyType.toLowerCase())
-        .where('isActive', isEqualTo: true);
+    // Filter by parentId if provided (most important filter)
+    if (parentId != null && parentId.isNotEmpty) {
+      query = query.where('parentId', isEqualTo: parentId);
+    }
     
-    return query
-        .orderBy('uploadedAt', descending: true)
-        .snapshots();
+    // Filter by clinicId if provided
+    if (clinicId != null && clinicId.isNotEmpty) {
+      query = query.where('clinicId', isEqualTo: clinicId);
+    }
+    
+    // Only show active materials
+    query = query.where('isActive', isEqualTo: true);
+    
+    return query.snapshots();
   }
 
   // Search materials by title or tags for specific therapy type and clinic
@@ -228,8 +233,11 @@ class _MaterialsPageState extends State<MaterialsPage> {
     print('  - user_id from prefs: $userId');
     print('  - parent_id from prefs: $parentId');
     
+    String finalParentId = userId ?? parentId ?? '';
+    print('✅ Final parent ID set to: $finalParentId');
+    
     setState(() {
-      _parentId = userId ?? parentId ?? '';
+      _parentId = finalParentId;
       _clinicId = ''; // Reset clinic ID for new user
     });
     
@@ -595,7 +603,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
     
     // Since "Physical Therapy" maps to "motor", show motor materials for CLI03
     return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getTherapyMaterials('motor', clinicId: _clinicId),
+      stream: ParentMaterialsService.getTherapyMaterials('motor', clinicId: _clinicId, parentId: _parentId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SliverToBoxAdapter(
@@ -987,7 +995,7 @@ class _MaterialsPageState extends State<MaterialsPage> {
     print('Building materials list for therapy: $therapyType, clinic: $clinicId');
     
     return StreamBuilder<QuerySnapshot>(
-      stream: ParentMaterialsService.getTherapyMaterials(therapyType, clinicId: clinicId),
+      stream: ParentMaterialsService.getTherapyMaterials(therapyType, clinicId: clinicId, parentId: _parentId),
       builder: (context, snapshot) {
         print('Snapshot connection state: ${snapshot.connectionState}');
         
@@ -2420,12 +2428,16 @@ class _MaterialsPageState extends State<MaterialsPage> {
 
   // Build Material Category Card
   Widget _buildMaterialCategoryCard(Map<String, dynamic> category) {
+    print('🔍 Building category card for: ${category['title']}');
+    print('   - parentId: $_parentId');
+    print('   - clinicId: $_clinicId');
+    
     return StreamBuilder<QuerySnapshot>(
-      stream: _clinicId.isNotEmpty
+      stream: _parentId.isNotEmpty
           ? FirebaseFirestore.instance
-              .collection('ClinicMaterials')
+              .collection('Materials')  // Changed from ClinicMaterials to Materials
               .where('category', isEqualTo: category['title'].toString().toLowerCase())
-              .where('clinicId', isEqualTo: _clinicId)
+              .where('parentId', isEqualTo: _parentId)  // Filter by parentId
               .where('isActive', isEqualTo: true)
               .snapshots()
           : null,
@@ -2433,6 +2445,14 @@ class _MaterialsPageState extends State<MaterialsPage> {
         int materialCount = 0;
         if (snapshot.hasData) {
           materialCount = snapshot.data!.docs.length;
+          print('📊 ${category['title']} category: $materialCount materials found');
+          // Debug: show what materials were found
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            print('   - Material: ${data['title']} | Category: ${data['category']} | ParentId: ${data['parentId']}');
+          }
+        } else {
+          print('📊 ${category['title']} category: No data yet');
         }
 
         return Container(
@@ -2538,7 +2558,6 @@ class _MaterialsPageState extends State<MaterialsPage> {
         builder: (context) => MaterialCategoryPage(
           categoryTitle: category,
           categoryColor: categoryColor,
-          clinicId: _clinicId,
         ),
       ),
     );
@@ -2552,7 +2571,6 @@ class _MaterialsPageState extends State<MaterialsPage> {
         builder: (context) => MaterialCategoryPage(
           categoryTitle: categoryTitle,
           categoryColor: categoryColor,
-          clinicId: _clinicId,
         ),
       ),
     );
@@ -3293,6 +3311,7 @@ class ParentMaterialFolderView extends StatelessWidget {
   final Color categoryColor;
   final String title;
   final String? clinicId;
+  final String? parentId;
 
   const ParentMaterialFolderView({
     Key? key,
@@ -3300,6 +3319,7 @@ class ParentMaterialFolderView extends StatelessWidget {
     required this.categoryColor,
     required this.title,
     this.clinicId,
+    this.parentId,
   }) : super(key: key);
 
   @override
@@ -3316,7 +3336,7 @@ class ParentMaterialFolderView extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: clinicId),
+        stream: ParentMaterialsService.getTherapyMaterials(category, clinicId: clinicId, parentId: parentId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
@@ -4131,47 +4151,86 @@ class _MaterialsPageContentState extends State<MaterialsPageContent> {
 }
 
 // Material Category Page for viewing specific category materials
-class MaterialCategoryPage extends StatelessWidget {
+class MaterialCategoryPage extends StatefulWidget {
   final String categoryTitle;
   final Color categoryColor;
-  final String clinicId;
 
   const MaterialCategoryPage({
     super.key,
     required this.categoryTitle,
     required this.categoryColor,
-    required this.clinicId,
   });
+
+  @override
+  State<MaterialCategoryPage> createState() => _MaterialCategoryPageState();
+}
+
+class _MaterialCategoryPageState extends State<MaterialCategoryPage> {
+  String? _parentId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadParentId();
+  }
+
+  Future<void> _loadParentId() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _parentId = prefs.getString('user_id') ?? prefs.getString('parent_id');
+      print('📱 MaterialCategoryPage loaded parentId: $_parentId');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '$categoryTitle Materials',
+          '${widget.categoryTitle} Materials',
           style: const TextStyle(color: Colors.white),
         ),
-        backgroundColor: categoryColor,
+        backgroundColor: widget.categoryColor,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: clinicId.isNotEmpty
-            ? FirebaseFirestore.instance
-                .collection('ClinicMaterials')
-                .where('category', isEqualTo: categoryTitle.toLowerCase())
-                .where('clinicId', isEqualTo: clinicId)
-                .where('isActive', isEqualTo: true)
-                .snapshots()
-            : null,
-        builder: (context, snapshot) {
+      body: _parentId == null
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('Materials')
+                  .where('parentId', isEqualTo: _parentId)
+                  .where('category', isEqualTo: widget.categoryTitle.toLowerCase())
+                  .snapshots(),
+              builder: (context, snapshot) {
+          print('🔍 MaterialCategoryPage Query Debug:');
+          print('   - Category: ${widget.categoryTitle.toLowerCase()}');
+          print('   - ParentId: $_parentId');
+          print('   - Connection State: ${snapshot.connectionState}');
+          
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
+            print('❌ Query Error: ${snapshot.error}');
             return Center(
               child: Text('Error: ${snapshot.error}'),
             );
+          }
+
+          print('   - Has Data: ${snapshot.hasData}');
+          print('   - Doc Count: ${snapshot.hasData ? snapshot.data!.docs.length : 0}');
+          
+          if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+            print('📄 Found documents:');
+            for (var doc in snapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              print('   Doc ${doc.id}: ${data.keys.toList()}');
+              print('   - parentId: ${data['parentId']}');
+              print('   - clinicId: ${data['clinicId']}');
+              print('   - category: ${data['category']}');
+              print('   - title: ${data['title']}');
+            }
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -4186,7 +4245,7 @@ class MaterialCategoryPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'No $categoryTitle materials found',
+                    'No ${widget.categoryTitle} materials found',
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.grey.shade600,
@@ -4223,12 +4282,12 @@ class MaterialCategoryPage extends StatelessWidget {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color: categoryColor.withOpacity(0.1),
+                      color: widget.categoryColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.picture_as_pdf,
-                      color: categoryColor,
+                      color: widget.categoryColor,
                       size: 30,
                     ),
                   ),
@@ -4264,7 +4323,7 @@ class MaterialCategoryPage extends StatelessWidget {
                       IconButton(
                         icon: Icon(
                           Icons.download,
-                          color: categoryColor,
+                          color: widget.categoryColor,
                           size: 24,
                         ),
                         onPressed: () => _downloadMaterial(context, material),
@@ -4272,7 +4331,7 @@ class MaterialCategoryPage extends StatelessWidget {
                       ),
                       Icon(
                         Icons.arrow_forward_ios,
-                        color: categoryColor,
+                        color: widget.categoryColor,
                         size: 16,
                       ),
                     ],
@@ -4284,7 +4343,7 @@ class MaterialCategoryPage extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (context) => MaterialViewer(
                           material: material,
-                          categoryColor: categoryColor,
+                          categoryColor: widget.categoryColor,
                         ),
                       ),
                     );
@@ -4318,11 +4377,11 @@ class MaterialCategoryPage extends StatelessWidget {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (BuildContext context) {
+        builder: (BuildContext dialogContext) {
           return AlertDialog(
             content: Row(
               children: [
-                CircularProgressIndicator(color: categoryColor),
+                CircularProgressIndicator(color: widget.categoryColor),
                 const SizedBox(width: 20),
                 const Text('Downloading...'),
               ],

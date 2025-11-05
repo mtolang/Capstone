@@ -618,16 +618,6 @@ class MaterialFolderView extends StatelessWidget {
                       _handleMenuAction(context, value, docId, material),
                   itemBuilder: (context) => [
                     const PopupMenuItem(
-                      value: 'share',
-                      child: Row(
-                        children: [
-                          Icon(Icons.share, size: 20),
-                          SizedBox(width: 8),
-                          Text('Share'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
                       value: 'edit',
                       child: Row(
                         children: [
@@ -839,15 +829,6 @@ class MaterialFolderView extends StatelessWidget {
   void _handleMenuAction(BuildContext context, String action, String docId,
       Map<String, dynamic> material) {
     switch (action) {
-      case 'share':
-        // TODO: Implement sharing
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sharing ${material['title']}...'),
-            backgroundColor: categoryColor,
-          ),
-        );
-        break;
       case 'edit':
         // TODO: Implement editing
         _showEditMaterialDialog(context, docId, material);
