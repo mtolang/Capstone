@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'final_evaluation_form.dart';
+import 'add_session_form.dart';
+import 'final_evaluation_list.dart';
 
 class ClientProgressDetailPage extends StatefulWidget {
   final Map<String, dynamic> clientData;
@@ -26,6 +28,43 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
   void initState() {
     super.initState();
     _loadAssessments();
+  }
+
+  Future<void> _navigateToAddSession() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddSessionForm(
+          clientData: widget.clientData,
+          clinicId: widget.clinicId,
+        ),
+      ),
+    );
+
+    // Refresh data if session was added
+    if (result == true) {
+      setState(() {
+        isLoading = true;
+      });
+      await _loadAssessments();
+    }
+  }
+
+  Future<void> _navigateToViewEvaluations() async {
+    final clientId = widget.clientData['clientId']?.toString() ?? '';
+    final childName = widget.clientData['childName']?.toString() ?? 
+                      widget.clientData['patientName']?.toString() ?? 
+                      'Unknown';
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FinalEvaluationList(
+          patientId: clientId,
+          childName: childName,
+        ),
+      ),
+    );
   }
 
   Future<void> _navigateToFinalEvaluation() async {
@@ -378,6 +417,13 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
           ),
         ),
         actions: [
+          // View Evaluations Button
+          IconButton(
+            onPressed: _navigateToViewEvaluations,
+            icon: const Icon(Icons.folder_open, color: Colors.white),
+            tooltip: 'View Final Evaluations',
+          ),
+          // Create Final Evaluation Button
           if (assessments.isNotEmpty)
             IconButton(
               onPressed: _navigateToFinalEvaluation,
@@ -386,10 +432,32 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
             ),
         ],
       ),
-      floatingActionButton: assessments.isNotEmpty
-          ? FloatingActionButton.extended(
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Add Session Button
+          FloatingActionButton.extended(
+            onPressed: _navigateToAddSession,
+            backgroundColor: const Color(0xFF006A5B),
+            heroTag: 'addSession',
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text(
+              'Add Session',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Final Evaluation Button (only show if there are sessions)
+          if (assessments.isNotEmpty)
+            FloatingActionButton.extended(
               onPressed: _navigateToFinalEvaluation,
-              backgroundColor: const Color(0xFF006A5B),
+              backgroundColor: const Color(0xFFFF9800),
+              heroTag: 'finalEvaluation',
               icon: const Icon(Icons.assignment_turned_in, color: Colors.white),
               label: const Text(
                 'Final Evaluation',
@@ -399,8 +467,9 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
                   fontFamily: 'Poppins',
                 ),
               ),
-            )
-          : null,
+            ),
+        ],
+      ),
       body: isLoading
           ? const Center(
               child: CircularProgressIndicator(
@@ -448,48 +517,79 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.assessment_outlined,
-            size: 80,
-            color: Colors.grey[300],
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF006A5B).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.note_add_outlined,
+              size: 80,
+              color: const Color(0xFF006A5B),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Text(
-            'No Sessions Found',
+            'No Sessions Yet',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
+              color: Colors.grey[800],
               fontFamily: 'Poppins',
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            'No therapy sessions were found for this client.',
+            'Start tracking therapy progress by adding\nthe first session for this client.',
             style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
+              fontSize: 15,
+              color: Colors.grey[600],
               fontFamily: 'Poppins',
+              height: 1.5,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 32),
 
-          // Retry button
-          ElevatedButton(
+          // Add First Session Button
+          ElevatedButton.icon(
+            onPressed: _navigateToAddSession,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006A5B),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 2,
+            ),
+            icon: const Icon(Icons.add, size: 24),
+            label: const Text(
+              'Add First Session',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Or Retry Loading
+          TextButton(
             onPressed: () {
               setState(() {
                 isLoading = true;
               });
               _loadAssessments();
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF006A5B),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text(
-              'Retry Loading',
-              style: TextStyle(fontFamily: 'Poppins'),
+            child: Text(
+              'Or Retry Loading',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontFamily: 'Poppins',
+              ),
             ),
           ),
 
