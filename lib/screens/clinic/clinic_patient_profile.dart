@@ -494,42 +494,36 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
         splashFactory: NoSplash.splashFactory,
         tabs: [
           Tab(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.info_outline, size: 16),
-                  SizedBox(width: 4),
-                  Text('Info'),
-                ],
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.info_outline, size: 16),
+                SizedBox(width: 4),
+                Text('Info'),
+              ],
             ),
           ),
           Tab(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.library_books, size: 16),
-                  SizedBox(width: 4),
-                  Text('Records'),
-                ],
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.library_books, size: 16),
+                SizedBox(width: 4),
+                Text('Records'),
+              ],
             ),
           ),
           Tab(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.calendar_today, size: 16),
-                  SizedBox(width: 4),
-                  Text('Schedule'),
-                ],
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.calendar_today, size: 16),
+                SizedBox(width: 4),
+                Text('Schedule'),
+              ],
             ),
           ),
         ],
@@ -713,13 +707,21 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
           print('🔥 TEST QUERY ERROR: $error');
         });
 
-    // Query TherapyPhotos using uploadedById (matches parent ID) and clinicId
-    // TESTING: Let's try the simplest query first
+    // Query TherapyPhotos using uploadedById (matches parent ID) to filter by specific parent
+    // Simplified query without orderBy to avoid index requirement
+    print('🔍 === EXECUTING QUERY ===');
+    print('🔍 Query: TherapyPhotos where uploadedById = "$finalParentId"');
+    
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('TherapyPhotos')
-          .limit(10)
-          .snapshots(),
+      stream: finalParentId.isNotEmpty && finalParentId != 'null'
+          ? FirebaseFirestore.instance
+              .collection('TherapyPhotos')
+              .where('uploadedById', isEqualTo: finalParentId)
+              .snapshots()
+          : FirebaseFirestore.instance
+              .collection('TherapyPhotos')
+              .where('childName', isEqualTo: widget.patientName)
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -736,7 +738,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
           if (snapshot.stackTrace != null) {
             print('🔥 Stack trace: ${snapshot.stackTrace}');
           }
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -747,7 +749,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
                 ),
                 SizedBox(height: 16),
                 Text(
-                  'No therapy photos',
+                  'Error loading therapy photos',
                   style: TextStyle(
                     fontSize: 18,
                     color: Colors.grey,
@@ -756,10 +758,10 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Error loading therapy photos',
+                  '${snapshot.error}',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
+                    fontSize: 12,
+                    color: Colors.red,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -770,6 +772,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
 
         final allRecords = snapshot.data?.docs ?? [];
         print('🔍 === QUERY RESULTS ===');
+        print('🔍 Queried for parentId: "$finalParentId"');
         print('🔍 Total TherapyPhotos found: ${allRecords.length}');
         
         // Debug: Print all available documents for debugging
@@ -777,6 +780,7 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
           final data = allRecords[i].data() as Map<String, dynamic>;
           print('🔍 TherapyPhoto $i:');
           print('    uploadedById: "${data['uploadedById']}"');
+          print('    parentId: "${data['parentId']}"');
           print('    clinicId: "${data['clinicId']}"'); 
           print('    childName: "${data['childName']}"');
           print('    category: "${data['category']}"');
@@ -784,8 +788,8 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
           print('    photoUrl: "${data['photoUrl']}"');
         }
 
-        // Filter records by isActive (since we already filter by clinicId in the query)
-        final records = allRecords.where((doc) {
+        // Filter records by isActive and sort by uploadedAt
+        var records = allRecords.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final docIsActive = data['isActive'] as bool?;
           
@@ -796,6 +800,17 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
           
           return isActive;
         }).toList();
+        
+        // Sort by uploadedAt (client-side)
+        records.sort((a, b) {
+          final aData = a.data() as Map<String, dynamic>;
+          final bData = b.data() as Map<String, dynamic>;
+          final aTime = aData['uploadedAt'] as Timestamp?;
+          final bTime = bData['uploadedAt'] as Timestamp?;
+          
+          if (aTime == null || bTime == null) return 0;
+          return bTime.compareTo(aTime); // descending order
+        });
 
         print('🔍 === FINAL RESULTS ===');
         print('🔍 Active records count: ${records.length}');

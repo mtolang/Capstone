@@ -81,7 +81,7 @@ class _ParentLoginState extends State<ParentLogin> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text(
           'Carer Login',
@@ -91,38 +91,41 @@ class _ParentLoginState extends State<ParentLogin> {
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: ConstrainedBox(
-                constraints: BoxConstraints.expand(height: size.height * 0.2),
-                child: Image.asset(
-                  'asset/images/WAVE.png',
-                  fit: BoxFit.cover,
+        child: SingleChildScrollView(
+          child: SizedBox(
+            height: size.height - AppBar().preferredSize.height - MediaQuery.of(context).padding.top,
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints.expand(height: size.height * 0.2),
+                    child: Image.asset(
+                      'asset/images/WAVE.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: ConstrainedBox(
-                constraints: BoxConstraints.expand(height: size.height * 0.30),
-                child: Image.asset(
-                  'asset/images/WAVE (1).png',
-                  fit: BoxFit.cover,
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints.expand(height: size.height * 0.30),
+                    child: Image.asset(
+                      'asset/images/WAVE (1).png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(45.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                Padding(
+                  padding: const EdgeInsets.all(45.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                   Image.asset(
                     'asset/logo1.png',
                     height: 100,
@@ -216,6 +219,8 @@ class _ParentLoginState extends State<ParentLogin> {
               ),
             ),
           ],
+        ),
+          ),
         ),
       ),
     );
