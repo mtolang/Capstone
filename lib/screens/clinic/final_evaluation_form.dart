@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'final_evaluation_viewer.dart';
 
 class FinalEvaluationForm extends StatefulWidget {
   final Map<String, dynamic> clientData;
@@ -21,6 +25,8 @@ class FinalEvaluationForm extends StatefulWidget {
 class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
+  String? _savedEvaluationId; // Store the evaluation ID after saving
+  bool _isEvaluationSaved = false; // Track if evaluation is saved
 
   // Overall Assessment
   final TextEditingController _overallSummaryController = TextEditingController();
@@ -394,22 +400,80 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
             ),
             const SizedBox(height: 30),
             
-            // Submit Button
-            SizedBox(
-              height: 55,
-              child: ElevatedButton(
-                onPressed: _isSaving ? null : _submitEvaluation,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF006A5B),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            // Action Buttons Section
+            if (!_isEvaluationSaved)
+              // Save Button (shows before evaluation is saved)
+              SizedBox(
+                height: 55,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _submitEvaluation,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF006A5B),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
                   ),
-                  elevation: 2,
+                  child: _isSaving
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Save Final Evaluation',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
                 ),
-                child: _isSaving
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        'Submit Final Evaluation',
+              )
+            else
+              // View and Export Buttons (shows after evaluation is saved)
+              Column(
+                children: [
+                  // Success message
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green, width: 2),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green[700], size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Final evaluation saved successfully!',
+                            style: TextStyle(
+                              color: Colors.green[700],
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // View Evaluation Button
+                  SizedBox(
+                    height: 55,
+                    child: ElevatedButton.icon(
+                      onPressed: _viewEvaluation,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF006A5B),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                      ),
+                      icon: const Icon(Icons.visibility, color: Colors.white, size: 24),
+                      label: const Text(
+                        'View Final Evaluation',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -417,8 +481,36 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
                           fontFamily: 'Poppins',
                         ),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Export as PDF Button
+                  SizedBox(
+                    height: 55,
+                    child: ElevatedButton.icon(
+                      onPressed: _exportEvaluationAsPDF,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF9800),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                      ),
+                      icon: const Icon(Icons.picture_as_pdf, color: Colors.white, size: 24),
+                      label: const Text(
+                        'Export as PDF',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -985,18 +1077,34 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
       };
 
       // Save to Firestore
-      await FirebaseFirestore.instance
+      final docRef = await FirebaseFirestore.instance
           .collection('FinalEvaluations')
           .add(evaluationData);
 
       if (mounted) {
+        setState(() {
+          _savedEvaluationId = docRef.id;
+          _isEvaluationSaved = true;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Final evaluation submitted successfully!'),
+            content: Text('Final evaluation saved successfully! You can now view or export it.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate success
+        
+        // Scroll to bottom to show the new buttons
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Scrollable.ensureVisible(
+              context,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeInOut,
+            );
+          }
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -1014,6 +1122,295 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
         });
       }
     }
+  }
+
+  void _viewEvaluation() {
+    if (_savedEvaluationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No evaluation found. Please save the evaluation first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FinalEvaluationViewer(
+          evaluationId: _savedEvaluationId!,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportEvaluationAsPDF() async {
+    if (_savedEvaluationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No evaluation found. Please save the evaluation first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFF006A5B)),
+        ),
+      );
+
+      // Fetch the evaluation data from Firestore
+      final doc = await FirebaseFirestore.instance
+          .collection('FinalEvaluations')
+          .doc(_savedEvaluationId)
+          .get();
+
+      if (!doc.exists) {
+        if (mounted) Navigator.pop(context); // Close loading dialog
+        throw Exception('Evaluation not found');
+      }
+
+      final evaluation = doc.data()!;
+
+      // Create PDF document
+      final pdf = pw.Document();
+
+      // Add pages to PDF
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (context) => [
+            // Header
+            pw.Header(
+              level: 0,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'FINAL EVALUATION REPORT',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.teal800,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Divider(thickness: 2, color: PdfColors.teal800),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // Client Information
+            _buildPdfSection('Client Information', [
+              _buildPdfInfoRow('Child Name', evaluation['childName'] ?? 'N/A'),
+              _buildPdfInfoRow('Parent Name', evaluation['parentName'] ?? 'N/A'),
+              _buildPdfInfoRow('Age', evaluation['age']?.toString() ?? 'N/A'),
+              _buildPdfInfoRow('Total Sessions Completed', evaluation['totalSessionsCompleted']?.toString() ?? '0'),
+              _buildPdfInfoRow('Evaluation Date', evaluation['evaluationDate'] != null
+                  ? DateFormat('MMMM dd, yyyy').format((evaluation['evaluationDate'] as Timestamp).toDate())
+                  : 'N/A'),
+            ]),
+            pw.SizedBox(height: 20),
+
+            // Overall Assessment
+            _buildPdfSection('Overall Assessment', [
+              _buildPdfTextField('Overall Progress Summary', evaluation['overallSummary'] ?? ''),
+              _buildPdfTextField('Therapy Goals Achieved', evaluation['therapyGoalsAchieved'] ?? ''),
+              _buildPdfInfoRow('Progress Rating', evaluation['overallProgressRating'] ?? ''),
+              _buildPdfTextField('Progress Description', evaluation['progressDescription'] ?? ''),
+            ]),
+            pw.SizedBox(height: 20),
+
+            // Skills Development
+            _buildPdfSection('Skills Development Analysis', [
+              _buildPdfSkillSection('Fine Motor Skills', evaluation['fineMotorEvaluation']),
+              pw.SizedBox(height: 12),
+              _buildPdfSkillSection('Gross Motor Skills', evaluation['grossMotorEvaluation']),
+              pw.SizedBox(height: 12),
+              _buildPdfSkillSection('Cognitive Skills', evaluation['cognitiveEvaluation']),
+              pw.SizedBox(height: 12),
+              _buildPdfSkillSection('Sensory Processing', evaluation['sensoryEvaluation']),
+              pw.SizedBox(height: 12),
+              _buildPdfSkillSection('Social & Emotional Development', evaluation['socialEmotionalEvaluation']),
+            ]),
+            pw.SizedBox(height: 20),
+
+            // Recommendations
+            _buildPdfSection('Recommendations & Future Planning', [
+              _buildPdfTextField('Continue Therapy', evaluation['continueTherapyRecommendation'] ?? ''),
+              _buildPdfTextField('Home Exercise Program', evaluation['homeExerciseProgram'] ?? ''),
+              if (evaluation['schoolRecommendations'] != null && evaluation['schoolRecommendations'].toString().isNotEmpty)
+                _buildPdfTextField('School Recommendations', evaluation['schoolRecommendations']),
+              _buildPdfTextField('Follow-up Schedule', evaluation['followUpSchedule'] ?? ''),
+              if (evaluation['additionalServicesRecommended'] != null && evaluation['additionalServicesRecommended'].toString().isNotEmpty)
+                _buildPdfTextField('Additional Services', evaluation['additionalServicesRecommended']),
+              _buildPdfTextField('Parent Guidelines', evaluation['parentGuidelines'] ?? ''),
+            ]),
+            pw.SizedBox(height: 20),
+
+            // Discharge Planning (if applicable)
+            if (evaluation['isDischargeRecommended'] == true)
+              _buildPdfSection('Discharge Planning', [
+                _buildPdfTextField('Discharge Reason', evaluation['dischargeReason'] ?? ''),
+                _buildPdfTextField('Maintenance Plan', evaluation['maintenancePlan'] ?? ''),
+              ]),
+            if (evaluation['isDischargeRecommended'] == true)
+              pw.SizedBox(height: 20),
+
+            // Professional Information
+            _buildPdfSection('Professional Assessment', [
+              _buildPdfTextField('Therapist Notes', evaluation['therapistNotes'] ?? ''),
+              _buildPdfInfoRow('Therapist Name', evaluation['therapistName'] ?? ''),
+              _buildPdfInfoRow('License Number', evaluation['therapistLicense'] ?? ''),
+            ]),
+
+            // Footer
+            pw.SizedBox(height: 40),
+            pw.Divider(),
+            pw.Text(
+              'Generated on ${DateFormat('MMMM dd, yyyy - hh:mm a').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+            ),
+          ],
+        ),
+      );
+
+      if (mounted) Navigator.pop(context); // Close loading dialog
+
+      // Show PDF preview and allow user to save/print
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: 'Final_Evaluation_${evaluation['childName']}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF generated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        // Close loading dialog if still open
+        if (Navigator.canPop(context)) Navigator.pop(context);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Helper methods for PDF generation
+  pw.Widget _buildPdfSection(String title, List<pw.Widget> children) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          title,
+          style: pw.TextStyle(
+            fontSize: 18,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.teal800,
+          ),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfInfoRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 150,
+            child: pw.Text(
+              '$label:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Text(value, style: const pw.TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfTextField(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 6),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            value.isNotEmpty ? value : 'Not provided',
+            style: const pw.TextStyle(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfSkillSection(String skillName, dynamic skillData) {
+    if (skillData == null) {
+      return pw.Text('$skillName: No data available');
+    }
+
+    final currentLevel = skillData['currentLevel'] ?? 0;
+    final improvementNotes = skillData['improvementNotes'] ?? '';
+    final strengths = skillData['strengthsIdentified'] ?? '';
+    final areas = skillData['areasForDevelopment'] ?? '';
+    final recommended = skillData['recommendedActivities'] ?? '';
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          skillName,
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13, color: PdfColors.blue800),
+        ),
+        pw.SizedBox(height: 4),
+        _buildPdfInfoRow('Current Level', '$currentLevel/5'),
+        if (improvementNotes.isNotEmpty) _buildPdfInfoRow('Improvement Notes', improvementNotes),
+        if (strengths.isNotEmpty) _buildPdfInfoRow('Strengths', strengths),
+        if (areas.isNotEmpty) _buildPdfInfoRow('Areas for Development', areas),
+        if (recommended.isNotEmpty) _buildPdfInfoRow('Recommended Activities', recommended),
+      ],
+    );
   }
 
   @override
