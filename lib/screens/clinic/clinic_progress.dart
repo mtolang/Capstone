@@ -1400,7 +1400,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                           color: assessmentCount > 0
                               ? Colors.white
                               : Colors.grey[600],
-                          fontSize: 12,
+                          fontSize: 10,
                           fontWeight: FontWeight.w500,
                           fontFamily: 'Poppins',
                         ),
@@ -1428,17 +1428,18 @@ class _ClinicProgressState extends State<ClinicProgress> {
                       foregroundColor:
                           hasAssessments ? Colors.white : Colors.grey[600],
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                          horizontal: 12, vertical: 6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      minimumSize: const Size(60, 32),
+                      minimumSize: const Size(50, 28),
                     ),
                     child: Text(
                       hasAssessments ? 'View' : 'None',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 10,
                         fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   );
@@ -1724,7 +1725,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               color: Color(0xFF2C3E50),
               fontFamily: 'Poppins',
@@ -1742,7 +1743,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                   Text(
                     '${(progress * 100).toInt()}%',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: progressColor,
                       fontFamily: 'Poppins',
@@ -1751,7 +1752,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
                   Text(
                     daysOverview,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9,
                       color: Colors.grey[600],
                       fontFamily: 'Poppins',
                     ),

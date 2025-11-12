@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:kindora/screens/clinic/custom_tabbar.dart';
 import 'package:kindora/screens/clinic/clinic_navbar.dart';
 import 'package:kindora/screens/clinic/clinic_profile_details.dart';
 import '../../helper/clinic_auth.dart';
@@ -137,15 +136,7 @@ class _ClinicProfileState extends State<ClinicProfile> {
                 physics: const BouncingScrollPhysics(),
                 child: Column(
                   children: <Widget>[
-                    const SizedBox(height: 30),
-
-                    // - Custom Tab bar -
-                    const Center(
-                      child: CustomTabBar(),
-                    ),
-
-                    // Padding added before the CustomTabBar to avoid overlap
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 120),
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -401,89 +392,6 @@ class _ClinicProfileState extends State<ClinicProfile> {
                   size: 30,
                 ),
               ),
-            ),
-
-            // Floating Action Button (FAB) - Calendar/Booking
-            Positioned(
-              bottom: 35,
-              right: 30,
-              child: FloatingActionButton(
-                heroTag: "calendar_fab",
-                onPressed: () {
-                  print('Calendar/Booking FAB tapped');
-                  _showBookingOptions(context);
-                },
-                backgroundColor: const Color(0xFF006A5B),
-                child: const Icon(
-                  Icons.calendar_month,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Show booking options
-  void _showBookingOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Booking Options',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading:
-                  const Icon(Icons.event_available, color: Color(0xFF006A5B)),
-              title: const Text('View Calendar'),
-              subtitle: const Text('See all appointments'),
-              onTap: () {
-                Navigator.pop(context);
-                print('View Calendar selected');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Calendar view functionality')),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.schedule, color: Color(0xFF006A5B)),
-              title: const Text('Manage Bookings'),
-              subtitle: const Text('Edit or cancel appointments'),
-              onTap: () {
-                Navigator.pop(context);
-                print('Manage Bookings selected');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Manage bookings functionality')),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.add, color: Color(0xFF006A5B)),
-              title: const Text('New Booking'),
-              subtitle: const Text('Create a new appointment'),
-              onTap: () {
-                Navigator.pop(context);
-                print('New Booking selected');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('New booking functionality')),
-                );
-              },
             ),
           ],
         ),

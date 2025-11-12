@@ -12,6 +12,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_tts
   iris_method_channel
   permission_handler_windows
+  printing
   url_launcher_windows
 )
 

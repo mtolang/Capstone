@@ -54,21 +54,22 @@ class _CustomTabBarState extends State<CustomTabBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 350, // Adjust the width as needed
+      width: 150, // Reduced width for single tab
       height: 40,
       decoration: ShapeDecoration(
-        color: Colors.white.withOpacity(0.5),
+        color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          buildTab('Profile', 0),
-          buildTab('Gallery', 1),
-          buildTab('Reviews', 2),
-        ],
+      alignment: Alignment.center,
+      child: const Text(
+        'Profile',
+        style: TextStyle(
+          color: Color.fromARGB(255, 3, 62, 54),
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

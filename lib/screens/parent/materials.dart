@@ -2609,13 +2609,6 @@ class _MaterialViewerState extends State<MaterialViewer> {
         ),
         backgroundColor: widget.categoryColor,
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download, color: Colors.white),
-            onPressed: () => _downloadMaterial(),
-            tooltip: 'Download',
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
