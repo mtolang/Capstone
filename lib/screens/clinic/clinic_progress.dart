@@ -1711,7 +1711,7 @@ class _ClinicProgressState extends State<ClinicProgress> {
     required Color progressColor,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
@@ -1724,8 +1724,10 @@ class _ClinicProgressState extends State<ClinicProgress> {
         children: [
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: FontWeight.bold,
               color: Color(0xFF2C3E50),
               fontFamily: 'Poppins',
@@ -2115,8 +2117,10 @@ class _ClinicProgressState extends State<ClinicProgress> {
           const SizedBox(height: 12),
           Text(
             therapyType,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: color,
               fontFamily: 'Poppins',
