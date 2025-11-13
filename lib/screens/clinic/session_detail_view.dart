@@ -18,7 +18,7 @@ class SessionDetailView extends StatelessWidget {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          'Session $sessionNumber Details',
+          sessionNumber == 0 ? 'Initial Assessment' : 'Session $sessionNumber Details',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -28,6 +28,13 @@ class SessionDetailView extends StatelessWidget {
         backgroundColor: const Color(0xFF006A5B),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.print),
+            onPressed: () => _handlePrint(context),
+            tooltip: 'Print/Download Report',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -59,9 +66,31 @@ class SessionDetailView extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // Skill Ratings
+            // Skill Ratings (for regular sessions)
             if (sessionData['skillsRating'] != null)
               _buildSkillsSection(),
+
+            // Primary Concerns (for initial assessments)
+            if (sessionData['primaryConcerns'] != null &&
+                sessionData['primaryConcerns'].toString().isNotEmpty)
+              _buildSectionCard(
+                'Primary Concerns / Reason for Assessment',
+                Icons.warning_amber_rounded,
+                [
+                  _buildTextContent(sessionData['primaryConcerns']),
+                ],
+              ),
+
+            if (sessionData['primaryConcerns'] != null &&
+                sessionData['primaryConcerns'].toString().isNotEmpty)
+              const SizedBox(height: 20),
+
+            // Skills Assessment (for initial assessments with separate categories)
+            if (sessionData['fineMotorSkills'] != null ||
+                sessionData['grossMotorSkills'] != null ||
+                sessionData['sensoryProcessing'] != null ||
+                sessionData['cognitiveSkills'] != null)
+              _buildCategorizedSkillsSection(),
 
             const SizedBox(height: 20),
 
@@ -185,7 +214,7 @@ class SessionDetailView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Session $sessionNumber',
+                      sessionNumber == 0 ? 'Initial Assessment' : 'Session $sessionNumber',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -333,6 +362,166 @@ class SessionDetailView extends StatelessWidget {
     );
   }
 
+  Widget _buildCategorizedSkillsSection() {
+    final List<Widget> skillSections = [];
+
+    // Fine Motor Skills
+    if (sessionData['fineMotorSkills'] != null) {
+      final fineMotor = sessionData['fineMotorSkills'] as Map<String, dynamic>;
+      skillSections.add(_buildSkillCategoryCard(
+        'Fine Motor Skills',
+        fineMotor,
+        Colors.blue,
+      ));
+      skillSections.add(const SizedBox(height: 16));
+    }
+
+    // Gross Motor Skills
+    if (sessionData['grossMotorSkills'] != null) {
+      final grossMotor = sessionData['grossMotorSkills'] as Map<String, dynamic>;
+      skillSections.add(_buildSkillCategoryCard(
+        'Gross Motor Skills',
+        grossMotor,
+        Colors.green,
+      ));
+      skillSections.add(const SizedBox(height: 16));
+    }
+
+    // Sensory Processing
+    if (sessionData['sensoryProcessing'] != null) {
+      final sensory = sessionData['sensoryProcessing'] as Map<String, dynamic>;
+      skillSections.add(_buildSkillCategoryCard(
+        'Sensory Processing',
+        sensory,
+        Colors.orange,
+      ));
+      skillSections.add(const SizedBox(height: 16));
+    }
+
+    // Cognitive Skills
+    if (sessionData['cognitiveSkills'] != null) {
+      final cognitive = sessionData['cognitiveSkills'] as Map<String, dynamic>;
+      skillSections.add(_buildSkillCategoryCard(
+        'Cognitive Skills',
+        cognitive,
+        Colors.purple,
+      ));
+    }
+
+    if (skillSections.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: skillSections,
+    );
+  }
+
+  Widget _buildSkillCategoryCard(String categoryName, Map<String, dynamic> skills, Color color) {
+    // Extract notes if present
+    final notes = skills['notes']?.toString();
+    
+    // Build skill ratings (exclude 'notes' field)
+    final skillRatings = skills.entries
+        .where((entry) => entry.key != 'notes' && entry.value is int)
+        .map((entry) {
+          return _buildSkillRating(
+            _formatSkillName(entry.key),
+            entry.value ?? 0,
+          );
+        })
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.stars,
+                  color: color,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                categoryName,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          ...skillRatings,
+          if (notes != null && notes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.note, size: 16, color: color),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Notes',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    notes,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[700],
+                      height: 1.4,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildSkillRating(String skillName, dynamic rating) {
     int ratingValue = 0;
     if (rating is int) {
@@ -407,5 +596,145 @@ class SessionDetailView extends StatelessWidget {
       // Return as is
     }
     return 'Unknown date';
+  }
+
+  void _handlePrint(BuildContext context) {
+    // Show options dialog for print/download
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.print, color: Color(0xFF006A5B)),
+              SizedBox(width: 10),
+              Text(
+                'Export Options',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.print, color: Color(0xFF006A5B)),
+                title: const Text(
+                  'Print Report',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _printReport(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.download, color: Color(0xFF006A5B)),
+                title: const Text(
+                  'Download as PDF',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _downloadPDF(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share, color: Color(0xFF006A5B)),
+                title: const Text(
+                  'Share Report',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _shareReport(context);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _printReport(BuildContext context) {
+    // TODO: Implement actual print functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.info_outline, color: Colors.white),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Print functionality will be implemented soon',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF006A5B),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _downloadPDF(BuildContext context) {
+    // TODO: Implement PDF generation and download
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.info_outline, color: Colors.white),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'PDF download functionality will be implemented soon',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF006A5B),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _shareReport(BuildContext context) {
+    // TODO: Implement share functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.info_outline, color: Colors.white),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Share functionality will be implemented soon',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF006A5B),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 }

@@ -867,6 +867,15 @@ class _ClinicPatientProgressReportState
     }
 
     try {
+      // Check if this is the first assessment for this patient
+      final existingAssessments = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('patientId', isEqualTo: widget.progressData['patientId'])
+          .where('clinicId', isEqualTo: widget.progressData['clinicId'])
+          .get();
+
+      final isInitialAssessment = existingAssessments.docs.isEmpty;
+
       final assessmentData = {
         'childName': _childNameController.text,
         'dateOfBirth': _dateOfBirthController.text,
@@ -904,6 +913,8 @@ class _ClinicPatientProgressReportState
           'notes': _cognitiveNotesController.text,
         },
         'assessmentType': 'Occupational Therapy',
+        'isInitialAssessment': isInitialAssessment,
+        'isFinalEvaluation': false,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'patientId': widget.progressData['patientId'],

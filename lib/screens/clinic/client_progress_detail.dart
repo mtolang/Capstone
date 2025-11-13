@@ -5,6 +5,7 @@ import 'final_evaluation_form.dart';
 import 'add_session_form.dart';
 import 'final_evaluation_list.dart';
 import 'session_detail_view.dart';
+import 'final_evaluation_viewer.dart';
 
 class ClientProgressDetailPage extends StatefulWidget {
   final Map<String, dynamic> clientData;
@@ -23,12 +24,16 @@ class ClientProgressDetailPage extends StatefulWidget {
 
 class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
   List<Map<String, dynamic>> assessments = [];
+  Map<String, dynamic>? initialAssessment;
+  List<Map<String, dynamic>> finalEvaluations = [];
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadAssessments();
+    _loadInitialAssessment();
+    _loadFinalEvaluations();
   }
 
   Future<void> _navigateToAddSession() async {
@@ -48,6 +53,8 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
         isLoading = true;
       });
       await _loadAssessments();
+      await _loadInitialAssessment();
+      await _loadFinalEvaluations();
     }
   }
 
@@ -86,7 +93,240 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
         isLoading = true;
       });
       await _loadAssessments();
+      await _loadInitialAssessment();
+      await _loadFinalEvaluations();
     }
+  }
+
+  void _showViewPrintOptions() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.folder_open, color: Color(0xFF006A5B)),
+              SizedBox(width: 10),
+              Text(
+                'Assessment Reports',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // FIRST ASSESSMENT SECTION
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                  child: Text(
+                    'FIRST ASSESSMENT',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[600],
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                if (initialAssessment != null) ...[
+                  ListTile(
+                    leading: const Icon(Icons.visibility, color: Color(0xFF00897B)),
+                    title: const Text(
+                      'View Assessment',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _viewInitialAssessment();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.print, color: Color(0xFF00897B)),
+                    title: const Text(
+                      'Print / Download',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _printInitialAssessment();
+                    },
+                  ),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'No initial assessment available',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                
+                const Divider(height: 24),
+                
+                // FINAL EVALUATION SECTION
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                  child: Text(
+                    'FINAL EVALUATION',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[600],
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                if (finalEvaluations.isNotEmpty) ...[
+                  ListTile(
+                    leading: const Icon(Icons.visibility, color: Color(0xFFFF6F00)),
+                    title: const Text(
+                      'View Evaluations',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
+                    subtitle: Text(
+                      '${finalEvaluations.length} evaluation(s)',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _navigateToViewEvaluations();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.print, color: Color(0xFFFF6F00)),
+                    title: const Text(
+                      'Print / Download',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _printFinalEvaluations();
+                    },
+                  ),
+                ],
+                // Create Final Evaluation option
+                if (assessments.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.add_circle, color: Color(0xFF006A5B)),
+                    title: const Text(
+                      'Create New Evaluation',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      _navigateToFinalEvaluation();
+                    },
+                  ),
+                if (finalEvaluations.isEmpty && assessments.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'No evaluations available. Complete sessions first.',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _viewInitialAssessment() {
+    if (initialAssessment != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SessionDetailView(
+            sessionData: initialAssessment!,
+            sessionNumber: 0,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _printInitialAssessment() {
+    // TODO: Implement print/download initial assessment
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.info_outline, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Print/Download feature coming soon!',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Color(0xFF00897B),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _printFinalEvaluations() {
+    // TODO: Implement print/download final evaluations
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            Icon(Icons.info_outline, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Print/Download feature coming soon!',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Color(0xFFFF6F00),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _loadAssessments() async {
@@ -240,6 +480,66 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadInitialAssessment() async {
+    try {
+      final clientId = widget.clientData['clientId']?.toString();
+
+      if (clientId == null || clientId.isEmpty) return;
+
+      // Query for the initial assessment
+      final snapshot = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('patientId', isEqualTo: clientId)
+          .where('clinicId', isEqualTo: widget.clinicId)
+          .where('isInitialAssessment', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        setState(() {
+          final doc = snapshot.docs.first;
+          initialAssessment = {
+            'id': doc.id,
+            ...doc.data(),
+          };
+        });
+        print('✅ Initial assessment loaded: ${initialAssessment?['id']}');
+      } else {
+        print('ℹ️ No initial assessment found');
+      }
+    } catch (e) {
+      print('❌ Error loading initial assessment: $e');
+    }
+  }
+
+  Future<void> _loadFinalEvaluations() async {
+    try {
+      final clientId = widget.clientData['clientId']?.toString();
+      if (clientId == null || clientId.isEmpty) return;
+
+      // Query for final evaluations
+      final snapshot = await FirebaseFirestore.instance
+          .collection('FinalEvaluations')
+          .where('patientId', isEqualTo: clientId)
+          .where('clinicId', isEqualTo: widget.clinicId)
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      setState(() {
+        finalEvaluations = snapshot.docs.map((doc) {
+          return <String, dynamic>{
+            'id': doc.id,
+            ...doc.data(),
+          };
+        }).toList();
+      });
+
+      print('✅ Loaded ${finalEvaluations.length} final evaluations');
+    } catch (e) {
+      print('❌ Error loading final evaluations: $e');
     }
   }
 
@@ -418,19 +718,12 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
           ),
         ),
         actions: [
-          // View Evaluations Button
+          // View/Print Options Button
           IconButton(
-            onPressed: _navigateToViewEvaluations,
+            onPressed: _showViewPrintOptions,
             icon: const Icon(Icons.folder_open, color: Colors.white),
-            tooltip: 'View Final Evaluations',
+            tooltip: 'View & Print Options',
           ),
-          // Create Final Evaluation Button
-          if (assessments.isNotEmpty)
-            IconButton(
-              onPressed: _navigateToFinalEvaluation,
-              icon: const Icon(Icons.assignment_turned_in, color: Colors.white),
-              tooltip: 'Create Final Evaluation',
-            ),
         ],
       ),
       floatingActionButton: Column(
@@ -499,6 +792,18 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
                       // Skills Breakdown
                       _buildSkillsBreakdown(averageScores),
                       const SizedBox(height: 20),
+
+                      // Initial Assessment Section
+                      if (initialAssessment != null)
+                        _buildInitialAssessmentSection(),
+                      if (initialAssessment != null)
+                        const SizedBox(height: 20),
+
+                      // Final Evaluations Section
+                      if (finalEvaluations.isNotEmpty)
+                        _buildFinalEvaluationsSection(),
+                      if (finalEvaluations.isNotEmpty)
+                        const SizedBox(height: 20),
 
                       // Assessment History
                       _buildAssessmentHistory(),
@@ -1141,6 +1446,258 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInitialAssessmentSection() {
+    if (initialAssessment == null) return const SizedBox.shrink();
+
+    String dateStr = 'Unknown date';
+    try {
+      final timestamp = initialAssessment!['createdAt'] as Timestamp?;
+      if (timestamp != null) {
+        final date = timestamp.toDate();
+        dateStr = '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      // Use default
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF006A5B).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.assignment,
+                  color: Color(0xFF006A5B),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Initial Assessment',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2C3E50),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                    Text(
+                      'Date: $dateStr',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SessionDetailView(
+                    sessionData: initialAssessment!,
+                    sessionNumber: 0,
+                  ),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF006A5B).withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF006A5B).withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'View Initial Assessment Details',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF006A5B),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Color(0xFF006A5B),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFinalEvaluationsSection() {
+    if (finalEvaluations.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF9800).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.assignment_turned_in,
+                  color: Color(0xFFFF9800),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Final Evaluations',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2C3E50),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          ...finalEvaluations.asMap().entries.map((entry) {
+            final index = entry.key;
+            final evaluation = entry.value;
+            
+            String dateStr = 'Unknown date';
+            try {
+              final timestamp = evaluation['createdAt'] as Timestamp?;
+              if (timestamp != null) {
+                final date = timestamp.toDate();
+                dateStr = '${date.day}/${date.month}/${date.year}';
+              }
+            } catch (e) {
+              // Use default
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: index < finalEvaluations.length - 1 ? 12 : 0),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => FinalEvaluationViewer(
+                        evaluationId: evaluation['id'],
+                      ),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF9800).withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFF9800).withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Final Evaluation ${finalEvaluations.length - index}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFFF9800),
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dateStr,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: Color(0xFFFF9800),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ],
+      ),
     );
   }
 
