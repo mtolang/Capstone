@@ -487,7 +487,28 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
     try {
       final clientId = widget.clientData['clientId']?.toString();
 
-      if (clientId == null || clientId.isEmpty) return;
+      print('🔍 Loading initial assessment for clientId: $clientId, clinicId: ${widget.clinicId}');
+
+      if (clientId == null || clientId.isEmpty) {
+        print('❌ ClientId is null or empty');
+        return;
+      }
+
+      // First, let's check all assessments for this patient
+      final allAssessments = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('patientId', isEqualTo: clientId)
+          .where('clinicId', isEqualTo: widget.clinicId)
+          .get();
+
+      print('🔍 Total assessments found: ${allAssessments.docs.length}');
+      for (var doc in allAssessments.docs) {
+        final data = doc.data();
+        print('🔍 Assessment ID: ${doc.id}');
+        print('   - isInitialAssessment: ${data['isInitialAssessment']}');
+        print('   - patientId: ${data['patientId']}');
+        print('   - createdAt: ${data['createdAt']}');
+      }
 
       // Query for the initial assessment
       final snapshot = await FirebaseFirestore.instance
@@ -508,7 +529,7 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
         });
         print('✅ Initial assessment loaded: ${initialAssessment?['id']}');
       } else {
-        print('ℹ️ No initial assessment found');
+        print('ℹ️ No initial assessment found with isInitialAssessment=true');
       }
     } catch (e) {
       print('❌ Error loading initial assessment: $e');
@@ -518,15 +539,30 @@ class _ClientProgressDetailPageState extends State<ClientProgressDetailPage> {
   Future<void> _loadFinalEvaluations() async {
     try {
       final clientId = widget.clientData['clientId']?.toString();
-      if (clientId == null || clientId.isEmpty) return;
+      
+      print('🔍 Loading final evaluations for clientId: $clientId, clinicId: ${widget.clinicId}');
+      
+      if (clientId == null || clientId.isEmpty) {
+        print('❌ ClientId is null or empty for final evaluations');
+        return;
+      }
 
-      // Query for final evaluations
+      // Query for final evaluations (using 'clientId' field, not 'patientId')
       final snapshot = await FirebaseFirestore.instance
           .collection('FinalEvaluations')
-          .where('patientId', isEqualTo: clientId)
+          .where('clientId', isEqualTo: clientId)
           .where('clinicId', isEqualTo: widget.clinicId)
           .orderBy('createdAt', descending: true)
           .get();
+
+      print('🔍 Final evaluations query returned: ${snapshot.docs.length} documents');
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        print('🔍 Final Evaluation ID: ${doc.id}');
+        print('   - clientId: ${data['clientId']}');
+        print('   - clinicId: ${data['clinicId']}');
+        print('   - createdAt: ${data['createdAt']}');
+      }
 
       setState(() {
         finalEvaluations = snapshot.docs.map((doc) {

@@ -876,6 +876,12 @@ class _ClinicPatientProgressReportState
 
       final isInitialAssessment = existingAssessments.docs.isEmpty;
 
+      print('🔍 INITIAL ASSESSMENT SAVE DEBUG:');
+      print('🔍 progressData: ${widget.progressData}');
+      print('🔍 patientId from widget: ${widget.progressData['patientId']}');
+      print('🔍 clinicId from widget: ${widget.progressData['clinicId']}');
+      print('🔍 isInitialAssessment: $isInitialAssessment');
+
       final assessmentData = {
         'childName': _childNameController.text,
         'dateOfBirth': _dateOfBirthController.text,
@@ -926,6 +932,11 @@ class _ClinicPatientProgressReportState
           .collection('OTAssessments')
           .add(assessmentData);
 
+      print('✅ Initial Assessment saved successfully!');
+      print('✅ Saved data patientId: ${assessmentData['patientId']}');
+      print('✅ Saved data clinicId: ${assessmentData['clinicId']}');
+      print('✅ Saved data isInitialAssessment: ${assessmentData['isInitialAssessment']}');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -938,8 +949,8 @@ class _ClinicPatientProgressReportState
           ),
         );
 
-        // Navigate back after successful save
-        Navigator.pop(context);
+        // Navigate back after successful save and signal refresh needed
+        Navigator.pop(context, true); // Return true to trigger parent refresh
       }
     } catch (e) {
       if (mounted) {

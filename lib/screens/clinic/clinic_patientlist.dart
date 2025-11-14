@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kindora/screens/clinic/clinic_patient_profile.dart';
+import 'package:kindora/screens/clinic/session_detail_view.dart';
+import 'package:kindora/screens/clinic/client_progress_detail.dart';
+import 'package:kindora/screens/clinic/final_evaluation_viewer.dart';
 
 class ClinicPatientListPage extends StatefulWidget {
   const ClinicPatientListPage({Key? key}) : super(key: key);
@@ -575,12 +578,426 @@ class _ClinicPatientListPageState extends State<ClinicPatientListPage> {
                     );
                   },
                 ),
+                const SizedBox(width: 8),
+
+                // Folder icon button to view assessments/evaluations
+                IconButton(
+                  icon: const Icon(
+                    Icons.folder_outlined,
+                    color: Color(0xFF006A5B),
+                    size: 28,
+                  ),
+                  onPressed: () => _showViewPrintOptions(patient),
+                  tooltip: 'View Assessments & Reports',
+                ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  void _showViewPrintOptions(Map<String, dynamic> patient) {
+    final patientId = patient['documentId'] ?? patient['id'];
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.folder_open, color: Color(0xFF006A5B)),
+              SizedBox(width: 10),
+              Text(
+                'Assessment Reports',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: _loadPatientReports(patientId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'Error loading reports: ${snapshot.error}',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.red,
+                      ),
+                    ),
+                  );
+                }
+
+                final reports = snapshot.data ?? {};
+                final initialAssessment = reports['initialAssessment'];
+                final sessions = reports['sessions'] as List? ?? [];
+                final finalEvaluations = reports['finalEvaluations'] as List? ?? [];
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // FIRST ASSESSMENT SECTION
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                      child: Text(
+                        'FIRST ASSESSMENT',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                    if (initialAssessment != null) ...[
+                      ListTile(
+                        leading: const Icon(Icons.visibility, color: Color(0xFF00897B)),
+                        title: const Text(
+                          'View Assessment',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _viewInitialAssessment(initialAssessment);
+                        },
+                      ),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(
+                          'No initial assessment available',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    
+                    const Divider(height: 24),
+                    
+                    // SESSION REPORTS SECTION
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                      child: Text(
+                        'SESSION REPORTS',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                    if (sessions.isNotEmpty) ...[
+                      ListTile(
+                        leading: const Icon(Icons.article, color: Color(0xFF006A5B)),
+                        title: const Text(
+                          'View Sessions',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                        subtitle: Text(
+                          '${sessions.length} session(s)',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _viewSessions(patient, sessions);
+                        },
+                      ),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(
+                          'No session reports available',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    
+                    const Divider(height: 24),
+                    
+                    // FINAL EVALUATION SECTION
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                      child: Text(
+                        'FINAL EVALUATION',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                    if (finalEvaluations.isNotEmpty) ...[
+                      ListTile(
+                        leading: const Icon(Icons.visibility, color: Color(0xFFFF6F00)),
+                        title: const Text(
+                          'View Evaluations',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                        subtitle: Text(
+                          '${finalEvaluations.length} evaluation(s)',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _viewFinalEvaluations(finalEvaluations);
+                        },
+                      ),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(
+                          'No evaluations available',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> _loadPatientReports(String patientId) async {
+    try {
+      print('📁 Loading reports for patient: $patientId, clinic: $_clinicId');
+
+      // Load initial assessment
+      Map<String, dynamic>? initialAssessment;
+      final initialQuery = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('patientId', isEqualTo: patientId)
+          .where('clinicId', isEqualTo: _clinicId)
+          .where('isInitialAssessment', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (initialQuery.docs.isNotEmpty) {
+        final doc = initialQuery.docs.first;
+        initialAssessment = {
+          'id': doc.id,
+          ...doc.data(),
+        };
+        print('✅ Found initial assessment: ${doc.id}');
+      } else {
+        print('❌ No initial assessment found');
+      }
+
+      // Load all sessions (assessments that are not initial)
+      final sessionsQuery = await FirebaseFirestore.instance
+          .collection('OTAssessments')
+          .where('patientId', isEqualTo: patientId)
+          .where('clinicId', isEqualTo: _clinicId)
+          .get();
+
+      final sessions = sessionsQuery.docs
+          .where((doc) => doc.data()['isInitialAssessment'] != true)
+          .map((doc) => {
+                'id': doc.id,
+                ...doc.data(),
+              })
+          .toList();
+      
+      // Sort sessions by createdAt in memory (newest first)
+      sessions.sort((a, b) {
+        final aTime = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        final bTime = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        return bTime.compareTo(aTime);
+      });
+      
+      print('✅ Found ${sessions.length} session reports');
+
+      // Load final evaluations
+      final evaluationsQuery = await FirebaseFirestore.instance
+          .collection('FinalEvaluations')
+          .where('clientId', isEqualTo: patientId)
+          .where('clinicId', isEqualTo: _clinicId)
+          .get();
+
+      final finalEvaluations = evaluationsQuery.docs
+          .map((doc) => {
+                'id': doc.id,
+                ...doc.data(),
+              })
+          .toList();
+      
+      // Sort evaluations by createdAt in memory (newest first)
+      finalEvaluations.sort((a, b) {
+        final aTime = (a['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        final bTime = (b['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        return bTime.compareTo(aTime);
+      });
+      
+      print('✅ Found ${finalEvaluations.length} final evaluations');
+
+      return {
+        'initialAssessment': initialAssessment,
+        'sessions': sessions,
+        'finalEvaluations': finalEvaluations,
+      };
+    } catch (e) {
+      print('❌ Error loading patient reports: $e');
+      rethrow;
+    }
+  }
+
+  void _viewInitialAssessment(Map<String, dynamic> assessment) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SessionDetailView(
+          sessionData: assessment,
+          sessionNumber: 0,
+        ),
+      ),
+    );
+  }
+
+  void _viewSessions(Map<String, dynamic> patient, List<dynamic> sessions) {
+    // Navigate to progress reports page to view sessions
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClientProgressDetailPage(
+          clientData: patient,
+          clinicId: _clinicId ?? '',
+        ),
+      ),
+    );
+  }
+
+  void _viewFinalEvaluations(List<dynamic> evaluations) {
+    if (evaluations.isEmpty) return;
+
+    // Show list if multiple evaluations, or directly view if only one
+    if (evaluations.length == 1) {
+      final evaluationId = evaluations.first['id'] as String;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FinalEvaluationViewer(
+            evaluationId: evaluationId,
+          ),
+        ),
+      );
+    } else {
+      // Show list dialog to choose which evaluation to view
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Select Evaluation',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: evaluations.length,
+              itemBuilder: (context, index) {
+                final evaluation = evaluations[index];
+                final evaluationId = evaluation['id'] as String;
+                final createdAt = evaluation['createdAt'] as Timestamp?;
+                final date = createdAt?.toDate();
+                
+                return ListTile(
+                  leading: const Icon(Icons.description, color: Color(0xFFFF6F00)),
+                  title: Text(
+                    'Evaluation ${index + 1}',
+                    style: const TextStyle(fontFamily: 'Poppins'),
+                  ),
+                  subtitle: date != null
+                      ? Text(
+                          '${date.day}/${date.month}/${date.year}',
+                          style: const TextStyle(fontFamily: 'Poppins'),
+                        )
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FinalEvaluationViewer(
+                          evaluationId: evaluationId,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Color(0xFF006A5B),
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _showStatusLegend() {

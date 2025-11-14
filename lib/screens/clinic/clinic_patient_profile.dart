@@ -2383,8 +2383,19 @@ class _ClinicPatientProfileState extends State<ClinicPatientProfile>
           'patientName': widget.patientName,
           'progressData': progressData,
         },
-      ).then((_) {
+      ).then((result) {
         print('🚀 Navigation completed successfully');
+        print('🔄 Assessment result: $result');
+        
+        // If assessment was saved, refresh the folder icon data
+        if (result == true) {
+          print('✅ Assessment saved! Refreshing page data...');
+          setState(() {
+            // This will trigger a rebuild and reload the folder icon data
+          });
+          // You might need to call a method here to reload assessments
+          // if you have one in this widget
+        }
       }).catchError((error) {
         print('🔥 Navigation error: $error');
         // Show error message to user

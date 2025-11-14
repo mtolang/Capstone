@@ -157,21 +157,33 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text(
-          'Final Evaluation Report',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
+    return WillPopScope(
+      onWillPop: () async {
+        // Return true to indicate data should be refreshed if evaluation was saved
+        Navigator.pop(context, _isEvaluationSaved);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: const Text(
+            'Final Evaluation Report',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          backgroundColor: const Color(0xFF006A5B),
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              Navigator.pop(context, _isEvaluationSaved);
+            },
           ),
         ),
-        backgroundColor: const Color(0xFF006A5B),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -515,7 +527,8 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
           ],
         ),
       ),
-    );
+      ), // Close Scaffold
+    ); // Close WillPopScope
   }
 
   Widget _buildClientInfoCard() {
@@ -1021,6 +1034,12 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
     });
 
     try {
+      // Debug logging
+      print('🔍 FINAL EVALUATION SAVE DEBUG:');
+      print('🔍 clientData: ${widget.clientData}');
+      print('🔍 clientId from widget: ${widget.clientData['clientId']}');
+      print('🔍 clinicId from widget: ${widget.clinicId}');
+      
       // Prepare evaluation data
       final evaluationData = {
         // Client Information
@@ -1080,6 +1099,11 @@ class _FinalEvaluationFormState extends State<FinalEvaluationForm> {
       final docRef = await FirebaseFirestore.instance
           .collection('FinalEvaluations')
           .add(evaluationData);
+
+      print('✅ Final Evaluation saved successfully!');
+      print('✅ Document ID: ${docRef.id}');
+      print('✅ Saved data clientId: ${evaluationData['clientId']}');
+      print('✅ Saved data clinicId: ${evaluationData['clinicId']}');
 
       if (mounted) {
         setState(() {

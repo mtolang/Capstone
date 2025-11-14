@@ -82,68 +82,99 @@ class FinalEvaluationViewer extends StatelessWidget {
           _buildHeaderCard(evaluation),
           const SizedBox(height: 20),
           
-          // Overall Assessment
-          _buildSection(
-            'Overall Assessment',
-            Icons.assessment,
-            [
-              _buildReadOnlyField('Overall Progress Summary', evaluation['overallSummary']),
-              const SizedBox(height: 16),
-              _buildReadOnlyField('Therapy Goals Achieved', evaluation['therapyGoalsAchieved']),
-              const SizedBox(height: 16),
-              _buildChipField('Progress Rating', evaluation['overallProgressRating']),
-              const SizedBox(height: 16),
-              _buildReadOnlyField('Progress Description', evaluation['progressDescription']),
-            ],
-          ),
-          const SizedBox(height: 20),
-          
-          // Skills Development
-          _buildSection(
-            'Skills Development Analysis',
-            Icons.star,
-            [
-              _buildSkillDisplay('Fine Motor Skills', evaluation['fineMotorEvaluation'], Colors.blue),
-              const SizedBox(height: 16),
-              _buildSkillDisplay('Gross Motor Skills', evaluation['grossMotorEvaluation'], Colors.green),
-              const SizedBox(height: 16),
-              _buildSkillDisplay('Cognitive Skills', evaluation['cognitiveEvaluation'], Colors.purple),
-              const SizedBox(height: 16),
-              _buildSkillDisplay('Sensory Processing', evaluation['sensoryEvaluation'], Colors.orange),
-              const SizedBox(height: 16),
-              _buildSkillDisplay('Social & Emotional', evaluation['socialEmotionalEvaluation'], Colors.pink),
-            ],
-          ),
-          const SizedBox(height: 20),
-          
-          // Recommendations
-          _buildSection(
-            'Recommendations & Future Planning',
-            Icons.medical_services,
-            [
-              _buildReadOnlyField('Continue Therapy', evaluation['continueTherapyRecommendation']),
-              const SizedBox(height: 16),
-              _buildReadOnlyField('Home Exercise Program', evaluation['homeExerciseProgram']),
-              const SizedBox(height: 16),
-              if (evaluation['schoolRecommendations'] != null && evaluation['schoolRecommendations'].toString().isNotEmpty)
-                ...[
-                  _buildReadOnlyField('School Recommendations', evaluation['schoolRecommendations']),
-                  const SizedBox(height: 16),
+          // Overall Assessment - Only show if ANY field has content
+          if (_hasOverallAssessmentContent(evaluation))
+            ...[
+              _buildSection(
+                'Overall Assessment',
+                Icons.assessment,
+                [
+                  if (_hasContent(evaluation['overallSummary'])) ...[
+                    _buildReadOnlyField('Overall Progress Summary', evaluation['overallSummary']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['therapyGoalsAchieved'])) ...[
+                    _buildReadOnlyField('Therapy Goals Achieved', evaluation['therapyGoalsAchieved']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['overallProgressRating'])) ...[
+                    _buildChipField('Progress Rating', evaluation['overallProgressRating']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['progressDescription']))
+                    _buildReadOnlyField('Progress Description', evaluation['progressDescription']),
                 ],
-              _buildReadOnlyField('Follow-up Schedule', evaluation['followUpSchedule']),
-              const SizedBox(height: 16),
-              if (evaluation['additionalServicesRecommended'] != null && evaluation['additionalServicesRecommended'].toString().isNotEmpty)
-                ...[
-                  _buildReadOnlyField('Additional Services', evaluation['additionalServicesRecommended']),
-                  const SizedBox(height: 16),
-                ],
-              _buildReadOnlyField('Parent Guidelines', evaluation['parentGuidelines']),
+              ),
+              const SizedBox(height: 20),
             ],
-          ),
+          
+          // Skills Development - Only show skills that have content
+          if (_hasAnySkillContent(evaluation))
+            ...[
+              _buildSection(
+                'Skills Development Analysis',
+                Icons.star,
+                [
+                  if (_hasContent(evaluation['fineMotorEvaluation'])) ...[
+                    _buildSkillDisplay('Fine Motor Skills', evaluation['fineMotorEvaluation'], Colors.blue),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['grossMotorEvaluation'])) ...[
+                    _buildSkillDisplay('Gross Motor Skills', evaluation['grossMotorEvaluation'], Colors.green),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['cognitiveEvaluation'])) ...[
+                    _buildSkillDisplay('Cognitive Skills', evaluation['cognitiveEvaluation'], Colors.purple),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['sensoryEvaluation'])) ...[
+                    _buildSkillDisplay('Sensory Processing', evaluation['sensoryEvaluation'], Colors.orange),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['socialEmotionalEvaluation']))
+                    _buildSkillDisplay('Social & Emotional', evaluation['socialEmotionalEvaluation'], Colors.pink),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+          
+          // Recommendations - Only show if ANY recommendation field has content
+          if (_hasRecommendationsContent(evaluation))
+            ...[
+              _buildSection(
+                'Recommendations & Future Planning',
+                Icons.medical_services,
+                [
+                  if (_hasContent(evaluation['continueTherapyRecommendation'])) ...[
+                    _buildReadOnlyField('Continue Therapy', evaluation['continueTherapyRecommendation']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['homeExerciseProgram'])) ...[
+                    _buildReadOnlyField('Home Exercise Program', evaluation['homeExerciseProgram']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['schoolRecommendations'])) ...[
+                    _buildReadOnlyField('School Recommendations', evaluation['schoolRecommendations']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['followUpSchedule'])) ...[
+                    _buildReadOnlyField('Follow-up Schedule', evaluation['followUpSchedule']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['additionalServicesRecommended'])) ...[
+                    _buildReadOnlyField('Additional Services', evaluation['additionalServicesRecommended']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['parentGuidelines']))
+                    _buildReadOnlyField('Parent Guidelines', evaluation['parentGuidelines']),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
           const SizedBox(height: 20),
           
-          // Discharge Planning (if applicable)
-          if (evaluation['isDischargeRecommended'] == true)
+          // Discharge Planning (if applicable and has content)
+          if (evaluation['isDischargeRecommended'] == true && _hasDischargeContent(evaluation))
             ...[
               _buildSection(
                 'Discharge Planning',
@@ -170,33 +201,43 @@ class FinalEvaluationViewer extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  _buildReadOnlyField('Discharge Rationale', evaluation['dischargeReason']),
-                  const SizedBox(height: 16),
-                  _buildReadOnlyField('Maintenance Plan', evaluation['maintenancePlan']),
+                  if (_hasContent(evaluation['dischargeReason'])) ...[
+                    const SizedBox(height: 16),
+                    _buildReadOnlyField('Discharge Rationale', evaluation['dischargeReason']),
+                  ],
+                  if (_hasContent(evaluation['maintenancePlan'])) ...[
+                    const SizedBox(height: 16),
+                    _buildReadOnlyField('Maintenance Plan', evaluation['maintenancePlan']),
+                  ],
                 ],
               ),
               const SizedBox(height: 20),
             ],
           
-          // Professional Notes
-          _buildSection(
-            'Professional Assessment',
-            Icons.person,
-            [
-              _buildReadOnlyField('Therapist Notes', evaluation['therapistNotes']),
-              const SizedBox(height: 16),
-              _buildInfoRow('Therapist', evaluation['therapistName']),
-              _buildInfoRow('License', evaluation['therapistLicense']),
-              _buildInfoRow(
-                'Evaluation Date',
-                evaluation['evaluationDate'] != null
-                    ? DateFormat('MMMM dd, yyyy').format((evaluation['evaluationDate'] as Timestamp).toDate())
-                    : 'N/A',
+          // Professional Notes - Only show if has content
+          if (_hasProfessionalNotesContent(evaluation))
+            ...[
+              _buildSection(
+                'Professional Assessment',
+                Icons.person,
+                [
+                  if (_hasContent(evaluation['therapistNotes'])) ...[
+                    _buildReadOnlyField('Therapist Notes', evaluation['therapistNotes']),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_hasContent(evaluation['therapistName']))
+                    _buildInfoRow('Therapist', evaluation['therapistName']),
+                  if (_hasContent(evaluation['therapistLicense']))
+                    _buildInfoRow('License', evaluation['therapistLicense']),
+                  if (evaluation['evaluationDate'] != null)
+                    _buildInfoRow(
+                      'Evaluation Date',
+                      DateFormat('MMMM dd, yyyy').format((evaluation['evaluationDate'] as Timestamp).toDate()),
+                    ),
+                ],
               ),
+              const SizedBox(height: 40),
             ],
-          ),
-          const SizedBox(height: 40),
         ],
       ),
     );
@@ -644,5 +685,49 @@ class FinalEvaluationViewer extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Helper methods to check if content exists
+  bool _hasContent(dynamic value) {
+    if (value == null) return false;
+    if (value is String) return value.trim().isNotEmpty;
+    if (value is Map) return value.isNotEmpty;
+    return value != null;
+  }
+
+  bool _hasOverallAssessmentContent(Map<String, dynamic> evaluation) {
+    return _hasContent(evaluation['overallSummary']) ||
+           _hasContent(evaluation['therapyGoalsAchieved']) ||
+           _hasContent(evaluation['overallProgressRating']) ||
+           _hasContent(evaluation['progressDescription']);
+  }
+
+  bool _hasAnySkillContent(Map<String, dynamic> evaluation) {
+    return _hasContent(evaluation['fineMotorEvaluation']) ||
+           _hasContent(evaluation['grossMotorEvaluation']) ||
+           _hasContent(evaluation['cognitiveEvaluation']) ||
+           _hasContent(evaluation['sensoryEvaluation']) ||
+           _hasContent(evaluation['socialEmotionalEvaluation']);
+  }
+
+  bool _hasRecommendationsContent(Map<String, dynamic> evaluation) {
+    return _hasContent(evaluation['continueTherapyRecommendation']) ||
+           _hasContent(evaluation['homeExerciseProgram']) ||
+           _hasContent(evaluation['schoolRecommendations']) ||
+           _hasContent(evaluation['followUpSchedule']) ||
+           _hasContent(evaluation['additionalServicesRecommended']) ||
+           _hasContent(evaluation['parentGuidelines']);
+  }
+
+  bool _hasDischargeContent(Map<String, dynamic> evaluation) {
+    return _hasContent(evaluation['dischargeReason']) ||
+           _hasContent(evaluation['maintenancePlan']);
+  }
+
+  bool _hasProfessionalNotesContent(Map<String, dynamic> evaluation) {
+    return _hasContent(evaluation['therapistNotes']) ||
+           _hasContent(evaluation['therapistName']) ||
+           _hasContent(evaluation['therapistLicense']) ||
+           evaluation['evaluationDate'] != null;
   }
 }
